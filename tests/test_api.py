@@ -6,6 +6,7 @@ from qdrant_client import QdrantClient
 from studylens.api.main import create_app
 from studylens.config import Settings
 from studylens.ingestion.auto_index import AutoIndexReport
+from studylens.ingestion.edstem import EdStemIndexResult
 from studylens.ingestion.exams import ExamIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
 from studylens.retrieval.qa import TemplateLLM
@@ -172,6 +173,50 @@ def test_index_exams_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
     body = response.json()
     assert body["results"][0]["status"] == "indexed"
     assert body["results"][0]["chunks"] == 2
+
+
+def test_index_edstem_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
+    class FakeEdStemIndexer:
+        async def index_course_scope_notes(
+            self,
+            *,
+            course_id: str,
+            course_title: str,
+        ) -> list[EdStemIndexResult]:
+            assert course_id == "COMP70001"
+            assert course_title == "Advanced Algorithms"
+            return [EdStemIndexResult(title="Exam scope", status="indexed", chunks=1)]
+
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        qdrant_collection="api_edstem_test",
+    )
+    service = RAGService(
+        embeddings=HashEmbeddingClient(dimensions=64),
+        vector_store=QdrantVectorStore(
+            collection_name="api_edstem_test",
+            dimensions=64,
+            client=QdrantClient(":memory:"),
+        ),
+        llm=TemplateLLM(),
+    )
+    client = TestClient(
+        create_app(
+            settings=settings,
+            rag_service=service,
+            edstem_indexer=FakeEdStemIndexer(),
+        )
+    )
+
+    response = client.post(
+        "/index/edstem",
+        json={"course_id": "COMP70001", "course_title": "Advanced Algorithms"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["results"][0]["status"] == "indexed"
 
 
 def test_generation_endpoints_return_latex(tmp_path: Path) -> None:

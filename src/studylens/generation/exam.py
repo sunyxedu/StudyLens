@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from studylens.generation.common import format_search_results, wrap_latex_document
+from studylens.generation.common import (
+    auto_scope_notes,
+    format_scope_notes,
+    format_search_results,
+    wrap_latex_document,
+)
 from studylens.retrieval.qa import LLMClient, RAGService
 
 
@@ -20,15 +25,12 @@ class PredictedExamGenerator:
         question_count: int = 4,
         top_k: int = 50,
     ) -> str:
+        notes = scope_notes if scope_notes else auto_scope_notes(self.rag, course_id=course_id)
         past_exam_results = self.rag.retrieve(
             "past exam paper questions marking style recurring topics likely assessment structure",
             course_id=course_id,
             kinds={"past_exam", "exercise", "tutorial", "material"},
             top_k=top_k,
-        )
-        scope_text = (
-            "\n".join(f"- {note}" for note in scope_notes or [])
-            or "- No scope notes supplied."
         )
         context = format_search_results(past_exam_results, max_chars=15000)
         prompt = f"""
@@ -40,7 +42,7 @@ Rules:
 - Include a short rationale and a concise marking outline after each question.
 - Do not claim certainty; label it as a prediction.
 - Apply these scope notes:
-{scope_text}
+{format_scope_notes(notes)}
 
 Past-paper and course context:
 {context}

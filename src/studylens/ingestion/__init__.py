@@ -10,6 +10,12 @@ from studylens.ingestion.browser_session import (
     HttpFetcher,
 )
 from studylens.ingestion.documents import build_chunks, chunk_text, extract_text
+from studylens.ingestion.edstem import (
+    EdStemCrawler,
+    EdStemIndexer,
+    EdStemIndexResult,
+    build_edstem_indexer,
+)
 from studylens.ingestion.exams import (
     ExamIndexResult,
     ExamsClient,
@@ -24,12 +30,16 @@ __all__ = [
     "BrowserFetcher",
     "BrowserSession",
     "CourseAutoIndexer",
+    "EdStemCrawler",
+    "EdStemIndexResult",
+    "EdStemIndexer",
     "ExamIndexResult",
     "ExamsClient",
     "ExamsIndexer",
     "HttpFetcher",
     "build_auto_indexer",
     "build_chunks",
+    "build_edstem_indexer",
     "build_exams_indexer",
     "chunk_text",
     "extract_text",

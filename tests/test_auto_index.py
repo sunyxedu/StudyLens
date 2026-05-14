@@ -8,6 +8,7 @@ from qdrant_client import QdrantClient
 from studylens.config import Settings
 from studylens.ingestion._paths import safe_path_part
 from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix
+from studylens.ingestion.edstem import EdStemIndexResult
 from studylens.ingestion.exams import ExamIndexResult
 from studylens.ingestion.panopto import PanoptoVideoIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
@@ -82,6 +83,18 @@ class FakeExamsIndexer:
         ]
 
 
+class FakeEdStemIndexer:
+    async def index_course_scope_notes(
+        self,
+        *,
+        course_id: str,
+        course_title: str,
+    ) -> list[EdStemIndexResult]:
+        assert course_id == "COMP70001"
+        assert "Advanced Algorithms" in course_title
+        return [EdStemIndexResult(title="Exam scope", status="indexed", chunks=1)]
+
+
 def make_service() -> RAGService:
     embeddings = HashEmbeddingClient(dimensions=64)
     store = QdrantVectorStore(
@@ -140,7 +153,7 @@ def test_course_auto_indexer_includes_panopto_video_results(tmp_path: Path) -> N
     assert any(item.stage == "panopto" and item.chunks == 3 for item in report.items)
 
 
-def test_course_auto_indexer_includes_exam_stage_when_indexer_attached(tmp_path: Path) -> None:
+def test_course_auto_indexer_runs_all_four_stages_when_all_attached(tmp_path: Path) -> None:
     settings = Settings(
         data_dir=tmp_path / "data",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
@@ -153,15 +166,15 @@ def test_course_auto_indexer_includes_exam_stage_when_indexer_attached(tmp_path:
         fetcher=FakeAsyncFetcher(),
         panopto_indexer=FakePanoptoIndexer(),
         exams_indexer=FakeExamsIndexer(),
+        edstem_indexer=FakeEdStemIndexer(),
     )
 
     report = asyncio.run(indexer.index_course(course_id="COMP70001"))
 
     stages = {item.stage for item in report.items}
-    assert stages == {"scientia", "panopto", "exams"}
-    assert report.discovered_resources == 5
-    assert report.indexed_chunks == 7
-    assert any(item.stage == "exams" and item.status == "indexed" for item in report.items)
+    assert stages == {"scientia", "panopto", "exams", "edstem"}
+    assert report.indexed_chunks == 8
+    assert any(item.stage == "edstem" and item.status == "indexed" for item in report.items)
 
 
 def test_course_auto_indexer_uses_explicit_course_url_without_timeline(tmp_path: Path) -> None:

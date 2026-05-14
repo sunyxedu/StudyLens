@@ -16,6 +16,8 @@ from studylens.api.schemas import (
     GeneratedLatexResponse,
     GenerateRequest,
     HealthResponse,
+    IndexEdStemRequest,
+    IndexEdStemResponse,
     IndexExamsRequest,
     IndexExamsResponse,
     IndexTextRequest,
@@ -31,6 +33,7 @@ from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
 from studylens.ingestion.auto_index import AutoIndexReport, build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
+from studylens.ingestion.edstem import EdStemIndexer, build_edstem_indexer
 from studylens.ingestion.exams import ExamsIndexer, build_exams_indexer
 from studylens.retrieval.qa import RAGService
 
@@ -89,6 +92,7 @@ def create_app(
     rag_service: RAGService | None = None,
     auto_indexer: AutoIndexerLike | None = None,
     exams_indexer: ExamsIndexer | None = None,
+    edstem_indexer: EdStemIndexer | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     service = rag_service or build_rag_service(settings)
@@ -100,6 +104,7 @@ def create_app(
     application.state.exam_generator = PredictedExamGenerator(rag=service, llm=service.llm)
     application.state.auto_indexer = auto_indexer
     application.state.exams_indexer = exams_indexer
+    application.state.edstem_indexer = edstem_indexer
 
     allow_all = (
         "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
@@ -149,6 +154,28 @@ def create_app(
         )
         results = await indexer.index_course_exams(course_id=payload.course_id)
         return IndexExamsResponse(results=results)
+
+    @application.post("/index/edstem", response_model=IndexEdStemResponse)
+    async def index_edstem(
+        payload: IndexEdStemRequest,
+        request: Request,
+    ) -> IndexEdStemResponse:
+        injected: EdStemIndexer | None = request.app.state.edstem_indexer
+        if injected is not None:
+            results = await injected.index_course_scope_notes(
+                course_id=payload.course_id,
+                course_title=payload.course_title,
+            )
+            return IndexEdStemResponse(results=results)
+
+        settings: Settings = request.app.state.settings
+        async with BrowserSession.from_settings(settings) as session:
+            indexer = build_edstem_indexer(settings, _service(request), session)
+            results = await indexer.index_course_scope_notes(
+                course_id=payload.course_id,
+                course_title=payload.course_title,
+            )
+        return IndexEdStemResponse(results=results)
 
     @application.post("/retrieve", response_model=RetrieveResponse)
     def retrieve(payload: RetrieveRequest, request: Request) -> RetrieveResponse:

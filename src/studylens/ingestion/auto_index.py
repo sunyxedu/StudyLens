@@ -13,6 +13,7 @@ from studylens.errors import IngestionError, UnsupportedDocumentError
 from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.edstem import EdStemIndexer, EdStemIndexResult, build_edstem_indexer
 from studylens.ingestion.exams import ExamIndexResult, ExamsIndexer, build_exams_indexer
 from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
@@ -68,6 +69,7 @@ class CourseAutoIndexer:
     fetcher: AsyncFetcher
     panopto_indexer: PanoptoVideoIndexer | None = None
     exams_indexer: ExamsIndexer | None = None
+    edstem_indexer: EdStemIndexer | None = None
 
     async def index_course(
         self,
@@ -106,6 +108,14 @@ class CourseAutoIndexer:
             exam_items = await self._index_exams(course_id=course.id)
             report.items.extend(exam_items)
             report.discovered_resources += sum(1 for item in exam_items if item.source_url)
+
+        if self.edstem_indexer is not None:
+            edstem_items = await self._index_edstem(
+                course_id=course.id,
+                course_title=course.title,
+            )
+            report.items.extend(edstem_items)
+            report.discovered_resources += sum(1 for item in edstem_items if item.chunks)
 
         report.indexed_resources = sum(1 for item in report.items if item.status == "indexed")
         report.indexed_chunks = sum(item.chunks for item in report.items)
@@ -216,6 +226,19 @@ class CourseAutoIndexer:
         results = await self.exams_indexer.index_course_exams(course_id=course_id)
         return [exam_result_to_item(result) for result in results]
 
+    async def _index_edstem(
+        self,
+        *,
+        course_id: str,
+        course_title: str,
+    ) -> list[AutoIndexItem]:
+        assert self.edstem_indexer is not None
+        results = await self.edstem_indexer.index_course_scope_notes(
+            course_id=course_id,
+            course_title=course_title,
+        )
+        return [edstem_result_to_item(result) for result in results]
+
 
 def build_auto_indexer(
     settings: Settings,
@@ -224,8 +247,9 @@ def build_auto_indexer(
     *,
     include_panopto: bool = True,
     include_exams: bool = True,
+    include_edstem: bool = True,
 ) -> CourseAutoIndexer:
-    """Default wiring: BrowserFetcher + Panopto + exams (when creds present)."""
+    """Default wiring: BrowserFetcher + Panopto + exams + EdStem (when configured)."""
 
     panopto = (
         PanoptoVideoIndexer(settings=settings, rag=rag, session=session)
@@ -233,12 +257,14 @@ def build_auto_indexer(
         else None
     )
     exams = build_exams_indexer(settings, rag) if include_exams else None
+    edstem = build_edstem_indexer(settings, rag, session) if include_edstem else None
     return CourseAutoIndexer(
         settings=settings,
         rag=rag,
         fetcher=BrowserFetcher(session),
         panopto_indexer=panopto,
         exams_indexer=exams,
+        edstem_indexer=edstem,
     )
 
 
@@ -279,6 +305,17 @@ def exam_result_to_item(result: ExamIndexResult) -> AutoIndexItem:
         stage="exams",
         source_url=result.source_url,
         local_path=result.local_path,
+        chunks=result.chunks,
+        error=result.error,
+    )
+
+
+def edstem_result_to_item(result: EdStemIndexResult) -> AutoIndexItem:
+    return AutoIndexItem(
+        title=result.title,
+        kind="edstem_note",
+        status=result.status,
+        stage="edstem",
         chunks=result.chunks,
         error=result.error,
     )

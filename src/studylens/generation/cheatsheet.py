@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from studylens.generation.common import format_search_results, wrap_latex_document
+from studylens.generation.common import (
+    auto_scope_notes,
+    format_scope_notes,
+    format_search_results,
+    wrap_latex_document,
+)
 from studylens.retrieval.qa import LLMClient, RAGService
 
 
@@ -19,14 +24,12 @@ class CheatsheetGenerator:
         scope_notes: list[str] | None = None,
         top_k: int = 40,
     ) -> str:
+        notes = scope_notes if scope_notes else auto_scope_notes(self.rag, course_id=course_id)
         results = self.rag.retrieve(
             "all examinable definitions theorems algorithms methods pitfalls formulas examples",
             course_id=course_id,
+            kinds={"material", "exercise", "tutorial", "transcript", "past_exam"},
             top_k=top_k,
-        )
-        scope_text = (
-            "\n".join(f"- {note}" for note in scope_notes or [])
-            or "- No scope notes supplied."
         )
         context = format_search_results(results, max_chars=14000)
         prompt = f"""
@@ -38,7 +41,7 @@ Rules:
 - Include definitions, formulas, algorithm steps, assumptions, complexity,
   common traps, and miniature examples.
 - Respect these EdStem/exam-scope notes:
-{scope_text}
+{format_scope_notes(notes)}
 
 Course context:
 {context}

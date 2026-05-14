@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from studylens.domain import SearchResult
+from studylens.retrieval.qa import RAGService
 
 LATEX_COMPACT_PREAMBLE = r"""\documentclass[9pt,a4paper]{article}
 \usepackage[margin=0.42in]{geometry}
@@ -39,6 +40,33 @@ def format_search_results(results: list[SearchResult], *, max_chars: int = 9000)
         if remaining <= 0:
             break
     return "\n\n".join(blocks)
+
+
+def auto_scope_notes(rag: RAGService, *, course_id: str, top_k: int = 12) -> list[str]:
+    """Pull indexed EdStem scope notes for the course as plain text bullets.
+
+    Falls back to an empty list so generation works even when no EdStem
+    notes were indexed (or no browser session was configured).
+    """
+
+    results = rag.retrieve(
+        "what is examinable in scope excluded not assessed coverage",
+        course_id=course_id,
+        kinds={"edstem_note"},
+        top_k=top_k,
+    )
+    notes: list[str] = []
+    for result in results:
+        text = result.chunk.text.strip()
+        if text:
+            notes.append(text)
+    return notes
+
+
+def format_scope_notes(notes: list[str]) -> str:
+    if not notes:
+        return "- No scope notes supplied."
+    return "\n".join(f"- {note}" for note in notes)
 
 
 def wrap_latex_document(title: str, body: str) -> str:

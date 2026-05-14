@@ -13,6 +13,7 @@ from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
 from studylens.ingestion.auto_index import build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.edstem import build_edstem_indexer
 from studylens.ingestion.exams import build_exams_indexer
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
 
@@ -102,6 +103,25 @@ def index_exams(course_id: str) -> None:
         indexer = build_exams_indexer(settings, service)
         results = await indexer.index_course_exams(course_id=course_id)
         return json.dumps([result.model_dump() for result in results], indent=2)
+
+    typer.echo(asyncio.run(_run()))
+
+
+@app.command("index-edstem")
+def index_edstem(course_id: str, course_title: str) -> None:
+    """Fetch and index EdStem scope notes for a course."""
+
+    settings = get_settings()
+    service = build_rag_service(settings)
+
+    async def _run() -> str:
+        async with BrowserSession.from_settings(settings) as session:
+            indexer = build_edstem_indexer(settings, service, session)
+            results = await indexer.index_course_scope_notes(
+                course_id=course_id,
+                course_title=course_title,
+            )
+            return json.dumps([result.model_dump() for result in results], indent=2)
 
     typer.echo(asyncio.run(_run()))
 
