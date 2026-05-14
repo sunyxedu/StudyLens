@@ -21,7 +21,8 @@ class EdStemCrawler:
     def require_browser_state(self) -> None:
         if not self.storage_state:
             raise ConfigurationError(
-                "EdStem access requires STUDYLENS_BROWSER_STORAGE_STATE with an authenticated session"
+                "EdStem access requires STUDYLENS_BROWSER_STORAGE_STATE "
+                "with an authenticated session"
             )
         if not self.storage_state.exists():
             raise ConfigurationError(f"Browser storage state not found: {self.storage_state}")
@@ -72,4 +73,3 @@ class EdStemCrawler:
                 )
             )
         return resources
-

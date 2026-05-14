@@ -46,6 +46,32 @@ export interface IndexTextRequest {
   kind: ResourceKind;
 }
 
+export interface AutoIndexCourseRequest {
+  course_id: string;
+  course_title?: string | null;
+  course_url?: string | null;
+}
+
+export interface AutoIndexItem {
+  title: string;
+  kind: ResourceKind;
+  status: "indexed" | "skipped" | "failed" | string;
+  source_url?: string | null;
+  local_path?: string | null;
+  chunks: number;
+  error?: string | null;
+}
+
+export interface AutoIndexReport {
+  course_id: string;
+  course_title: string;
+  source_url?: string | null;
+  discovered_resources: number;
+  indexed_resources: number;
+  indexed_chunks: number;
+  items: AutoIndexItem[];
+}
+
 export interface AskRequest {
   question: string;
   course_id?: string | null;
@@ -70,4 +96,3 @@ export interface GenerateRequest {
 export interface PredictedExamRequest extends GenerateRequest {
   question_count: number;
 }
-

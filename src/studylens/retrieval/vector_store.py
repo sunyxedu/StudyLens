@@ -69,7 +69,9 @@ def _chunk_from_payload(payload: dict[str, object]) -> DocumentChunk:
         resource_id=str(payload["resource_id"]),
         kind=str(payload["kind"]),
         title=payload.get("title") if isinstance(payload.get("title"), str) else None,
-        source_url=payload.get("source_url") if isinstance(payload.get("source_url"), str) else None,
+        source_url=(
+            payload.get("source_url") if isinstance(payload.get("source_url"), str) else None
+        ),
         position=int(payload["position"]),
         text=str(payload["text"]),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
@@ -80,14 +82,19 @@ def _qdrant_point_id(chunk_id: str) -> str:
     return str(uuid5(NAMESPACE_URL, f"studylens:{chunk_id}"))
 
 
-def _qdrant_filter(course_id: str | None = None, kinds: set[str] | None = None) -> models.Filter | None:
+def _qdrant_filter(
+    course_id: str | None = None,
+    kinds: set[str] | None = None,
+) -> models.Filter | None:
     conditions: list[models.FieldCondition] = []
     if course_id:
         conditions.append(
             models.FieldCondition(key="course_id", match=models.MatchValue(value=course_id))
         )
     if kinds:
-        conditions.append(models.FieldCondition(key="kind", match=models.MatchAny(any=sorted(kinds))))
+        conditions.append(
+            models.FieldCondition(key="kind", match=models.MatchAny(any=sorted(kinds)))
+        )
     return models.Filter(must=conditions) if conditions else None
 
 
@@ -118,7 +125,10 @@ class QdrantVectorStore:
             return
         self.client.create_collection(
             collection_name=self.collection_name,
-            vectors_config=models.VectorParams(size=self.dimensions, distance=models.Distance.COSINE),
+            vectors_config=models.VectorParams(
+                size=self.dimensions,
+                distance=models.Distance.COSINE,
+            ),
         )
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Payload indexes have no effect.*")
@@ -244,7 +254,8 @@ class SQLiteVectorStore:
             connection.executemany(
                 """
                 INSERT INTO chunks (
-                    id, course_id, resource_id, kind, title, source_url, position, text, metadata, vector
+                    id, course_id, resource_id, kind, title,
+                    source_url, position, text, metadata, vector
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET

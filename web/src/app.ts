@@ -6,8 +6,8 @@ import {
   sanitizeFilename,
   saveSettings,
 } from "./state.js";
-import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
-import type { ResourceKind, SearchResult } from "./types.js";
+import { autoIndexItemMeta, citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
+import type { AutoIndexReport, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
   backendUrl: byId<HTMLInputElement>("backend-url"),
@@ -24,11 +24,10 @@ const elements = {
   askStatus: byId<HTMLSpanElement>("ask-status"),
   answerCard: byId<HTMLElement>("answer-card"),
   citationList: byId<HTMLElement>("citation-list"),
-  indexKind: byId<HTMLSelectElement>("index-kind"),
-  indexTitle: byId<HTMLInputElement>("index-title-input"),
-  indexText: byId<HTMLTextAreaElement>("index-text"),
+  indexCourseUrl: byId<HTMLInputElement>("index-course-url"),
   indexSubmit: byId<HTMLButtonElement>("index-submit"),
   indexStatus: byId<HTMLSpanElement>("index-status"),
+  indexResults: byId<HTMLElement>("index-results"),
   retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
   retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
   retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
@@ -124,20 +123,17 @@ async function handleAsk(): Promise<void> {
 }
 
 async function handleIndex(): Promise<void> {
-  const title = elements.indexTitle.value.trim();
-  const text = elements.indexText.value.trim();
-  if (!title || !text) {
-    setStatus(elements.indexStatus, "Title and text required", "error");
-    return;
-  }
-  await withBusy(elements.indexSubmit, elements.indexStatus, "Indexing", async () => {
-    const result = await api.indexText({
+  await withBusy(elements.indexSubmit, elements.indexStatus, "Syncing", async () => {
+    const report = await api.autoIndexCourse({
       course_id: requireCourseId(),
-      title,
-      kind: elements.indexKind.value as ResourceKind,
-      text,
+      course_title: elements.courseTitle.value.trim() || null,
+      course_url: elements.indexCourseUrl.value.trim() || null,
     });
-    setStatus(elements.indexStatus, `${result.indexed_chunks} chunks indexed`);
+    renderIndexReport(report);
+    setStatus(
+      elements.indexStatus,
+      `${report.indexed_resources}/${report.discovered_resources} resources indexed · ${report.indexed_chunks} chunks`
+    );
   });
 }
 
@@ -211,6 +207,18 @@ function renderResults(results: SearchResult[]): void {
         resultTitle(result),
         clippedText(result.chunk.text),
         `${result.chunk.kind} · ${scoreLabel(result.score)} · chunk ${result.chunk.position}`
+      )
+    )
+  );
+}
+
+function renderIndexReport(report: AutoIndexReport): void {
+  elements.indexResults.replaceChildren(
+    ...report.items.map((item) =>
+      resultNode(
+        item.title,
+        item.error || item.local_path || item.source_url || "",
+        autoIndexItemMeta(item)
       )
     )
   );

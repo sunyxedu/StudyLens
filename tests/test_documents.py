@@ -46,7 +46,12 @@ def test_build_chunks_uses_resource_metadata() -> None:
         metadata={"week": "1"},
     )
 
-    chunks = build_chunks(resource, "First paragraph.\n\nSecond paragraph.", max_chars=20, overlap=5)
+    chunks = build_chunks(
+        resource,
+        "First paragraph.\n\nSecond paragraph.",
+        max_chars=20,
+        overlap=5,
+    )
 
     assert chunks
     assert chunks[0].course_id == "COMP70001"

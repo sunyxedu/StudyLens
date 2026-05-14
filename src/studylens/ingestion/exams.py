@@ -18,7 +18,9 @@ def parse_exam_links(html: str, base_url: str, course_id: str) -> list[Resource]
         href = str(anchor.get("href"))
         label = " ".join(anchor.get_text(" ").split()) or href.rsplit("/", 1)[-1]
         haystack = f"{href} {label}".lower()
-        if course_id.lower() not in haystack and not any(token in haystack for token in ("exam", "paper")):
+        if course_id.lower() not in haystack and not any(
+            token in haystack for token in ("exam", "paper")
+        ):
             continue
         if not href.lower().endswith((".pdf", ".html", ".htm")):
             continue
@@ -57,4 +59,3 @@ class ExamsClient:
             response = client.get(self.base_url, auth=(self.username, self.password))
             response.raise_for_status()
         return parse_exam_links(response.text, self.base_url, course_id)
-

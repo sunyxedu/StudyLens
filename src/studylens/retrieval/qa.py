@@ -18,7 +18,10 @@ class TemplateLLM:
 
     def complete(self, *, system: str, prompt: str) -> str:
         lines = [line.strip() for line in prompt.splitlines() if line.strip()]
-        question = next((line for line in lines if line.lower().startswith("question:")), "Question:")
+        question = next(
+            (line for line in lines if line.lower().startswith("question:")),
+            "Question:",
+        )
         context_lines = [line for line in lines if line.startswith("[")]
         if context_lines:
             return (

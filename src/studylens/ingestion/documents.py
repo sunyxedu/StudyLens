@@ -9,7 +9,19 @@ from bs4 import BeautifulSoup
 from studylens.domain import DocumentChunk, Resource
 from studylens.errors import UnsupportedDocumentError
 
-TEXT_SUFFIXES = {".txt", ".md", ".rst", ".tex", ".csv", ".tsv", ".json", ".py", ".java", ".c", ".cpp"}
+TEXT_SUFFIXES = {
+    ".txt",
+    ".md",
+    ".rst",
+    ".tex",
+    ".csv",
+    ".tsv",
+    ".json",
+    ".py",
+    ".java",
+    ".c",
+    ".cpp",
+}
 HTML_SUFFIXES = {".html", ".htm"}
 PDF_SUFFIXES = {".pdf"}
 
@@ -41,11 +53,17 @@ def extract_text(path: Path) -> str:
         return normalize_text("\n\n".join(page.extract_text() or "" for page in reader.pages))
 
     mime_type, _ = mimetypes.guess_type(path.name)
-    raise UnsupportedDocumentError(f"Unsupported document type for {path.name} ({mime_type or 'unknown'})")
+    raise UnsupportedDocumentError(
+        f"Unsupported document type for {path.name} ({mime_type or 'unknown'})"
+    )
 
 
 def _split_paragraphs(text: str) -> list[str]:
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", normalize_text(text)) if part.strip()]
+    paragraphs = [
+        part.strip()
+        for part in re.split(r"\n\s*\n", normalize_text(text))
+        if part.strip()
+    ]
     if paragraphs:
         return paragraphs
     return [normalize_text(text)] if text.strip() else []
@@ -98,7 +116,13 @@ def chunk_text(text: str, *, max_chars: int = 1400, overlap: int = 180) -> list[
     return chunks
 
 
-def build_chunks(resource: Resource, text: str, *, max_chars: int = 1400, overlap: int = 180) -> list[DocumentChunk]:
+def build_chunks(
+    resource: Resource,
+    text: str,
+    *,
+    max_chars: int = 1400,
+    overlap: int = 180,
+) -> list[DocumentChunk]:
     return [
         DocumentChunk(
             course_id=resource.course_id,
@@ -112,4 +136,3 @@ def build_chunks(resource: Resource, text: str, *, max_chars: int = 1400, overla
         )
         for index, chunk in enumerate(chunk_text(text, max_chars=max_chars, overlap=overlap))
     ]
-

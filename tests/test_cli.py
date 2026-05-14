@@ -19,3 +19,11 @@ def test_cli_inspect_scientia_outputs_course_json(tmp_path: Path) -> None:
     assert "COMP70001" in result.output
     assert "Advanced Algorithms" in result.output
 
+
+def test_cli_auto_index_command_is_registered() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["auto-index", "--help"])
+
+    assert result.exit_code == 0
+    assert "Scientia" in result.output

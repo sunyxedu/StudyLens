@@ -1,6 +1,8 @@
 import type {
   Answer,
   AskRequest,
+  AutoIndexCourseRequest,
+  AutoIndexReport,
   GenerateRequest,
   IndexTextRequest,
   PredictedExamRequest,
@@ -30,6 +32,14 @@ export class StudyLensApi {
 
   async indexText(payload: IndexTextRequest): Promise<{ indexed_chunks: number }> {
     return this.request("/chunks", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async autoIndexCourse(payload: AutoIndexCourseRequest): Promise<AutoIndexReport> {
+    return this.request("/index/course", {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify(payload),

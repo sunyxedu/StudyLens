@@ -1,4 +1,4 @@
-import type { Citation, SearchResult } from "./types.js";
+import type { AutoIndexItem, Citation, SearchResult } from "./types.js";
 
 export function citationLabel(citation: Citation, index: number): string {
   const title = citation.title || citation.resource_id;
@@ -21,3 +21,9 @@ export function clippedText(text: string, limit = 700): string {
   return `${text.slice(0, limit - 1).trimEnd()}…`;
 }
 
+export function autoIndexItemMeta(item: AutoIndexItem): string {
+  if (item.status === "indexed") {
+    return `${item.kind} · ${item.chunks} chunks`;
+  }
+  return `${item.kind} · ${item.status}`;
+}

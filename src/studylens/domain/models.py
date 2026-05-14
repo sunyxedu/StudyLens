@@ -51,7 +51,13 @@ class Resource(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if self.id is None:
-            self.id = stable_id(self.course_id, self.kind, self.source_url, self.local_path, self.title)
+            self.id = stable_id(
+                self.course_id,
+                self.kind,
+                self.source_url,
+                self.local_path,
+                self.title,
+            )
 
 
 class Course(BaseModel):
@@ -116,4 +122,3 @@ class Answer(BaseModel):
     answer: str
     citations: list[Citation] = Field(default_factory=list)
     follow_up: str | None = None
-

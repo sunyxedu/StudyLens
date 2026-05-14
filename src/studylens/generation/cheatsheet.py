@@ -24,7 +24,10 @@ class CheatsheetGenerator:
             course_id=course_id,
             top_k=top_k,
         )
-        scope_text = "\n".join(f"- {note}" for note in scope_notes or []) or "- No scope notes supplied."
+        scope_text = (
+            "\n".join(f"- {note}" for note in scope_notes or [])
+            or "- No scope notes supplied."
+        )
         context = format_search_results(results, max_chars=14000)
         prompt = f"""
 Create a dense two-page A4 LaTeX cheatsheet for {course_title} ({course_id}).
@@ -32,7 +35,8 @@ Create a dense two-page A4 LaTeX cheatsheet for {course_title} ({course_id}).
 Rules:
 - Output only LaTeX body content that can go inside a two-column article document.
 - Be comprehensive and compact.
-- Include definitions, formulas, algorithm steps, assumptions, complexity, common traps, and miniature examples.
+- Include definitions, formulas, algorithm steps, assumptions, complexity,
+  common traps, and miniature examples.
 - Respect these EdStem/exam-scope notes:
 {scope_text}
 
@@ -46,4 +50,3 @@ Course context:
         if "\\documentclass" in body:
             return body
         return wrap_latex_document(f"{course_title} Cheatsheet", body)
-

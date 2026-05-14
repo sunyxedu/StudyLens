@@ -9,6 +9,7 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import get_settings
 from studylens.domain import CourseSummary, Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
+from studylens.ingestion.auto_index import CourseAutoIndexer
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
 
@@ -61,6 +62,24 @@ def index_text(
     chunks = build_chunks(resource, text)
     indexed = service.index_chunks(chunks)
     typer.echo(f"Indexed {indexed} chunks for {course_id}.")
+
+
+@app.command("auto-index")
+def auto_index(
+    course_id: str,
+    course_title: str | None = None,
+    course_url: str | None = None,
+) -> None:
+    """Discover a Scientia course page, download resources, and index what can be parsed."""
+
+    settings = get_settings()
+    service = build_rag_service(settings)
+    report = CourseAutoIndexer(settings=settings, rag=service).index_course(
+        course_id=course_id,
+        course_title=course_title,
+        course_url=course_url,
+    )
+    typer.echo(report.model_dump_json(indent=2))
 
 
 @app.command()
@@ -117,4 +136,3 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
 
 if __name__ == "__main__":
     app()
-

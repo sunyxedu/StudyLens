@@ -26,7 +26,10 @@ class PredictedExamGenerator:
             kinds={"past_exam", "exercise", "tutorial", "material"},
             top_k=top_k,
         )
-        scope_text = "\n".join(f"- {note}" for note in scope_notes or []) or "- No scope notes supplied."
+        scope_text = (
+            "\n".join(f"- {note}" for note in scope_notes or [])
+            or "- No scope notes supplied."
+        )
         context = format_search_results(past_exam_results, max_chars=15000)
         prompt = f"""
 Predict a plausible upcoming exam paper for {course_title} ({course_id}).
@@ -49,4 +52,3 @@ Past-paper and course context:
         if "\\documentclass" in body:
             return body
         return wrap_latex_document(f"{course_title} Predicted Paper", body)
-

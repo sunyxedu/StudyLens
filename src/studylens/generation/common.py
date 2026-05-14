@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from studylens.domain import SearchResult
 
-
 LATEX_COMPACT_PREAMBLE = r"""\documentclass[9pt,a4paper]{article}
 \usepackage[margin=0.42in]{geometry}
 \usepackage{multicol}
@@ -26,7 +25,10 @@ def format_search_results(results: list[SearchResult], *, max_chars: int = 9000)
     remaining = max_chars
     for index, result in enumerate(results, start=1):
         chunk = result.chunk
-        header = f"[{index}] {chunk.title or chunk.resource_id} ({chunk.kind}, score={result.score:.3f})"
+        header = (
+            f"[{index}] {chunk.title or chunk.resource_id} "
+            f"({chunk.kind}, score={result.score:.3f})"
+        )
         body = chunk.text.strip()
         block = f"{header}\n{body}"
         if len(block) > remaining:
@@ -49,4 +51,3 @@ def wrap_latex_document(title: str, body: str) -> str:
         "\\end{multicols*}\n"
         "\\end{document}\n"
     )
-

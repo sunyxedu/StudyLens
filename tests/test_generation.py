@@ -11,7 +11,10 @@ class RecordingLLM:
 
     def complete(self, *, system: str, prompt: str) -> str:
         self.prompts.append(prompt)
-        return "\\subsection*{Core}\\begin{itemize}\\item Memoization avoids repeated work.\\end{itemize}"
+        return (
+            "\\subsection*{Core}\\begin{itemize}"
+            "\\item Memoization avoids repeated work.\\end{itemize}"
+        )
 
 
 def service_with_chunks(collection_name: str) -> tuple[RAGService, RecordingLLM]:
@@ -75,4 +78,3 @@ def test_predicted_exam_generator_mentions_question_count_and_scope() -> None:
     assert "Predicted Paper" in latex
     assert "Produce 3 substantial questions" in llm.prompts[0]
     assert "Only weeks 1-8" in llm.prompts[0]
-

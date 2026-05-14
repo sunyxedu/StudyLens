@@ -24,7 +24,12 @@ class TranscriptExtractor:
             metadata={"source": "transcript_file"},
         )
 
-    def transcribe_with_openai(self, course_id: str, media_path: Path, api_key: str | None) -> Resource:
+    def transcribe_with_openai(
+        self,
+        course_id: str,
+        media_path: Path,
+        api_key: str | None,
+    ) -> Resource:
         if not api_key:
             raise ConfigurationError("OpenAI API key is required for transcription")
         try:
@@ -46,4 +51,3 @@ class TranscriptExtractor:
             local_path=output,
             metadata={"source": "openai_transcription", "media_path": str(media_path)},
         )
-

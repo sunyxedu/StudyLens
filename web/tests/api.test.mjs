@@ -15,6 +15,14 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     const path = String(input).replace("http://localhost:8000", "");
     const bodies = {
       "/chunks": { indexed_chunks: 2 },
+      "/index/course": {
+        course_id: "COMP70001",
+        course_title: "Advanced Algorithms",
+        discovered_resources: 1,
+        indexed_resources: 1,
+        indexed_chunks: 2,
+        items: []
+      },
       "/ask": { question: "q", answer: "a", citations: [], follow_up: null },
       "/retrieve": { results: [] },
       "/generate/cheatsheet": { latex: "\\documentclass{article}" },
@@ -32,6 +40,11 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     title: "Notes",
     text: "Memoization",
     kind: "material",
+  })).indexed_chunks, 2);
+  assert.equal((await api.autoIndexCourse({
+    course_id: "COMP70001",
+    course_title: "Advanced Algorithms",
+    course_url: null
   })).indexed_chunks, 2);
   assert.equal((await api.ask({
     question: "q",
@@ -59,9 +72,10 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     question_count: 4,
   })).latex, /documentclass/);
 
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 6);
   assert.equal(JSON.parse(calls[0].init.body).title, "Notes");
-  assert.equal(JSON.parse(calls[1].init.body).include_exercises, true);
+  assert.equal(JSON.parse(calls[1].init.body).course_title, "Advanced Algorithms");
+  assert.equal(JSON.parse(calls[2].init.body).include_exercises, true);
 });
 
 test("StudyLensApi surfaces backend errors", async () => {
@@ -74,4 +88,3 @@ test("StudyLensApi surfaces backend errors", async () => {
     /StudyLens API 400: bad request/
   );
 });
-

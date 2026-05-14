@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from studylens.domain import Answer, SearchResult
 from studylens.domain.models import ResourceKind
+from studylens.ingestion.auto_index import AutoIndexReport
 
 
 class HealthResponse(BaseModel):
@@ -25,6 +26,16 @@ class IndexTextRequest(BaseModel):
 
 class IndexTextResponse(BaseModel):
     indexed_chunks: int
+
+
+class AutoIndexCourseRequest(BaseModel):
+    course_id: str
+    course_title: str | None = None
+    course_url: str | None = None
+
+
+class AutoIndexCourseResponse(AutoIndexReport):
+    pass
 
 
 class AskRequest(BaseModel):
@@ -62,4 +73,3 @@ class RetrieveResponse(BaseModel):
 
 class AskResponse(Answer):
     pass
-

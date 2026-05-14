@@ -1,5 +1,10 @@
 from studylens.domain import CourseSummary
-from studylens.ingestion.scientia import classify_resource, infer_course_id, parse_course_page, parse_timeline
+from studylens.ingestion.scientia import (
+    classify_resource,
+    infer_course_id,
+    parse_course_page,
+    parse_timeline,
+)
 
 
 def test_parse_timeline_finds_courses_and_deduplicates() -> None:

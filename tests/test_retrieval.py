@@ -3,7 +3,12 @@ from pathlib import Path
 from qdrant_client import QdrantClient
 
 from studylens.domain import DocumentChunk
-from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService, SQLiteVectorStore
+from studylens.retrieval import (
+    HashEmbeddingClient,
+    QdrantVectorStore,
+    RAGService,
+    SQLiteVectorStore,
+)
 from studylens.retrieval.qa import TemplateLLM
 from studylens.retrieval.vector_store import cosine_similarity
 
@@ -82,9 +87,11 @@ def test_rag_service_indexes_retrieves_and_answers() -> None:
     ]
 
     assert service.index_chunks(chunks) == 2
-    answer = service.answer("How does dynamic programming avoid repeated work?", course_id="COMP70001")
+    answer = service.answer(
+        "How does dynamic programming avoid repeated work?",
+        course_id="COMP70001",
+    )
 
     assert answer.citations
     assert answer.follow_up is not None
     assert "dynamic" in answer.answer.lower()
-

@@ -36,9 +36,15 @@ def classify_resource(text: str, href: str, context: str = "") -> ResourceKind:
     haystack = f"{text} {href} {context}".lower()
     if "tutorial" in haystack:
         return "tutorial"
-    if any(token in haystack for token in ("exercise", "exercises", "problem sheet", "problem-sheet")):
+    if any(
+        token in haystack
+        for token in ("exercise", "exercises", "problem sheet", "problem-sheet")
+    ):
         return "exercise"
-    if any(token in haystack for token in ("lecture", "slides", "material", "note", "handout", ".pdf")):
+    if any(
+        token in haystack
+        for token in ("lecture", "slides", "material", "note", "handout", ".pdf")
+    ):
         return "material"
     return "material"
 
@@ -152,4 +158,3 @@ class ScientiaClient:
             response = client.get(summary.url)
             response.raise_for_status()
         return parse_course_page(response.text, summary, summary.url)
-

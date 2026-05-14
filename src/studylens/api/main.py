@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from studylens.api.schemas import (
     AskRequest,
     AskResponse,
+    AutoIndexCourseRequest,
+    AutoIndexCourseResponse,
     GeneratedLatexResponse,
     GenerateRequest,
     HealthResponse,
@@ -23,15 +25,34 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import Settings, get_settings
 from studylens.domain import Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
+from studylens.ingestion.auto_index import CourseAutoIndexer
 from studylens.ingestion.documents import build_chunks
 from studylens.retrieval.qa import RAGService
+
+
+class LazyStudyLensApp:
+    def __init__(self) -> None:
+        self._app: FastAPI | None = None
+
+    def get_app(self) -> FastAPI:
+        if self._app is None:
+            self._app = create_app()
+        return self._app
+
+    async def __call__(self, scope, receive, send) -> None:  # type: ignore[no-untyped-def]
+        await self.get_app()(scope, receive, send)
 
 
 def _service(request: Request) -> RAGService:
     return request.app.state.rag_service
 
 
-def create_app(*, settings: Settings | None = None, rag_service: RAGService | None = None) -> FastAPI:
+def create_app(
+    *,
+    settings: Settings | None = None,
+    rag_service: RAGService | None = None,
+    auto_indexer: CourseAutoIndexer | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
     service = rag_service or build_rag_service(settings)
 
@@ -40,8 +61,14 @@ def create_app(*, settings: Settings | None = None, rag_service: RAGService | No
     application.state.rag_service = service
     application.state.cheatsheet_generator = CheatsheetGenerator(rag=service, llm=service.llm)
     application.state.exam_generator = PredictedExamGenerator(rag=service, llm=service.llm)
+    application.state.auto_indexer = auto_indexer or CourseAutoIndexer(
+        settings=settings,
+        rag=service,
+    )
 
-    allow_all = "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
+    allow_all = (
+        "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if allow_all else settings.allowed_origins,
@@ -67,6 +94,18 @@ def create_app(*, settings: Settings | None = None, rag_service: RAGService | No
         chunks = build_chunks(resource, payload.text)
         indexed = _service(request).index_chunks(chunks)
         return IndexTextResponse(indexed_chunks=indexed)
+
+    @application.post("/index/course", response_model=AutoIndexCourseResponse)
+    def auto_index_course(
+        payload: AutoIndexCourseRequest,
+        request: Request,
+    ) -> AutoIndexCourseResponse:
+        report = request.app.state.auto_indexer.index_course(
+            course_id=payload.course_id,
+            course_title=payload.course_title,
+            course_url=payload.course_url,
+        )
+        return AutoIndexCourseResponse(**report.model_dump())
 
     @application.post("/retrieve", response_model=RetrieveResponse)
     def retrieve(payload: RetrieveRequest, request: Request) -> RetrieveResponse:
@@ -126,4 +165,4 @@ def create_app(*, settings: Settings | None = None, rag_service: RAGService | No
     return application
 
 
-app = create_app()
+app = LazyStudyLensApp()

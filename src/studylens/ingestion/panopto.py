@@ -24,7 +24,8 @@ class PanoptoDownloader:
     def require_browser_state(self) -> None:
         if not self.storage_state:
             raise ConfigurationError(
-                "Panopto access requires STUDYLENS_BROWSER_STORAGE_STATE with an authenticated session"
+                "Panopto access requires STUDYLENS_BROWSER_STORAGE_STATE "
+                "with an authenticated session"
             )
         if not self.storage_state.exists():
             raise ConfigurationError(f"Browser storage state not found: {self.storage_state}")
@@ -47,7 +48,8 @@ class PanoptoDownloader:
             await page.keyboard.press("Enter")
             await page.wait_for_load_state("networkidle")
             links = await page.locator("a").evaluate_all(
-                "(nodes) => nodes.map(a => ({text: a.innerText, href: a.href})).filter(x => x.text && x.href)"
+                "(nodes) => nodes.map(a => ({text: a.innerText, href: a.href}))"
+                ".filter(x => x.text && x.href)"
             )
             await browser.close()
 
@@ -67,4 +69,3 @@ class PanoptoDownloader:
                 )
             )
         return resources
-

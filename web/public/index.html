@@ -73,31 +73,18 @@
 
         <section class="view" id="view-index" aria-labelledby="index-title">
           <div class="view-head">
-            <h2 id="index-title">Index Text</h2>
-            <label class="compact-field">
-              <span>Kind</span>
-              <select id="index-kind">
-                <option value="material">Material</option>
-                <option value="exercise">Exercise</option>
-                <option value="tutorial">Tutorial</option>
-                <option value="transcript">Transcript</option>
-                <option value="past_exam">Past Exam</option>
-                <option value="edstem_note">EdStem Note</option>
-              </select>
-            </label>
+            <h2 id="index-title">Auto Index</h2>
+            <span class="subtle">Scientia materials, exercises, and tutorials</span>
           </div>
           <label class="field">
-            <span>Title</span>
-            <input id="index-title-input" placeholder="Lecture 1 notes" />
-          </label>
-          <label class="field large">
-            <span>Text</span>
-            <textarea id="index-text" rows="12" placeholder="Paste notes, transcript, exercise text, or exam text"></textarea>
+            <span>Scientia Course URL</span>
+            <input id="index-course-url" placeholder="Optional: https://scientia.doc.ic.ac.uk/2526/..." />
           </label>
           <div class="actions">
-            <button id="index-submit" class="button primary" type="button">Index</button>
+            <button id="index-submit" class="button primary" type="button">Sync Course</button>
             <span id="index-status" class="status"></span>
           </div>
+          <section id="index-results" class="result-list"></section>
         </section>
 
         <section class="view" id="view-retrieve" aria-labelledby="retrieve-title">
@@ -161,4 +148,3 @@
     <script type="module" src="app.js"></script>
   </body>
 </html>
-

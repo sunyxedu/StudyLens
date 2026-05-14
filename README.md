@@ -51,7 +51,8 @@ uv run --extra dev pytest
 ```bash
 uv run studylens --help
 uv run studylens inspect-scientia path/to/course.html
-uv run studylens index-text COMP70001 notes.md
+uv run studylens auto-index COMP70001 --course-title "Advanced Algorithms"
+uv run studylens index-text COMP70001 notes.md --title "Lecture 1 Notes"
 uv run studylens ask "What is dynamic programming?" --course-id COMP70001
 ```
 
@@ -66,6 +67,8 @@ npm run dev
 
 The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000`.
 After `npm run build`, the API also serves the built UI from `http://localhost:8000/app`.
+
+In the UI, use `Index` to sync a course automatically from Scientia. It downloads and indexes supported materials, exercises, and tutorials. `studylens index-text` remains available as a fallback for local notes or transcripts.
 
 ## Extension
 
