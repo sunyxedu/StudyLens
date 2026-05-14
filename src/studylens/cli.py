@@ -58,12 +58,8 @@ def index_text(
 
 
 @app.command("auto-index")
-def auto_index(
-    course_id: str,
-    course_title: str | None = None,
-    course_url: str | None = None,
-) -> None:
-    """Discover a Scientia course page, download resources, and index what can be parsed."""
+def auto_index(course_id: str, course_title: str) -> None:
+    """Discover a Scientia course, download resources, and index what can be parsed."""
 
     settings = get_settings()
     service = build_rag_service(settings)
@@ -74,7 +70,6 @@ def auto_index(
             report = await indexer.index_course(
                 course_id=course_id,
                 course_title=course_title,
-                course_url=course_url,
             )
             return report.model_dump_json(indent=2)
 

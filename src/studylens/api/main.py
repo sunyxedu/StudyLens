@@ -43,8 +43,7 @@ class AutoIndexerLike(Protocol):
         self,
         *,
         course_id: str,
-        course_title: str | None,
-        course_url: str | None,
+        course_title: str,
     ) -> AutoIndexReport: ...
 
 
@@ -74,7 +73,6 @@ async def _run_auto_index(
         return await injected.index_course(
             course_id=payload.course_id,
             course_title=payload.course_title,
-            course_url=payload.course_url,
         )
     settings: Settings = request.app.state.settings
     async with BrowserSession.from_settings(settings) as session:
@@ -82,7 +80,6 @@ async def _run_auto_index(
         return await indexer.index_course(
             course_id=payload.course_id,
             course_title=payload.course_title,
-            course_url=payload.course_url,
         )
 
 

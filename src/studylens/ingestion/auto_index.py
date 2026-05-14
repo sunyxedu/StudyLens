@@ -77,16 +77,15 @@ class CourseAutoIndexer:
         self,
         *,
         course_id: str,
-        course_title: str | None = None,
-        course_url: str | None = None,
+        course_title: str,
     ) -> AutoIndexReport:
         summary = await self._resolve_course(
             course_id=course_id,
             course_title=course_title,
-            course_url=course_url,
         )
-        html = await self.fetcher.get_text(summary.url or course_url or "")
-        course = parse_course_page(html, summary, summary.url or course_url or "")
+        assert summary.url, "resolved course summary must have a URL"
+        html = await self.fetcher.get_text(summary.url)
+        course = parse_course_page(html, summary, summary.url)
         resources = [*course.materials, *course.exercises, *course.tutorials]
         report = AutoIndexReport(
             course_id=course.id,
@@ -127,25 +126,26 @@ class CourseAutoIndexer:
         self,
         *,
         course_id: str,
-        course_title: str | None,
-        course_url: str | None,
+        course_title: str,
     ) -> CourseSummary:
-        if course_url:
-            return CourseSummary(id=course_id, title=course_title or course_id, url=course_url)
-
         base_url = str(self.settings.scientia_base_url)
         timeline_html = await self.fetcher.get_text(base_url)
         courses = await self.course_extractor.extract_courses(timeline_html, base_url)
+
         normalized_id = course_id.upper()
         for course in courses:
-            if course.id.upper() == normalized_id:
+            if course.id.upper() == normalized_id and course.url:
                 return course
-        if course_title:
-            needle = course_title.casefold()
-            for course in courses:
-                if needle in course.title.casefold():
-                    return course
-        raise IngestionError(f"Could not find {course_id} on Scientia timeline")
+
+        needle = course_title.casefold()
+        for course in courses:
+            if needle in course.title.casefold() and course.url:
+                return course
+
+        raise IngestionError(
+            f"Could not find {course_id} ({course_title}) on the Scientia timeline. "
+            "Check the code/title, and refresh STUDYLENS_BROWSER_STORAGE_STATE if SSO expired."
+        )
 
     async def _index_resource(self, resource: Resource) -> AutoIndexItem:
         if not resource.source_url:

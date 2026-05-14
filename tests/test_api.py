@@ -80,16 +80,14 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
             self,
             *,
             course_id: str,
-            course_title: str | None,
-            course_url: str | None,
+            course_title: str,
         ):
             assert course_id == "COMP70001"
             assert course_title == "Advanced Algorithms"
-            assert course_url == "https://scientia.test/course"
             return AutoIndexReport(
                 course_id=course_id,
-                course_title=course_title or course_id,
-                source_url=course_url,
+                course_title=course_title,
+                source_url="https://scientia.doc.ic.ac.uk/2526/modules/COMP70001",
                 discovered_resources=2,
                 indexed_resources=1,
                 indexed_chunks=4,
@@ -123,7 +121,6 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
         json={
             "course_id": "COMP70001",
             "course_title": "Advanced Algorithms",
-            "course_url": "https://scientia.test/course",
         },
     )
 

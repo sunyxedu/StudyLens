@@ -48,15 +48,14 @@ export interface IndexTextRequest {
 
 export interface AutoIndexCourseRequest {
   course_id: string;
-  course_title?: string | null;
-  course_url?: string | null;
+  course_title: string;
 }
 
 export interface AutoIndexItem {
   title: string;
   kind: ResourceKind;
   status: "indexed" | "skipped" | "failed" | string;
-  stage?: "scientia" | "panopto" | string;
+  stage?: "scientia" | "panopto" | "exams" | "edstem" | string;
   source_url?: string | null;
   local_path?: string | null;
   chunks: number;

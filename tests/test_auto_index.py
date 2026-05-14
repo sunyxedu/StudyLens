@@ -146,7 +146,9 @@ def test_course_auto_indexer_downloads_extracts_and_indexes_supported_resources(
         course_extractor=extractor,
     )
 
-    report = asyncio.run(indexer.index_course(course_id="COMP70001"))
+    report = asyncio.run(
+        indexer.index_course(course_id="COMP70001", course_title="Advanced Algorithms")
+    )
 
     assert report.course_title == "COMP70001 Advanced Algorithms"
     assert report.discovered_resources == 3
@@ -173,7 +175,9 @@ def test_course_auto_indexer_includes_panopto_video_results(tmp_path: Path) -> N
         panopto_indexer=FakePanoptoIndexer(),
     )
 
-    report = asyncio.run(indexer.index_course(course_id="COMP70001"))
+    report = asyncio.run(
+        indexer.index_course(course_id="COMP70001", course_title="Advanced Algorithms")
+    )
 
     assert report.discovered_resources == 4
     assert report.indexed_resources == 3
@@ -198,7 +202,9 @@ def test_course_auto_indexer_runs_all_four_stages_when_all_attached(tmp_path: Pa
         edstem_indexer=FakeEdStemIndexer(),
     )
 
-    report = asyncio.run(indexer.index_course(course_id="COMP70001"))
+    report = asyncio.run(
+        indexer.index_course(course_id="COMP70001", course_title="Advanced Algorithms")
+    )
 
     stages = {item.stage for item in report.items}
     assert stages == {"scientia", "panopto", "exams", "edstem"}
@@ -206,33 +212,29 @@ def test_course_auto_indexer_runs_all_four_stages_when_all_attached(tmp_path: Pa
     assert any(item.stage == "edstem" and item.status == "indexed" for item in report.items)
 
 
-def test_course_auto_indexer_uses_explicit_course_url_without_extractor(tmp_path: Path) -> None:
-    fetcher = FakeAsyncFetcher()
+def test_course_auto_indexer_raises_when_course_missing_from_timeline(tmp_path: Path) -> None:
     settings = Settings(
         data_dir=tmp_path / "data",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
     )
     service = make_service()
-    extractor = FakeCourseExtractor([])
+    # Empty extractor → nothing matches → IngestionError.
     indexer = CourseAutoIndexer(
         settings=settings,
         rag=service,
-        fetcher=fetcher,
-        course_extractor=extractor,
+        fetcher=FakeAsyncFetcher(),
+        course_extractor=FakeCourseExtractor([]),
     )
 
-    report = asyncio.run(
-        indexer.index_course(
-            course_id="COMP70001",
-            course_title="Advanced Algorithms",
-            course_url="https://scientia.doc.ic.ac.uk/2526/modules/COMP70001",
+    import pytest
+
+    from studylens.errors import IngestionError
+
+    with pytest.raises(IngestionError, match="Could not find"):
+        asyncio.run(
+            indexer.index_course(course_id="COMP70001", course_title="Advanced Algorithms")
         )
-    )
-
-    assert report.course_title == "Advanced Algorithms"
-    assert report.discovered_resources == 3
-    assert extractor.calls == 0  # explicit URL skips the timeline LLM lookup
 
 
 def test_auto_index_helpers_infer_suffix_and_safe_path_names() -> None:

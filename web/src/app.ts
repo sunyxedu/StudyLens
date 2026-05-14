@@ -24,7 +24,6 @@ const elements = {
   askStatus: byId<HTMLSpanElement>("ask-status"),
   answerCard: byId<HTMLElement>("answer-card"),
   citationList: byId<HTMLElement>("citation-list"),
-  indexCourseUrl: byId<HTMLInputElement>("index-course-url"),
   indexSubmit: byId<HTMLButtonElement>("index-submit"),
   indexStatus: byId<HTMLSpanElement>("index-status"),
   indexResults: byId<HTMLElement>("index-results"),
@@ -126,8 +125,7 @@ async function handleIndex(): Promise<void> {
   await withBusy(elements.indexSubmit, elements.indexStatus, "Syncing", async () => {
     const report = await api.autoIndexCourse({
       course_id: requireCourseId(),
-      course_title: elements.courseTitle.value.trim() || null,
-      course_url: elements.indexCourseUrl.value.trim() || null,
+      course_title: requireCourseTitle(),
     });
     renderIndexReport(report);
     setStatus(

@@ -32,8 +32,7 @@ class IndexTextResponse(BaseModel):
 
 class AutoIndexCourseRequest(BaseModel):
     course_id: str
-    course_title: str | None = None
-    course_url: str | None = None
+    course_title: str
 
 
 class AutoIndexCourseResponse(AutoIndexReport):
