@@ -6,6 +6,7 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
+SCIENTIA_URL = "https://scientia.doc.ic.ac.uk/2526/timeline"
 PANOPTO_URL = (
     "https://imperial.cloud.panopto.eu/Panopto/Pages/Sessions/List.aspx#isSharedWithMe=true"
 )
@@ -19,14 +20,19 @@ async def save_browser_state(output: Path) -> None:
         context = await browser.new_context()
         page = await context.new_page()
 
+        await page.goto(SCIENTIA_URL, wait_until="domcontentloaded")
+        print("\nLog into Imperial SSO via Scientia in the opened browser.")
+        print("After the timeline loads, press Enter here.")
+        input()
+
         await page.goto(PANOPTO_URL, wait_until="domcontentloaded")
-        print("\nLog into Imperial/Panopto in the opened browser.")
-        print("After Panopto is logged in, press Enter here.")
+        print("\nNow log into Panopto (often single-click with the same SSO).")
+        print("After Panopto session list loads, press Enter here.")
         input()
 
         await page.goto(EDSTEM_URL, wait_until="domcontentloaded")
-        print("\nLog into EdStem in the opened browser.")
-        print("After EdStem is logged in, press Enter here to save browser state.")
+        print("\nNow log into EdStem in the opened browser.")
+        print("After the dashboard loads, press Enter here to save browser state.")
         input()
 
         await context.storage_state(path=str(output))
