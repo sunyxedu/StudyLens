@@ -40,7 +40,7 @@ from studylens.ingestion.browser_session import BrowserSession
 PAGE_TEXT_LIMIT = 2_000
 MAX_LINKS = 200
 TRAILING_FILE_RE = re.compile(r"\s*file\s*$", re.IGNORECASE)
-VALID_KINDS: tuple[ResourceKind, ...] = ("material", "exercise", "tutorial", "past_exam")
+VALID_KINDS: tuple[ResourceKind, ...] = ("material", "exercise")
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +71,9 @@ def _system_prompt(course_id: str, course_title: str, course_url: str) -> str:
             break
     return (
         f"You are listing every downloadable resource for course {course_id} "
-        f"({course_title}) on Scientia.\n\n"
+        f"({course_title}) on Scientia. We only care about lecture materials "
+        "and exercises here — past exams come from a different source, and "
+        "tutorials are out of scope.\n\n"
         "Tools:\n"
         "- goto(url): navigate to a URL\n"
         "- page_summary(): URL, title, and a short text snapshot of the page\n"
@@ -82,23 +84,19 @@ def _system_prompt(course_id: str, course_title: str, course_url: str) -> str:
         "Steps:\n"
         f"1. goto {base}/materials, then call list_external_resources()\n"
         f"2. goto {base}/exercises, then call list_external_resources()\n"
-        f"3. goto {base}/tutorials, then call list_external_resources()\n"
-        "4. Build a deduplicated list. For each item, set `kind` based on the "
-        "filename and the tab it was found on:\n"
-        "   - kind='past_exam' if the filename or anchor text looks like a past "
-        "paper / mock exam (e.g. 'mock', '2024-paper', 'exam', 'past paper'); "
-        "this overrides the tab, so a mock found on the materials tab is still "
-        "a past_exam.\n"
-        "   - kind='exercise' for problem sheets, answer keys, or anything on "
-        "the exercises tab that isn't a past paper.\n"
-        "   - kind='tutorial' for tutorial sheets / tutorial materials.\n"
-        "   - kind='material' for lecture notes, slides, handouts, and "
-        "everything else on the materials tab.\n"
-        "5. submit_resources(resources) — each item: title (str), source_url "
-        "(str, the UNWRAPPED real URL), kind (one of material|exercise|tutorial"
-        "|past_exam). Skip duplicates by source_url.\n\n"
+        "3. Build a deduplicated list. For each item:\n"
+        "   - kind='exercise' for problem sheets, answer keys, lab handouts — "
+        "anything from the exercises tab.\n"
+        "   - kind='material' for lecture notes, slides, handouts, summaries — "
+        "anything from the materials tab.\n"
+        "   - DO NOT emit kind='past_exam' or kind='tutorial'. Skip mock papers, "
+        "past exam papers, and tutorial-only PDFs entirely — those are handled "
+        "elsewhere or out of scope.\n"
+        "4. submit_resources(resources) — each item: title (str), source_url "
+        "(str, the UNWRAPPED real URL), kind (one of material|exercise). "
+        "Skip duplicates by source_url.\n\n"
         "Do not navigate inside resource pages or download files. Be efficient: "
-        "three gotos plus one submit is the happy path."
+        "two gotos plus one submit is the happy path."
     )
 
 

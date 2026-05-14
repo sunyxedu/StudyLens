@@ -41,7 +41,7 @@ from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, Br
 from studylens.ingestion.captions import build_caption_chunks, parse_caption_segments
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.edstem import EdStemCrawler
-from studylens.ingestion.exams import ExamsClient
+from studylens.ingestion.exams_agent import discover_past_exams
 from studylens.ingestion.llm_extractor import LLMCourseExtractor
 from studylens.ingestion.manifest import (
     CourseManifest,
@@ -514,15 +514,32 @@ class CourseAutoIndexer:
             return await self.exams_discoverer(self, summary)
         if not self.settings.imperial_username or not self.settings.imperial_password:
             return [], None  # quietly skip when creds aren't configured
-        client = ExamsClient(
-            base_url=str(self.settings.exams_base_url),
-            username=self.settings.imperial_username,
-            password=self.settings.imperial_password,
-        )
+        # Use the digit tail (50001) for matching — Imperial exam PDFs are
+        # named COMP50001.pdf so we still need to filter by it, but the
+        # agent can also match the full Edstem-style code if asked.
+        course_code = f"COMP{summary.id}" if summary.id.isdigit() else summary.id
         try:
-            resources = await client.discover_exam_papers(summary.id)
+            report = await discover_past_exams(
+                course_id=course_code,
+                settings=self.settings,
+            )
         except Exception as exc:  # pragma: no cover.
             return [], str(exc)
+        if report.error:
+            return [], report.error
+        resources = [
+            Resource(
+                course_id=summary.id,
+                title=exam.title,
+                kind="past_exam",
+                source_url=exam.source_url,
+                metadata={
+                    "source": "exams",
+                    "academic_year": exam.academic_year,
+                },
+            )
+            for exam in report.exams
+        ]
         return resources, None
 
     async def _download_exam(self, resource: Resource) -> tuple[bytes, str | None]:
