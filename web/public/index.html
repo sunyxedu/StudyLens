@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StudyLens</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <header class="brand">
+          <div class="brand-mark">SL</div>
+          <div>
+            <h1>StudyLens</h1>
+            <span id="health-pill" class="pill neutral">Checking</span>
+          </div>
+        </header>
+
+        <section class="control-group">
+          <label class="field">
+            <span>Backend</span>
+            <input id="backend-url" value="http://localhost:8000" autocomplete="off" />
+          </label>
+          <button id="save-backend" class="button secondary" type="button">Save</button>
+        </section>
+
+        <section class="control-group">
+          <label class="field">
+            <span>Course ID</span>
+            <input id="course-id" placeholder="COMP70001" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>Course Title</span>
+            <input id="course-title" placeholder="Advanced Algorithms" autocomplete="off" />
+          </label>
+        </section>
+
+        <nav class="nav" aria-label="StudyLens views">
+          <button class="nav-item active" data-view="ask" type="button">Ask</button>
+          <button class="nav-item" data-view="index" type="button">Index</button>
+          <button class="nav-item" data-view="retrieve" type="button">Retrieve</button>
+          <button class="nav-item" data-view="generate" type="button">Generate</button>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <section class="view active" id="view-ask" aria-labelledby="ask-title">
+          <div class="view-head">
+            <h2 id="ask-title">Course Q&A</h2>
+            <div class="inline-controls">
+              <label class="toggle">
+                <input id="ask-exercises" type="checkbox" checked />
+                <span>Exercises</span>
+              </label>
+              <label class="compact-field">
+                <span>Top K</span>
+                <input id="ask-top-k" type="number" min="1" max="20" value="5" />
+              </label>
+            </div>
+          </div>
+          <label class="field large">
+            <span>Question</span>
+            <textarea id="ask-question" rows="5" placeholder="What is the invariant in Dijkstra?"></textarea>
+          </label>
+          <div class="actions">
+            <button id="ask-submit" class="button primary" type="button">Ask</button>
+            <span id="ask-status" class="status"></span>
+          </div>
+          <article id="answer-card" class="output hidden"></article>
+          <section id="citation-list" class="result-list"></section>
+        </section>
+
+        <section class="view" id="view-index" aria-labelledby="index-title">
+          <div class="view-head">
+            <h2 id="index-title">Index Text</h2>
+            <label class="compact-field">
+              <span>Kind</span>
+              <select id="index-kind">
+                <option value="material">Material</option>
+                <option value="exercise">Exercise</option>
+                <option value="tutorial">Tutorial</option>
+                <option value="transcript">Transcript</option>
+                <option value="past_exam">Past Exam</option>
+                <option value="edstem_note">EdStem Note</option>
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Title</span>
+            <input id="index-title-input" placeholder="Lecture 1 notes" />
+          </label>
+          <label class="field large">
+            <span>Text</span>
+            <textarea id="index-text" rows="12" placeholder="Paste notes, transcript, exercise text, or exam text"></textarea>
+          </label>
+          <div class="actions">
+            <button id="index-submit" class="button primary" type="button">Index</button>
+            <span id="index-status" class="status"></span>
+          </div>
+        </section>
+
+        <section class="view" id="view-retrieve" aria-labelledby="retrieve-title">
+          <div class="view-head">
+            <h2 id="retrieve-title">Retrieve</h2>
+            <label class="compact-field">
+              <span>Top K</span>
+              <input id="retrieve-top-k" type="number" min="1" max="50" value="8" />
+            </label>
+          </div>
+          <label class="field large">
+            <span>Query</span>
+            <textarea id="retrieve-query" rows="4" placeholder="recurrence relation exam question"></textarea>
+          </label>
+          <div class="kind-grid" id="retrieve-kinds">
+            <label><input type="checkbox" value="material" checked /> Material</label>
+            <label><input type="checkbox" value="exercise" checked /> Exercise</label>
+            <label><input type="checkbox" value="tutorial" checked /> Tutorial</label>
+            <label><input type="checkbox" value="transcript" checked /> Transcript</label>
+            <label><input type="checkbox" value="past_exam" checked /> Past Exam</label>
+            <label><input type="checkbox" value="edstem_note" checked /> EdStem</label>
+          </div>
+          <div class="actions">
+            <button id="retrieve-submit" class="button primary" type="button">Retrieve</button>
+            <span id="retrieve-status" class="status"></span>
+          </div>
+          <section id="retrieve-results" class="result-list"></section>
+        </section>
+
+        <section class="view" id="view-generate" aria-labelledby="generate-title">
+          <div class="view-head">
+            <h2 id="generate-title">Generate</h2>
+            <div class="segmented" role="tablist" aria-label="Generation mode">
+              <button class="segment active" data-mode="cheatsheet" type="button">Cheatsheet</button>
+              <button class="segment" data-mode="exam" type="button">Predicted Paper</button>
+            </div>
+          </div>
+          <label class="field large">
+            <span>Scope Notes</span>
+            <textarea id="scope-notes" rows="5" placeholder="One note per line"></textarea>
+          </label>
+          <div class="generation-controls">
+            <label class="compact-field">
+              <span>Top K</span>
+              <input id="generate-top-k" type="number" min="1" max="80" value="40" />
+            </label>
+            <label id="question-count-field" class="compact-field hidden">
+              <span>Questions</span>
+              <input id="question-count" type="number" min="1" max="8" value="4" />
+            </label>
+          </div>
+          <div class="actions">
+            <button id="generate-submit" class="button primary" type="button">Generate</button>
+            <button id="download-latex" class="button secondary" type="button" disabled>Download .tex</button>
+            <span id="generate-status" class="status"></span>
+          </div>
+          <pre id="latex-output" class="latex-output"></pre>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
+

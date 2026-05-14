@@ -14,7 +14,7 @@ export class StudyLensClient {
   readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
 
-  constructor(baseUrl: string, fetchImpl: FetchLike = fetch) {
+  constructor(baseUrl: string, fetchImpl: FetchLike = (input, init) => fetch(input, init)) {
     this.baseUrl = normalizeBaseUrl(baseUrl);
     this.fetchImpl = fetchImpl;
   }

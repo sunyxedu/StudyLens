@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from studylens.api.schemas import (
     AskRequest,
@@ -111,8 +115,15 @@ def create_app(*, settings: Settings | None = None, rag_service: RAGService | No
         )
         return GeneratedLatexResponse(latex=latex)
 
+    web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
+    if web_dist.exists():
+        application.mount("/app", StaticFiles(directory=web_dist, html=True), name="app")
+
+        @application.get("/", include_in_schema=False)
+        def app_index() -> RedirectResponse:
+            return RedirectResponse(url="/app")
+
     return application
 
 
 app = create_app()
-

@@ -36,6 +36,7 @@ browser = [
 
 [project.scripts]
 studylens = "studylens.cli:app"
+studylens-save-browser-state = "studylens.tools.browser_state:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

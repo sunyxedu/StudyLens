@@ -1,0 +1,62 @@
+export interface AppSettings {
+  backendUrl: string;
+  courseId: string;
+  courseTitle: string;
+}
+
+const STORAGE_KEY = "studylens.web.settings";
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  backendUrl: "http://localhost:8000",
+  courseId: "COMP70001",
+  courseTitle: "Advanced Algorithms",
+};
+
+export function loadSettings(storage: Storage = localStorage): AppSettings {
+  try {
+    const raw = storage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_SETTINGS;
+    }
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      backendUrl: stringOrDefault(parsed.backendUrl, DEFAULT_SETTINGS.backendUrl),
+      courseId: stringOrDefault(parsed.courseId, DEFAULT_SETTINGS.courseId),
+      courseTitle: stringOrDefault(parsed.courseTitle, DEFAULT_SETTINGS.courseTitle),
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function saveSettings(settings: AppSettings, storage: Storage = localStorage): void {
+  storage.setItem(STORAGE_KEY, JSON.stringify(settings));
+}
+
+export function parseScopeNotes(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+export function resolveBackendUrl(settings: AppSettings, location: Location): string {
+  const isBundledApp = location.pathname.startsWith("/app") && location.port === "8000";
+  if (isBundledApp && settings.backendUrl === DEFAULT_SETTINGS.backendUrl) {
+    return location.origin;
+  }
+  return settings.backendUrl;
+}
+
+export function sanitizeFilename(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "studylens";
+}
+
+function stringOrDefault(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
