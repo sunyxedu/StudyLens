@@ -19,3 +19,20 @@ def test_settings_split_allowed_origins_and_directories(tmp_path: Path) -> None:
     assert settings.processed_dir.exists()
     assert settings.qdrant_path.parent.exists()
 
+
+def test_settings_reads_comma_separated_allowed_origins_from_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv(
+        "STUDYLENS_ALLOWED_ORIGINS",
+        "http://localhost:5173,chrome-extension://abc",
+    )
+
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
+    )
+
+    assert settings.allowed_origins == ["http://localhost:5173", "chrome-extension://abc"]

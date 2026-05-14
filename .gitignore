@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.idea/
 .venv/
 __pycache__/
 *.py[cod]
@@ -14,7 +15,7 @@ extension/dist/
 data/raw/
 data/processed/
 data/vector/
+data/auth/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/vector/.gitkeep
-

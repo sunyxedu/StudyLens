@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     edstem_base_url: AnyHttpUrl = "https://edstem.org/us/dashboard"
     exams_base_url: AnyHttpUrl = "https://exams.doc.ic.ac.uk/"
 
-    allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
