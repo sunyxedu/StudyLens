@@ -17,6 +17,9 @@ data/raw/
 data/processed/
 data/vector/
 data/auth/
+data/*.db
+data/*.db-journal
+data/*.sqlite3
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/vector/.gitkeep
