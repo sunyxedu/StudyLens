@@ -16,26 +16,40 @@ from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGServi
 from studylens.retrieval.qa import TemplateLLM
 
 
+def _wrap(real: str) -> str:
+    return f"/external-resource?url={real}"
+
+
+_LECTURE_NOTES = "https%3A%2F%2Fscientia.test%2Fapi%2Fresources%2F1%2Ffile%2FLecture-notes.txt"
+_SLIDES = "https%3A%2F%2Fscientia.test%2Fapi%2Fresources%2F2%2Ffile%2Fslides.pptx"
+_PROBLEM_SHEET = "https%3A%2F%2Fscientia.test%2Fapi%2Fresources%2F3%2Ffile%2FProblem-Sheet-1.html"
+
+_MATERIALS_TAB = (
+    f'<a href="{_wrap(_LECTURE_NOTES)}">Lecture notes</a>'
+    f'<a href="{_wrap(_SLIDES)}">Unsupported slides</a>'
+)
+_EXERCISES_TAB = f'<a href="{_wrap(_PROBLEM_SHEET)}">Problem Sheet 1</a>'
+_TUTORIALS_TAB = "<p>no tutorials</p>"
+
+
 class FakeAsyncFetcher:
     def __init__(self) -> None:
         self.text = {
             "https://scientia.doc.ic.ac.uk/2526/modules": "<html>timeline placeholder</html>",
-            "https://scientia.doc.ic.ac.uk/2526/modules/COMP70001": """
-                <h2>Materials</h2><a href="notes.txt">Lecture notes</a>
-                <h2>Exercises</h2><a href="exercise.html">Problem Sheet 1</a>
-                <h2>Materials</h2><a href="slides.pptx">Unsupported slides</a>
-            """,
+            "https://scientia.doc.ic.ac.uk/2526/modules/COMP70001/materials": _MATERIALS_TAB,
+            "https://scientia.doc.ic.ac.uk/2526/modules/COMP70001/exercises": _EXERCISES_TAB,
+            "https://scientia.doc.ic.ac.uk/2526/modules/COMP70001/tutorials": _TUTORIALS_TAB,
         }
         self.downloads = {
-            "https://scientia.doc.ic.ac.uk/2526/modules/notes.txt": (
+            "https://scientia.test/api/resources/1/file/Lecture-notes.txt": (
                 b"Dynamic programming stores overlapping subproblems.",
                 "text/plain",
             ),
-            "https://scientia.doc.ic.ac.uk/2526/modules/exercise.html": (
+            "https://scientia.test/api/resources/3/file/Problem-Sheet-1.html": (
                 b"<html><body><p>Tutorial exercise: write a recurrence.</p></body></html>",
                 "text/html",
             ),
-            "https://scientia.doc.ic.ac.uk/2526/modules/slides.pptx": (
+            "https://scientia.test/api/resources/2/file/slides.pptx": (
                 b"not parseable",
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             ),
@@ -66,7 +80,9 @@ def make_extractor() -> FakeCourseExtractor:
             CourseSummary(
                 id="COMP70001",
                 title="COMP70001 Advanced Algorithms",
-                url="https://scientia.doc.ic.ac.uk/2526/modules/COMP70001",
+                # The LLM extractor returns a tab-suffixed URL; auto-index
+                # derives the other tabs from it.
+                url="https://scientia.doc.ic.ac.uk/2526/modules/COMP70001/materials",
                 metadata={"source": "scientia"},
             )
         ]

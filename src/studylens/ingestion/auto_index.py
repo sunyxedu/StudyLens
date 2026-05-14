@@ -18,7 +18,7 @@ from studylens.ingestion.edstem import EdStemIndexer, EdStemIndexResult, build_e
 from studylens.ingestion.exams import ExamIndexResult, ExamsIndexer, build_exams_indexer
 from studylens.ingestion.llm_extractor import LLMCourseExtractor
 from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
-from studylens.ingestion.scientia import parse_course_page
+from studylens.ingestion.scientia import derive_tab_urls, parse_course_tab
 from studylens.retrieval.qa import RAGService
 
 SUPPORTED_DOWNLOAD_SUFFIXES = {
@@ -85,13 +85,22 @@ class CourseAutoIndexer:
             course_title=course_title,
         )
         assert summary.url, "resolved course summary must have a URL"
-        html = await self.fetcher.get_text(summary.url)
-        course = parse_course_page(html, summary, summary.url)
-        resources = [*course.materials, *course.exercises, *course.tutorials]
+
+        resources: list[Resource] = []
+        for kind, tab_url in derive_tab_urls(summary.url).items():
+            try:
+                html = await self.fetcher.get_text(tab_url)
+            except Exception:
+                # Tabs are optional: some courses lack exercises or tutorials.
+                continue
+            resources.extend(
+                parse_course_tab(html, tab_url, course_id=summary.id, kind=kind)
+            )
+
         report = AutoIndexReport(
-            course_id=course.id,
-            course_title=course.title,
-            source_url=course.source_url,
+            course_id=summary.id,
+            course_title=summary.title,
+            source_url=summary.url,
             discovered_resources=len(resources),
         )
 
@@ -100,21 +109,21 @@ class CourseAutoIndexer:
 
         if self.panopto_indexer is not None:
             panopto_items = await self._index_panopto(
-                course_id=course.id,
-                course_title=course.title,
+                course_id=summary.id,
+                course_title=summary.title,
             )
             report.items.extend(panopto_items)
             report.discovered_resources += sum(1 for item in panopto_items if item.source_url)
 
         if self.exams_indexer is not None:
-            exam_items = await self._index_exams(course_id=course.id)
+            exam_items = await self._index_exams(course_id=summary.id)
             report.items.extend(exam_items)
             report.discovered_resources += sum(1 for item in exam_items if item.source_url)
 
         if self.edstem_indexer is not None:
             edstem_items = await self._index_edstem(
-                course_id=course.id,
-                course_title=course.title,
+                course_id=summary.id,
+                course_title=summary.title,
             )
             report.items.extend(edstem_items)
             report.discovered_resources += sum(1 for item in edstem_items if item.chunks)

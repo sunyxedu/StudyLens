@@ -23,7 +23,7 @@ from studylens.ingestion.exams import (
     build_exams_indexer,
 )
 from studylens.ingestion.llm_extractor import LLMCourseExtractor
-from studylens.ingestion.scientia import parse_course_page
+from studylens.ingestion.scientia import derive_tab_urls, parse_course_page, parse_course_tab
 
 __all__ = [
     "AsyncFetcher",
@@ -44,6 +44,8 @@ __all__ = [
     "build_edstem_indexer",
     "build_exams_indexer",
     "chunk_text",
+    "derive_tab_urls",
     "extract_text",
     "parse_course_page",
+    "parse_course_tab",
 ]
