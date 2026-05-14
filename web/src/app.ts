@@ -297,6 +297,12 @@ function handleSelectAllCourses(): void {
   updateCoursesActions();
 }
 
+// How many courses to index simultaneously. Each one runs its own
+// BrowserSession (Chromium) + Claude Agent SDK subprocess, so the cap
+// keeps RAM and rate limits in check while still being faster than
+// strict serial.
+const INDEX_CONCURRENCY = 3;
+
 async function handleIndexSelected(): Promise<void> {
   const targets = discoveredCourses.filter((c) => selectedCourseCodes.has(c.code));
   if (targets.length === 0) {
@@ -310,14 +316,19 @@ async function handleIndexSelected(): Promise<void> {
   elements.coursesProgressList.replaceChildren(
     ...targets.map((c) => createProgressRow(c.code, c.title, "queued"))
   );
-  try {
-    for (const course of targets) {
+
+  const queue = [...targets];
+  let completed = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const course = queue.shift();
+      if (!course) return;
       const row = elements.coursesProgressList.querySelector<HTMLElement>(
         `[data-code="${course.code}"]`
       );
       if (!row) continue;
       setProgressStatus(row, "running", "Indexing…");
-      setStatus(elements.coursesStatus, `Indexing ${course.code}…`);
       try {
         const report = await api.autoIndexCourse({
           course_id: course.code,
@@ -335,8 +346,18 @@ async function handleIndexSelected(): Promise<void> {
           error instanceof Error ? error.message : "failed"
         );
       }
+      completed += 1;
+      setStatus(elements.coursesStatus, `${completed}/${targets.length} done`);
     }
-    setStatus(elements.coursesStatus, "Done");
+  }
+
+  const workers = Array.from(
+    { length: Math.min(INDEX_CONCURRENCY, targets.length) },
+    () => worker()
+  );
+  try {
+    await Promise.all(workers);
+    setStatus(elements.coursesStatus, `Done · ${completed}/${targets.length}`);
   } finally {
     elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
     elements.coursesDiscover.disabled = false;
