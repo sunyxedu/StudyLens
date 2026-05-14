@@ -373,6 +373,189 @@ textarea:focus {
   display: none !important;
 }
 
+/* Courses view ---------------------------------------------------------- */
+
+.course-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 720px;
+}
+
+.course-intro strong {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.course-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-width: 760px;
+}
+
+.course-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.course-card:hover {
+  border-color: #b9c5be;
+  background: #fbfaf4;
+}
+
+.course-card label {
+  display: grid;
+  grid-template-columns: 18px 100px 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.course-card input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.course-card.selected {
+  border-color: var(--accent);
+  background: #e8f1ec;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.course-card.selected:hover {
+  background: #dfeae4;
+}
+
+.course-code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 6px;
+  padding: 5px 8px;
+  text-align: center;
+}
+
+.course-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.course-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-url {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Indexing progress ----------------------------------------------------- */
+
+.course-progress {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+  margin-top: 6px;
+}
+
+.course-progress[hidden] {
+  display: none;
+}
+
+.course-progress-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.course-progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.course-progress-row {
+  display: grid;
+  grid-template-columns: 100px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+.course-progress-row .progress-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.course-progress-row .progress-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-progress-row .progress-summary {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-status {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  border-radius: 6px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.progress-status.queued { background: #ece9df; color: #60666a; }
+.progress-status.running { background: #f3e3cc; color: #8e5818; }
+.progress-status.done { background: #dcebe3; color: #145548; }
+.progress-status.failed { background: #f2ddda; color: #8c332c; }
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;

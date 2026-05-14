@@ -29,9 +29,12 @@ const elements = {
   indexResults: byId<HTMLElement>("index-results"),
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
+  coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
   coursesStatus: byId<HTMLSpanElement>("courses-status"),
-  coursesList: byId<HTMLElement>("courses-list"),
+  coursesSummary: byId<HTMLSpanElement>("courses-summary"),
+  coursesList: byId<HTMLUListElement>("courses-list"),
   coursesProgress: byId<HTMLElement>("courses-progress"),
+  coursesProgressList: byId<HTMLUListElement>("courses-progress-list"),
   retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
   retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
   retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
@@ -81,6 +84,8 @@ function init(): void {
   elements.downloadLatex.addEventListener("click", handleDownloadLatex);
   elements.coursesDiscover.addEventListener("click", handleDiscoverCourses);
   elements.coursesIndex.addEventListener("click", handleIndexSelected);
+  elements.coursesSelectAll.addEventListener("click", handleSelectAllCourses);
+  updateCoursesActions();
 
   void refreshHealth();
 }
@@ -130,55 +135,129 @@ async function handleAsk(): Promise<void> {
   });
 }
 
+type ProgressStatus = "queued" | "running" | "done" | "failed";
+
 async function handleDiscoverCourses(): Promise<void> {
   await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering", async () => {
     const response = await api.discoverCourses();
     discoveredCourses = response.courses;
     selectedCourseCodes.clear();
     renderCourseList();
-    elements.coursesProgress.replaceChildren();
-    elements.coursesIndex.disabled = discoveredCourses.length === 0;
+    elements.coursesProgressList.replaceChildren();
+    elements.coursesProgress.hidden = true;
     if (response.error) {
       setStatus(elements.coursesStatus, response.error, "error");
     } else {
-      const dropped = response.dropped_titles.length
-        ? ` (skipped ${response.dropped_titles.length} without a course code)`
-        : "";
-      setStatus(
-        elements.coursesStatus,
-        `Found ${discoveredCourses.length} courses${dropped}`
-      );
+      setStatus(elements.coursesStatus, "");
     }
+    updateCoursesSummary(response.dropped_titles.length);
+    updateCoursesActions();
   });
 }
 
 function renderCourseList(): void {
   elements.coursesList.replaceChildren(
-    ...discoveredCourses.map((course) => {
-      const row = document.createElement("label");
-      row.className = "course-row";
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = course.code;
-      checkbox.checked = selectedCourseCodes.has(course.code);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) selectedCourseCodes.add(course.code);
-        else selectedCourseCodes.delete(course.code);
-      });
-
-      const body = document.createElement("div");
-      const title = document.createElement("div");
-      title.innerHTML = `<strong>${course.code}</strong> · ${escapeHtml(course.title)}`;
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = course.edstem_url || "";
-      body.append(title, meta);
-
-      row.append(checkbox, body);
-      return row;
-    })
+    ...discoveredCourses.map((course) => createCourseCard(course))
   );
+}
+
+function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
+  const li = document.createElement("li");
+  li.className = "course-card";
+
+  const label = document.createElement("label");
+  label.htmlFor = `course-${course.code}`;
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.id = `course-${course.code}`;
+  checkbox.value = course.code;
+  checkbox.checked = selectedCourseCodes.has(course.code);
+  if (checkbox.checked) li.classList.add("selected");
+  checkbox.addEventListener("change", () => {
+    if (checkbox.checked) selectedCourseCodes.add(course.code);
+    else selectedCourseCodes.delete(course.code);
+    li.classList.toggle("selected", checkbox.checked);
+    updateCoursesActions();
+  });
+
+  const code = document.createElement("span");
+  code.className = "course-code";
+  code.textContent = course.code;
+
+  const info = document.createElement("span");
+  info.className = "course-info";
+
+  const title = document.createElement("span");
+  title.className = "course-title";
+  title.textContent = stripCodePrefix(course.title, course.code);
+  title.title = course.title;
+
+  info.append(title);
+
+  if (course.edstem_url) {
+    const url = document.createElement("span");
+    url.className = "course-url";
+    url.textContent = shortUrl(course.edstem_url);
+    url.title = course.edstem_url;
+    info.append(url);
+  }
+
+  label.append(checkbox, code, info);
+  li.append(label);
+  return li;
+}
+
+function stripCodePrefix(title: string, code: string): string {
+  // EdStem titles like "COMP 50001: Algorithm Design and Analysis" — drop the
+  // leading code so the title row doesn't double-print it next to the badge.
+  const stripped = title
+    .replace(/^\s*[A-Z]{2,5}\s*[-\s]?\s*\d{3,5}(?:[\.\/][A-Za-z0-9]+)?\s*[:\-—]\s*/, "")
+    .trim();
+  return stripped || title;
+}
+
+function shortUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.host.replace(/^www\./, "") + parsed.pathname;
+  } catch {
+    return url;
+  }
+}
+
+function updateCoursesSummary(dropped: number = 0): void {
+  if (discoveredCourses.length === 0) {
+    elements.coursesSummary.textContent = "";
+    return;
+  }
+  const dropNote = dropped > 0 ? ` · ${dropped} without a code skipped` : "";
+  elements.coursesSummary.textContent =
+    `${discoveredCourses.length} courses${dropNote}`;
+}
+
+function updateCoursesActions(): void {
+  const selectedCount = selectedCourseCodes.size;
+  elements.coursesIndex.disabled = selectedCount === 0;
+  elements.coursesIndex.textContent =
+    selectedCount > 0 ? `Index ${selectedCount} selected` : "Index selected";
+  elements.coursesSelectAll.hidden = discoveredCourses.length === 0;
+  elements.coursesSelectAll.textContent =
+    selectedCount === discoveredCourses.length && discoveredCourses.length > 0
+      ? "Clear selection"
+      : "Select all";
+}
+
+function handleSelectAllCourses(): void {
+  const allSelected = selectedCourseCodes.size === discoveredCourses.length;
+  selectedCourseCodes.clear();
+  if (!allSelected) {
+    for (const course of discoveredCourses) {
+      selectedCourseCodes.add(course.code);
+    }
+  }
+  renderCourseList();
+  updateCoursesActions();
 }
 
 async function handleIndexSelected(): Promise<void> {
@@ -189,23 +268,31 @@ async function handleIndexSelected(): Promise<void> {
   }
   elements.coursesIndex.disabled = true;
   elements.coursesDiscover.disabled = true;
-  elements.coursesProgress.replaceChildren();
+  elements.coursesSelectAll.disabled = true;
+  elements.coursesProgress.hidden = false;
+  elements.coursesProgressList.replaceChildren(
+    ...targets.map((c) => createProgressRow(c.code, c.title, "queued"))
+  );
   try {
     for (const course of targets) {
-      const row = appendProgressRow(course.code, course.title, "queued");
+      const row = elements.coursesProgressList.querySelector<HTMLElement>(
+        `[data-code="${course.code}"]`
+      );
+      if (!row) continue;
+      setProgressStatus(row, "running", "Indexing…");
       setStatus(elements.coursesStatus, `Indexing ${course.code}…`);
       try {
         const report = await api.autoIndexCourse({
           course_id: course.code,
           course_title: course.title,
         });
-        updateProgressRow(
+        setProgressStatus(
           row,
           "done",
           `${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks`
         );
       } catch (error) {
-        updateProgressRow(
+        setProgressStatus(
           row,
           "failed",
           error instanceof Error ? error.message : "failed"
@@ -214,31 +301,61 @@ async function handleIndexSelected(): Promise<void> {
     }
     setStatus(elements.coursesStatus, "Done");
   } finally {
-    elements.coursesIndex.disabled = false;
+    elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
     elements.coursesDiscover.disabled = false;
+    elements.coursesSelectAll.disabled = false;
   }
 }
 
-function appendProgressRow(code: string, title: string, status: string): HTMLElement {
-  const row = document.createElement("article");
-  row.className = "result-item";
-  row.dataset.code = code;
-  row.innerHTML = `<div class="result-meta"><span class="result-title">${code}</span><span data-role="status">${status}</span></div><p class="result-text">${escapeHtml(title)}</p>`;
-  elements.coursesProgress.appendChild(row);
-  return row;
+function createProgressRow(
+  code: string,
+  title: string,
+  status: ProgressStatus
+): HTMLLIElement {
+  const li = document.createElement("li");
+  li.className = "course-progress-row";
+  li.dataset.code = code;
+
+  const codeNode = document.createElement("span");
+  codeNode.className = "course-code";
+  codeNode.textContent = code;
+
+  const body = document.createElement("div");
+  body.className = "progress-body";
+
+  const titleNode = document.createElement("span");
+  titleNode.className = "progress-title";
+  titleNode.textContent = stripCodePrefix(title, code);
+  titleNode.title = title;
+
+  const summary = document.createElement("span");
+  summary.className = "progress-summary";
+  summary.dataset.role = "summary";
+  summary.textContent = "Queued";
+
+  body.append(titleNode, summary);
+
+  const statusBadge = document.createElement("span");
+  statusBadge.className = `progress-status ${status}`;
+  statusBadge.dataset.role = "status";
+  statusBadge.textContent = status;
+
+  li.append(codeNode, body, statusBadge);
+  return li;
 }
 
-function updateProgressRow(row: HTMLElement, status: string, summary: string): void {
+function setProgressStatus(
+  row: HTMLElement,
+  status: ProgressStatus,
+  summary: string
+): void {
   const statusNode = row.querySelector<HTMLElement>('[data-role="status"]');
-  if (statusNode) statusNode.textContent = status;
-  const body = row.querySelector<HTMLElement>(".result-text");
-  if (body) body.textContent = `${body.textContent} — ${summary}`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c)
-  );
+  if (statusNode) {
+    statusNode.className = `progress-status ${status}`;
+    statusNode.textContent = status;
+  }
+  const summaryNode = row.querySelector<HTMLElement>('[data-role="summary"]');
+  if (summaryNode) summaryNode.textContent = summary;
 }
 
 async function handleIndex(): Promise<void> {

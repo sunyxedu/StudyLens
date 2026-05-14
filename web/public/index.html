@@ -7,11 +7,6 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <style>
-      .course-row { display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid rgba(0,0,0,0.05); }
-      .course-row input { margin-top:4px; }
-      .course-row .meta { font-size:12px; color:var(--muted); }
-    </style>
     <main class="shell">
       <aside class="sidebar">
         <header class="brand">
@@ -53,21 +48,29 @@
       <section class="workspace">
         <section class="view active" id="view-courses" aria-labelledby="courses-title">
           <div class="view-head">
-            <h2 id="courses-title">My Courses</h2>
-            <span class="subtle">Pulled from EdStem dashboard via an agent</span>
+            <h2 id="courses-title">My courses</h2>
+            <span id="courses-summary" class="subtle"></span>
           </div>
-          <p class="subtle">
-            Click <strong>Discover from EdStem</strong> to list this term's courses. Then tick the
-            ones you want, and <strong>Index Selected</strong> runs Scientia + Panopto + exams +
-            EdStem for each.
+          <p class="course-intro">
+            <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
+            Tick the ones you want, then <strong>Index selected</strong> runs Scientia,
+            Panopto, past exams, and EdStem scope notes for each in one pass.
           </p>
           <div class="actions">
-            <button id="courses-discover" class="button primary" type="button">Discover from EdStem</button>
-            <button id="courses-index" class="button secondary" type="button" disabled>Index Selected</button>
+            <button id="courses-discover" class="button primary" type="button">Discover</button>
+            <button id="courses-index" class="button primary" type="button" disabled>
+              Index selected
+            </button>
+            <button id="courses-select-all" class="button secondary" type="button" hidden>
+              Select all
+            </button>
             <span id="courses-status" class="status"></span>
           </div>
-          <section id="courses-list" class="result-list"></section>
-          <section id="courses-progress" class="result-list"></section>
+          <ul id="courses-list" class="course-list" role="list"></ul>
+          <section id="courses-progress" class="course-progress" hidden>
+            <h3 class="course-progress-title">Indexing progress</h3>
+            <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
+          </section>
         </section>
 
         <section class="view" id="view-ask" aria-labelledby="ask-title">
