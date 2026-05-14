@@ -90,16 +90,13 @@ def parse_exam_links(html: str, base_url: str, course_id: str) -> list[Resource]
 
 
 YEAR_ARCHIVE_RE = re.compile(r"pastpapers/papers\.\d{2}-\d{2}")
-YEAR_LABEL_RE = re.compile(r"papers\.(\d{2}-\d{2})")
+YEAR_LABEL_RE = re.compile(r"papers\.(\d{2})-(\d{2})")
+ARCHIVE_INDEX_PATH = "archive.html"
+DEFAULT_MAX_YEARS = 10
 
 
 def find_year_archive_urls(html: str, base_url: str) -> list[str]:
-    """Return the year-archive URLs linked from the exams root index.
-
-    Each `pastpapers/papers.YY-YY` page is a flat index of every paper
-    sat that academic year, with anchors like `COMP50001.pdf` resolved
-    against the archive URL.
-    """
+    """Year-archive URLs linked from an exams page (root or archive)."""
     soup = BeautifulSoup(html, "html.parser")
     seen: dict[str, None] = {}
     for anchor in soup.find_all("a", href=True):
@@ -111,6 +108,15 @@ def find_year_archive_urls(html: str, base_url: str) -> list[str]:
             absolute = absolute + "/"  # urljoin treats the last segment as a dir
         seen.setdefault(absolute, None)
     return list(seen)
+
+
+def _academic_year_start(year_url: str) -> int:
+    """Map `.../papers.YY-YY/` to a full 4-digit start year for sorting."""
+    match = YEAR_LABEL_RE.search(year_url)
+    if not match:
+        return 0
+    yy = int(match.group(1))
+    return 2000 + yy if yy < 50 else 1900 + yy
 
 
 @dataclass(slots=True)
@@ -128,6 +134,7 @@ class ExamsClient:
     username: str | None = None
     password: str | None = None
     timeout: float = 30.0
+    max_years: int = DEFAULT_MAX_YEARS
 
     def _require_credentials(self) -> tuple[str, str]:
         if not self.username or not self.password:
@@ -143,6 +150,10 @@ class ExamsClient:
             follow_redirects=True,
             auth=(username, password),
         ) as client:
+            # Recent years live on the root index; older ones are linked from
+            # /archive.html. We merge both, sort by recency, and walk the most
+            # recent N. Going further back than ~10 years rarely helps since
+            # the syllabus drifts and old papers stop being representative.
             root_response = await client.get(self.base_url)
             if root_response.status_code == 401:
                 raise ConfigurationError(
@@ -150,13 +161,29 @@ class ExamsClient:
                     "IMPERIAL_USERNAME / IMPERIAL_PASSWORD"
                 )
             root_response.raise_for_status()
-            year_urls = find_year_archive_urls(root_response.text, self.base_url)
+            year_urls = list(find_year_archive_urls(root_response.text, self.base_url))
+
+            archive_url = urljoin(self.base_url, ARCHIVE_INDEX_PATH)
+            try:
+                archive_response = await client.get(archive_url)
+            except httpx.HTTPError:
+                archive_response = None
+            if archive_response is not None and archive_response.is_success:
+                year_urls.extend(
+                    find_year_archive_urls(archive_response.text, archive_url)
+                )
+
+            unique_years = list(dict.fromkeys(year_urls))
+            unique_years.sort(key=_academic_year_start, reverse=True)
+            target_years = unique_years[: self.max_years]
 
             seen_pdf_urls: set[str] = set()
             resources: list[Resource] = []
-            for year_url in year_urls:
+            for year_url in target_years:
                 year_match = YEAR_LABEL_RE.search(year_url)
-                year_label = year_match.group(1) if year_match else None
+                year_label = (
+                    f"{year_match.group(1)}-{year_match.group(2)}" if year_match else None
+                )
                 try:
                     year_response = await client.get(year_url)
                 except httpx.HTTPError:
