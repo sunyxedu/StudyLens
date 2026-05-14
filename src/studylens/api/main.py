@@ -16,6 +16,8 @@ from studylens.api.schemas import (
     GeneratedLatexResponse,
     GenerateRequest,
     HealthResponse,
+    IndexExamsRequest,
+    IndexExamsResponse,
     IndexTextRequest,
     IndexTextResponse,
     PredictedExamRequest,
@@ -29,6 +31,7 @@ from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
 from studylens.ingestion.auto_index import AutoIndexReport, build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
+from studylens.ingestion.exams import ExamsIndexer, build_exams_indexer
 from studylens.retrieval.qa import RAGService
 
 
@@ -85,6 +88,7 @@ def create_app(
     settings: Settings | None = None,
     rag_service: RAGService | None = None,
     auto_indexer: AutoIndexerLike | None = None,
+    exams_indexer: ExamsIndexer | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     service = rag_service or build_rag_service(settings)
@@ -95,6 +99,7 @@ def create_app(
     application.state.cheatsheet_generator = CheatsheetGenerator(rag=service, llm=service.llm)
     application.state.exam_generator = PredictedExamGenerator(rag=service, llm=service.llm)
     application.state.auto_indexer = auto_indexer
+    application.state.exams_indexer = exams_indexer
 
     allow_all = (
         "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
@@ -132,6 +137,18 @@ def create_app(
     ) -> AutoIndexCourseResponse:
         report = await _run_auto_index(request, payload)
         return AutoIndexCourseResponse(**report.model_dump())
+
+    @application.post("/index/exams", response_model=IndexExamsResponse)
+    async def index_exams(
+        payload: IndexExamsRequest,
+        request: Request,
+    ) -> IndexExamsResponse:
+        indexer: ExamsIndexer = (
+            request.app.state.exams_indexer
+            or build_exams_indexer(request.app.state.settings, _service(request))
+        )
+        results = await indexer.index_course_exams(course_id=payload.course_id)
+        return IndexExamsResponse(results=results)
 
     @application.post("/retrieve", response_model=RetrieveResponse)
     def retrieve(payload: RetrieveRequest, request: Request) -> RetrieveResponse:

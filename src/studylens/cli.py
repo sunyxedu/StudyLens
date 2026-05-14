@@ -13,6 +13,7 @@ from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
 from studylens.ingestion.auto_index import build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.exams import build_exams_indexer
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
 
 app = typer.Typer(help="StudyLens course ingestion and retrieval CLI.")
@@ -86,6 +87,21 @@ def auto_index(
                 course_url=course_url,
             )
             return report.model_dump_json(indent=2)
+
+    typer.echo(asyncio.run(_run()))
+
+
+@app.command("index-exams")
+def index_exams(course_id: str) -> None:
+    """Download and index past exam papers for a course."""
+
+    settings = get_settings()
+    service = build_rag_service(settings)
+
+    async def _run() -> str:
+        indexer = build_exams_indexer(settings, service)
+        results = await indexer.index_course_exams(course_id=course_id)
+        return json.dumps([result.model_dump() for result in results], indent=2)
 
     typer.echo(asyncio.run(_run()))
 

@@ -6,6 +6,7 @@ from qdrant_client import QdrantClient
 from studylens.api.main import create_app
 from studylens.config import Settings
 from studylens.ingestion.auto_index import AutoIndexReport
+from studylens.ingestion.exams import ExamIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
 from studylens.retrieval.qa import TemplateLLM
 
@@ -127,6 +128,50 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.json()["indexed_chunks"] == 4
+
+
+def test_index_exams_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
+    class FakeExamsIndexer:
+        async def index_course_exams(self, *, course_id: str) -> list[ExamIndexResult]:
+            assert course_id == "COMP70001"
+            return [
+                ExamIndexResult(
+                    title="2024 paper",
+                    status="indexed",
+                    source_url="https://exams.test/2024.pdf",
+                    local_path="data/raw/COMP70001/exams/2024.pdf",
+                    chunks=2,
+                )
+            ]
+
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        qdrant_collection="api_exams_test",
+    )
+    service = RAGService(
+        embeddings=HashEmbeddingClient(dimensions=64),
+        vector_store=QdrantVectorStore(
+            collection_name="api_exams_test",
+            dimensions=64,
+            client=QdrantClient(":memory:"),
+        ),
+        llm=TemplateLLM(),
+    )
+    client = TestClient(
+        create_app(
+            settings=settings,
+            rag_service=service,
+            exams_indexer=FakeExamsIndexer(),
+        )
+    )
+
+    response = client.post("/index/exams", json={"course_id": "COMP70001"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["results"][0]["status"] == "indexed"
+    assert body["results"][0]["chunks"] == 2
 
 
 def test_generation_endpoints_return_latex(tmp_path: Path) -> None:

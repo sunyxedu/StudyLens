@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from studylens.domain import Answer, SearchResult
 from studylens.domain.models import ResourceKind
 from studylens.ingestion.auto_index import AutoIndexReport
+from studylens.ingestion.exams import ExamIndexResult
 
 
 class HealthResponse(BaseModel):
@@ -36,6 +37,14 @@ class AutoIndexCourseRequest(BaseModel):
 
 class AutoIndexCourseResponse(AutoIndexReport):
     pass
+
+
+class IndexExamsRequest(BaseModel):
+    course_id: str
+
+
+class IndexExamsResponse(BaseModel):
+    results: list[ExamIndexResult]
 
 
 class AskRequest(BaseModel):

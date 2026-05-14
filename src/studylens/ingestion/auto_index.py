@@ -13,6 +13,7 @@ from studylens.errors import IngestionError, UnsupportedDocumentError
 from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.exams import ExamIndexResult, ExamsIndexer, build_exams_indexer
 from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
 from studylens.retrieval.qa import RAGService
@@ -66,6 +67,7 @@ class CourseAutoIndexer:
     rag: RAGService
     fetcher: AsyncFetcher
     panopto_indexer: PanoptoVideoIndexer | None = None
+    exams_indexer: ExamsIndexer | None = None
 
     async def index_course(
         self,
@@ -99,6 +101,11 @@ class CourseAutoIndexer:
             )
             report.items.extend(panopto_items)
             report.discovered_resources += sum(1 for item in panopto_items if item.source_url)
+
+        if self.exams_indexer is not None:
+            exam_items = await self._index_exams(course_id=course.id)
+            report.items.extend(exam_items)
+            report.discovered_resources += sum(1 for item in exam_items if item.source_url)
 
         report.indexed_resources = sum(1 for item in report.items if item.status == "indexed")
         report.indexed_chunks = sum(item.chunks for item in report.items)
@@ -204,6 +211,11 @@ class CourseAutoIndexer:
         )
         return [panopto_result_to_item(result) for result in results]
 
+    async def _index_exams(self, *, course_id: str) -> list[AutoIndexItem]:
+        assert self.exams_indexer is not None
+        results = await self.exams_indexer.index_course_exams(course_id=course_id)
+        return [exam_result_to_item(result) for result in results]
+
 
 def build_auto_indexer(
     settings: Settings,
@@ -211,19 +223,22 @@ def build_auto_indexer(
     session: BrowserSession,
     *,
     include_panopto: bool = True,
+    include_exams: bool = True,
 ) -> CourseAutoIndexer:
-    """Default wiring: BrowserFetcher + Panopto indexer sharing one session."""
+    """Default wiring: BrowserFetcher + Panopto + exams (when creds present)."""
 
     panopto = (
         PanoptoVideoIndexer(settings=settings, rag=rag, session=session)
         if include_panopto
         else None
     )
+    exams = build_exams_indexer(settings, rag) if include_exams else None
     return CourseAutoIndexer(
         settings=settings,
         rag=rag,
         fetcher=BrowserFetcher(session),
         panopto_indexer=panopto,
+        exams_indexer=exams,
     )
 
 
@@ -249,6 +264,19 @@ def panopto_result_to_item(result: PanoptoVideoIndexResult) -> AutoIndexItem:
         kind="transcript",
         status=result.status,
         stage="panopto",
+        source_url=result.source_url,
+        local_path=result.local_path,
+        chunks=result.chunks,
+        error=result.error,
+    )
+
+
+def exam_result_to_item(result: ExamIndexResult) -> AutoIndexItem:
+    return AutoIndexItem(
+        title=result.title,
+        kind="past_exam",
+        status=result.status,
+        stage="exams",
         source_url=result.source_url,
         local_path=result.local_path,
         chunks=result.chunks,

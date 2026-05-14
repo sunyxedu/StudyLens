@@ -8,6 +8,7 @@ from qdrant_client import QdrantClient
 from studylens.config import Settings
 from studylens.ingestion._paths import safe_path_part
 from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix
+from studylens.ingestion.exams import ExamIndexResult
 from studylens.ingestion.panopto import PanoptoVideoIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
 from studylens.retrieval.qa import TemplateLLM
@@ -63,6 +64,20 @@ class FakePanoptoIndexer:
                 source_url="https://panopto.test/viewer?id=1",
                 local_path="data/raw/COMP70001/panopto/lecture.srt",
                 chunks=3,
+            )
+        ]
+
+
+class FakeExamsIndexer:
+    async def index_course_exams(self, *, course_id: str) -> list[ExamIndexResult]:
+        assert course_id == "COMP70001"
+        return [
+            ExamIndexResult(
+                title="2024 paper",
+                status="indexed",
+                source_url="https://exams.test/COMP70001/2024.pdf",
+                local_path="data/raw/COMP70001/exams/2024.pdf",
+                chunks=2,
             )
         ]
 
@@ -123,6 +138,30 @@ def test_course_auto_indexer_includes_panopto_video_results(tmp_path: Path) -> N
     assert report.indexed_resources == 3
     assert report.indexed_chunks == 5
     assert any(item.stage == "panopto" and item.chunks == 3 for item in report.items)
+
+
+def test_course_auto_indexer_includes_exam_stage_when_indexer_attached(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
+    )
+    service = make_service()
+    indexer = CourseAutoIndexer(
+        settings=settings,
+        rag=service,
+        fetcher=FakeAsyncFetcher(),
+        panopto_indexer=FakePanoptoIndexer(),
+        exams_indexer=FakeExamsIndexer(),
+    )
+
+    report = asyncio.run(indexer.index_course(course_id="COMP70001"))
+
+    stages = {item.stage for item in report.items}
+    assert stages == {"scientia", "panopto", "exams"}
+    assert report.discovered_resources == 5
+    assert report.indexed_chunks == 7
+    assert any(item.stage == "exams" and item.status == "indexed" for item in report.items)
 
 
 def test_course_auto_indexer_uses_explicit_course_url_without_timeline(tmp_path: Path) -> None:
