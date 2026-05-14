@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 from studylens.domain import Resource
-from studylens.errors import ConfigurationError
+from studylens.ingestion.browser_session import BrowserSession
 
 EXAM_SCOPE_RE = re.compile(
     r"\b(exam|assess|test|scope|included|excluded|not\s+examined|not\s+assessed|will\s+not)\b",
@@ -15,17 +14,15 @@ EXAM_SCOPE_RE = re.compile(
 
 @dataclass(slots=True)
 class EdStemCrawler:
-    base_url: str
-    storage_state: Path | None = None
+    """Collect exam-scope posts from EdStem for a given course.
 
-    def require_browser_state(self) -> None:
-        if not self.storage_state:
-            raise ConfigurationError(
-                "EdStem access requires STUDYLENS_BROWSER_STORAGE_STATE "
-                "with an authenticated session"
-            )
-        if not self.storage_state.exists():
-            raise ConfigurationError(f"Browser storage state not found: {self.storage_state}")
+    Drives a real Page because EdStem's dashboard is heavily JS-rendered
+    and uses client-side routing to navigate from dashboard → course →
+    posts list. All auth comes from the BrowserSession's storage state.
+    """
+
+    session: BrowserSession
+    base_url: str
 
     @staticmethod
     def filter_exam_scope_posts(posts: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -36,16 +33,7 @@ class EdStemCrawler:
         ]
 
     async def collect_scope_notes(self, course_id: str, course_title: str) -> list[Resource]:
-        self.require_browser_state()
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError as exc:
-            raise ConfigurationError("Install studylens[browser] to use EdStem ingestion") from exc
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(storage_state=str(self.storage_state))
-            page = await context.new_page()
+        async with self.session.page() as page:
             await page.goto(self.base_url, wait_until="domcontentloaded")
             await page.get_by_text(course_title, exact=False).first.click()
             await page.wait_for_load_state("networkidle")
@@ -55,7 +43,6 @@ class EdStemCrawler:
                     body: node.innerText || ''
                 }))"""
             )
-            await browser.close()
 
         resources: list[Resource] = []
         for index, post in enumerate(self.filter_exam_scope_posts(posts)):

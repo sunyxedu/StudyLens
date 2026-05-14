@@ -74,7 +74,13 @@ def test_index_retrieve_and_ask_flow(tmp_path: Path) -> None:
 
 def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
     class FakeAutoIndexer:
-        def index_course(self, *, course_id: str, course_title: str | None, course_url: str | None):
+        async def index_course(
+            self,
+            *,
+            course_id: str,
+            course_title: str | None,
+            course_url: str | None,
+        ):
             assert course_id == "COMP70001"
             assert course_title == "Advanced Algorithms"
             assert course_url == "https://scientia.test/course"

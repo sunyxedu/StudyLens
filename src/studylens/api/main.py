@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,9 +26,20 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import Settings, get_settings
 from studylens.domain import Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
-from studylens.ingestion.auto_index import CourseAutoIndexer
+from studylens.ingestion.auto_index import AutoIndexReport, build_auto_indexer
+from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
 from studylens.retrieval.qa import RAGService
+
+
+class AutoIndexerLike(Protocol):
+    async def index_course(
+        self,
+        *,
+        course_id: str,
+        course_title: str | None,
+        course_url: str | None,
+    ) -> AutoIndexReport: ...
 
 
 class LazyStudyLensApp:
@@ -47,11 +59,32 @@ def _service(request: Request) -> RAGService:
     return request.app.state.rag_service
 
 
+async def _run_auto_index(
+    request: Request,
+    payload: AutoIndexCourseRequest,
+) -> AutoIndexReport:
+    injected: AutoIndexerLike | None = request.app.state.auto_indexer
+    if injected is not None:
+        return await injected.index_course(
+            course_id=payload.course_id,
+            course_title=payload.course_title,
+            course_url=payload.course_url,
+        )
+    settings: Settings = request.app.state.settings
+    async with BrowserSession.from_settings(settings) as session:
+        indexer = build_auto_indexer(settings, _service(request), session)
+        return await indexer.index_course(
+            course_id=payload.course_id,
+            course_title=payload.course_title,
+            course_url=payload.course_url,
+        )
+
+
 def create_app(
     *,
     settings: Settings | None = None,
     rag_service: RAGService | None = None,
-    auto_indexer: CourseAutoIndexer | None = None,
+    auto_indexer: AutoIndexerLike | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     service = rag_service or build_rag_service(settings)
@@ -61,10 +94,7 @@ def create_app(
     application.state.rag_service = service
     application.state.cheatsheet_generator = CheatsheetGenerator(rag=service, llm=service.llm)
     application.state.exam_generator = PredictedExamGenerator(rag=service, llm=service.llm)
-    application.state.auto_indexer = auto_indexer or CourseAutoIndexer(
-        settings=settings,
-        rag=service,
-    )
+    application.state.auto_indexer = auto_indexer
 
     allow_all = (
         "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
@@ -96,15 +126,11 @@ def create_app(
         return IndexTextResponse(indexed_chunks=indexed)
 
     @application.post("/index/course", response_model=AutoIndexCourseResponse)
-    def auto_index_course(
+    async def auto_index_course(
         payload: AutoIndexCourseRequest,
         request: Request,
     ) -> AutoIndexCourseResponse:
-        report = request.app.state.auto_indexer.index_course(
-            course_id=payload.course_id,
-            course_title=payload.course_title,
-            course_url=payload.course_url,
-        )
+        report = await _run_auto_index(request, payload)
         return AutoIndexCourseResponse(**report.model_dump())
 
     @application.post("/retrieve", response_model=RetrieveResponse)

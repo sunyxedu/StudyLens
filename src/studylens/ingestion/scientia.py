@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
-import httpx
 from bs4 import BeautifulSoup, Tag
 
 from studylens.domain import Course, CourseSummary, Resource
@@ -138,23 +136,3 @@ def parse_course_page(html: str, summary: CourseSummary, base_url: str) -> Cours
         tutorials=buckets["tutorial"],
         metadata=summary.metadata,
     )
-
-
-@dataclass(slots=True)
-class ScientiaClient:
-    base_url: str
-    timeout: float = 30.0
-
-    def fetch_timeline(self) -> list[CourseSummary]:
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            response = client.get(self.base_url)
-            response.raise_for_status()
-        return parse_timeline(response.text, self.base_url)
-
-    def fetch_course(self, summary: CourseSummary) -> Course:
-        if not summary.url:
-            raise ValueError(f"Course {summary.id} does not have a source URL")
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            response = client.get(summary.url)
-            response.raise_for_status()
-        return parse_course_page(response.text, summary, summary.url)

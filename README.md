@@ -68,7 +68,9 @@ npm run dev
 The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000`.
 After `npm run build`, the API also serves the built UI from `http://localhost:8000/app`.
 
-In the UI, use `Index` to sync a course automatically. It downloads and indexes supported Scientia materials, exercises, and tutorials, then indexes Panopto video captions/transcripts when `STUDYLENS_BROWSER_STORAGE_STATE` is configured. Captions are kept with timestamps and linked back to the video URL. `studylens index-text` remains available as a fallback for local notes or transcripts.
+In the UI, use `Index` to sync a course automatically. It downloads and indexes supported Scientia materials, exercises, and tutorials, then indexes Panopto video captions/transcripts. Captions are kept with timestamps and linked back to the video URL. `studylens index-text` remains available as a fallback for local notes or transcripts.
+
+Scientia, Panopto, and EdStem all sit behind Imperial SSO, so auto-indexing requires `STUDYLENS_BROWSER_STORAGE_STATE` to point at an authenticated Playwright storage state file (refresh with `studylens-save-browser-state` as below). All three ingestion paths share a single browser context built from that state, so you only authenticate once per session.
 
 ## Extension
 

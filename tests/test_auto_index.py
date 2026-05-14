@@ -1,15 +1,19 @@
+from __future__ import annotations
+
+import asyncio
 from pathlib import Path
 
 from qdrant_client import QdrantClient
 
 from studylens.config import Settings
-from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix, safe_path_part
+from studylens.ingestion._paths import safe_path_part
+from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix
 from studylens.ingestion.panopto import PanoptoVideoIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
 from studylens.retrieval.qa import TemplateLLM
 
 
-class FakeFetcher:
+class FakeAsyncFetcher:
     def __init__(self) -> None:
         self.text = {
             "https://scientia.doc.ic.ac.uk/2526/timeline": """
@@ -36,15 +40,15 @@ class FakeFetcher:
             ),
         }
 
-    def get_text(self, url: str) -> str:
+    async def get_text(self, url: str) -> str:
         return self.text[url]
 
-    def download(self, url: str) -> tuple[bytes, str | None]:
+    async def download(self, url: str) -> tuple[bytes, str | None]:
         return self.downloads[url]
 
 
 class FakePanoptoIndexer:
-    def index_course_videos(
+    async def index_course_videos(
         self,
         *,
         course_id: str,
@@ -63,7 +67,7 @@ class FakePanoptoIndexer:
         ]
 
 
-def make_service(tmp_path: Path) -> RAGService:
+def make_service() -> RAGService:
     embeddings = HashEmbeddingClient(dimensions=64)
     store = QdrantVectorStore(
         collection_name="auto_index_test",
@@ -81,15 +85,14 @@ def test_course_auto_indexer_downloads_extracts_and_indexes_supported_resources(
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
     )
-    service = make_service(tmp_path)
+    service = make_service()
     indexer = CourseAutoIndexer(
         settings=settings,
         rag=service,
-        fetcher=FakeFetcher(),
-        include_panopto=False,
+        fetcher=FakeAsyncFetcher(),
     )
 
-    report = indexer.index_course(course_id="COMP70001")
+    report = asyncio.run(indexer.index_course(course_id="COMP70001"))
 
     assert report.course_title == "COMP70001 Advanced Algorithms"
     assert report.discovered_resources == 3
@@ -106,20 +109,42 @@ def test_course_auto_indexer_includes_panopto_video_results(tmp_path: Path) -> N
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
     )
-    service = make_service(tmp_path)
+    service = make_service()
     indexer = CourseAutoIndexer(
         settings=settings,
         rag=service,
-        fetcher=FakeFetcher(),
+        fetcher=FakeAsyncFetcher(),
         panopto_indexer=FakePanoptoIndexer(),
     )
 
-    report = indexer.index_course(course_id="COMP70001")
+    report = asyncio.run(indexer.index_course(course_id="COMP70001"))
 
     assert report.discovered_resources == 4
     assert report.indexed_resources == 3
     assert report.indexed_chunks == 5
     assert any(item.stage == "panopto" and item.chunks == 3 for item in report.items)
+
+
+def test_course_auto_indexer_uses_explicit_course_url_without_timeline(tmp_path: Path) -> None:
+    fetcher = FakeAsyncFetcher()
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
+    )
+    service = make_service()
+    indexer = CourseAutoIndexer(settings=settings, rag=service, fetcher=fetcher)
+
+    report = asyncio.run(
+        indexer.index_course(
+            course_id="COMP70001",
+            course_title="Advanced Algorithms",
+            course_url="https://scientia.doc.ic.ac.uk/2526/modules/COMP70001",
+        )
+    )
+
+    assert report.course_title == "Advanced Algorithms"
+    assert report.discovered_resources == 3
 
 
 def test_auto_index_helpers_infer_suffix_and_safe_path_names() -> None:

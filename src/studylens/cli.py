@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -9,7 +10,8 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import get_settings
 from studylens.domain import CourseSummary, Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
-from studylens.ingestion.auto_index import CourseAutoIndexer
+from studylens.ingestion.auto_index import build_auto_indexer
+from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
 
@@ -74,12 +76,18 @@ def auto_index(
 
     settings = get_settings()
     service = build_rag_service(settings)
-    report = CourseAutoIndexer(settings=settings, rag=service).index_course(
-        course_id=course_id,
-        course_title=course_title,
-        course_url=course_url,
-    )
-    typer.echo(report.model_dump_json(indent=2))
+
+    async def _run() -> str:
+        async with BrowserSession.from_settings(settings) as session:
+            indexer = build_auto_indexer(settings, service, session)
+            report = await indexer.index_course(
+                course_id=course_id,
+                course_title=course_title,
+                course_url=course_url,
+            )
+            return report.model_dump_json(indent=2)
+
+    typer.echo(asyncio.run(_run()))
 
 
 @app.command()

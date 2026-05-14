@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +8,8 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 from studylens.config import Settings
 from studylens.domain import Resource
-from studylens.errors import ConfigurationError
+from studylens.ingestion._paths import safe_path_part, unique_path
+from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.captions import build_caption_chunks, parse_caption_segments
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.video import TranscriptExtractor
@@ -41,112 +41,28 @@ class PanoptoVideoIndexResult:
 
 
 @dataclass(slots=True)
-class PanoptoDownloader:
-    """Thin browser-automation boundary for Panopto.
-
-    The exact Panopto DOM can vary by tenant and login state, so this class keeps
-    network/session concerns outside the retrieval pipeline. Tests should target
-    callers with fake downloaders; live runs require Playwright and a saved
-    browser storage state.
-    """
-
-    base_url: str
-    storage_state: Path | None = None
-    download_dir: Path = Path("data/raw/panopto")
-
-    def require_browser_state(self) -> None:
-        if not self.storage_state:
-            raise ConfigurationError(
-                "Panopto access requires STUDYLENS_BROWSER_STORAGE_STATE "
-                "with an authenticated session"
-            )
-        if not self.storage_state.exists():
-            raise ConfigurationError(f"Browser storage state not found: {self.storage_state}")
-
-    async def search_course_videos(self, course_id: str, course_title: str) -> list[Resource]:
-        self.require_browser_state()
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError as exc:
-            raise ConfigurationError("Install studylens[browser] to use Panopto ingestion") from exc
-
-        query = f"{course_id} {course_title}".strip()
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(storage_state=str(self.storage_state))
-            page = await context.new_page()
-            await page.goto(f"{self.base_url}#isSharedWithMe=true", wait_until="domcontentloaded")
-            search = page.get_by_role("textbox").first
-            await search.fill(query)
-            await page.keyboard.press("Enter")
-            await page.wait_for_load_state("networkidle")
-            links = await page.locator("a").evaluate_all(
-                "(nodes) => nodes.map(a => ({text: a.innerText, href: a.href}))"
-                ".filter(x => x.text && x.href)"
-            )
-            await browser.close()
-
-        resources: list[Resource] = []
-        for item in links:
-            title = str(item.get("text", "")).strip()
-            href = str(item.get("href", "")).strip()
-            if not title or not href:
-                continue
-            resources.append(
-                Resource(
-                    course_id=course_id,
-                    title=title,
-                    kind="video",
-                    source_url=href,
-                    metadata={"source": "panopto", "query": query},
-                )
-            )
-        return resources
-
-
-@dataclass(slots=True)
 class PanoptoVideoIndexer:
     """Index Panopto videos by combining session metadata with captions/transcripts."""
 
     settings: Settings
     rag: RAGService
+    session: BrowserSession
     max_videos: int = 30
 
-    def index_course_videos(
+    async def index_course_videos(
         self,
         *,
         course_id: str,
         course_title: str,
     ) -> list[PanoptoVideoIndexResult]:
-        if not self.settings.browser_storage_state:
-            return [
-                PanoptoVideoIndexResult(
-                    title="Panopto videos",
-                    status="skipped",
-                    error=(
-                        "Set STUDYLENS_BROWSER_STORAGE_STATE to index Panopto "
-                        "captions and video transcripts"
-                    ),
-                    discovered=False,
-                )
-            ]
-        if not self.settings.browser_storage_state.exists():
-            return [
-                PanoptoVideoIndexResult(
-                    title="Panopto videos",
-                    status="failed",
-                    error=f"Browser storage state not found: {self.settings.browser_storage_state}",
-                    discovered=False,
-                )
-            ]
-
         try:
-            return asyncio.run(
-                self._index_course_videos_async(
-                    course_id=course_id,
-                    course_title=course_title,
-                )
+            sessions = await self._search_sessions(
+                course_id=course_id,
+                course_title=course_title,
             )
+            results: list[PanoptoVideoIndexResult] = []
+            for panopto_session in sessions[: self.max_videos]:
+                results.append(await self._index_session(course_id, panopto_session))
         except Exception as exc:  # pragma: no cover - live Panopto failures are tenant-specific.
             return [
                 PanoptoVideoIndexResult(
@@ -156,33 +72,6 @@ class PanoptoVideoIndexer:
                     discovered=False,
                 )
             ]
-
-    async def _index_course_videos_async(
-        self,
-        *,
-        course_id: str,
-        course_title: str,
-    ) -> list[PanoptoVideoIndexResult]:
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError as exc:
-            raise ConfigurationError("Install studylens[browser] to use Panopto ingestion") from exc
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                storage_state=str(self.settings.browser_storage_state)
-            )
-            page = await context.new_page()
-            sessions = await self._search_sessions(
-                page=page,
-                course_id=course_id,
-                course_title=course_title,
-            )
-            results: list[PanoptoVideoIndexResult] = []
-            for session in sessions[: self.max_videos]:
-                results.append(await self._index_session(context, course_id, session))
-            await browser.close()
 
         if not results:
             return [
@@ -198,23 +87,23 @@ class PanoptoVideoIndexer:
     async def _search_sessions(
         self,
         *,
-        page: Any,
         course_id: str,
         course_title: str,
     ) -> list[PanoptoSession]:
         query = f"{course_id} {course_title}".strip()
-        await page.goto(
-            f"{self.settings.panopto_base_url}#isSharedWithMe=true",
-            wait_until="domcontentloaded",
-        )
-        textbox = page.get_by_role("textbox").first
-        await textbox.fill(query)
-        await page.keyboard.press("Enter")
-        await page.wait_for_load_state("networkidle")
-        links = await page.locator("a").evaluate_all(
-            "(nodes) => nodes.map(a => ({text: (a.innerText || '').trim(), href: a.href}))"
-            ".filter(x => x.href)"
-        )
+        async with self.session.page() as page:
+            await page.goto(
+                f"{self.settings.panopto_base_url}#isSharedWithMe=true",
+                wait_until="domcontentloaded",
+            )
+            textbox = page.get_by_role("textbox").first
+            await textbox.fill(query)
+            await page.keyboard.press("Enter")
+            await page.wait_for_load_state("networkidle")
+            links = await page.locator("a").evaluate_all(
+                "(nodes) => nodes.map(a => ({text: (a.innerText || '').trim(), href: a.href}))"
+                ".filter(x => x.href)"
+            )
 
         sessions: dict[str, PanoptoSession] = {}
         for item in links:
@@ -232,41 +121,42 @@ class PanoptoVideoIndexer:
 
     async def _index_session(
         self,
-        context: Any,
         course_id: str,
-        session: PanoptoSession,
+        panopto_session: PanoptoSession,
     ) -> PanoptoVideoIndexResult:
-        details = await self._fetch_session_details(context, session)
-        caption_text, caption_source = await self._fetch_caption_text(context, session, details)
+        details = await self._fetch_session_details(panopto_session)
+        caption_text, caption_source = await self._fetch_caption_text(panopto_session, details)
         if caption_text:
             return self._index_caption_text(
                 course_id=course_id,
-                session=session,
+                panopto_session=panopto_session,
                 caption_text=caption_text,
                 caption_source=caption_source,
             )
-        return await self._index_video_transcription(context, course_id, session, details)
+        return await self._index_video_transcription(course_id, panopto_session, details)
 
-    async def _fetch_session_details(self, context: Any, session: PanoptoSession) -> dict[str, Any]:
-        api_url = panopto_session_api_url(str(self.settings.panopto_base_url), session.id)
-        response = await context.request.get(api_url)
-        if not response.ok:
-            return {}
+    async def _fetch_session_details(self, panopto_session: PanoptoSession) -> dict[str, Any]:
+        api_url = panopto_session_api_url(str(self.settings.panopto_base_url), panopto_session.id)
         try:
-            data = await response.json()
+            text = await self.session.fetch_text(api_url)
         except Exception:
+            return {}
+        import json
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
             return {}
         return data if isinstance(data, dict) else {}
 
     async def _fetch_caption_text(
         self,
-        context: Any,
-        session: PanoptoSession,
+        panopto_session: PanoptoSession,
         details: dict[str, Any],
     ) -> tuple[str | None, str | None]:
         urls = [
             *find_deep_urls(details, ("CaptionDownloadUrl", "captionDownloadUrl")),
-            generated_srt_url(str(self.settings.panopto_base_url), session.id),
+            generated_srt_url(str(self.settings.panopto_base_url), panopto_session.id),
         ]
         seen: set[str] = set()
         for url in urls:
@@ -274,10 +164,10 @@ class PanoptoVideoIndexer:
             if absolute in seen:
                 continue
             seen.add(absolute)
-            response = await context.request.get(absolute)
-            if not response.ok:
+            try:
+                text = await self.session.fetch_text(absolute)
+            except Exception:
                 continue
-            text = await response.text()
             if "-->" in text and len(text.strip()) > 20:
                 return text, absolute
         return None, None
@@ -286,27 +176,27 @@ class PanoptoVideoIndexer:
         self,
         *,
         course_id: str,
-        session: PanoptoSession,
+        panopto_session: PanoptoSession,
         caption_text: str,
         caption_source: str | None,
     ) -> PanoptoVideoIndexResult:
         output_path = self._write_text_artifact(
             course_id=course_id,
-            title=session.title,
+            title=panopto_session.title,
             suffix=".srt",
             text=caption_text,
         )
         resource = Resource(
             course_id=course_id,
-            title=f"{session.title} captions",
+            title=f"{panopto_session.title} captions",
             kind="transcript",
-            source_url=session.viewer_url,
+            source_url=panopto_session.viewer_url,
             local_path=output_path,
             metadata={
                 "source": "panopto",
-                "session_id": session.id,
+                "session_id": panopto_session.id,
                 "caption_source": caption_source,
-                "video_url": session.viewer_url,
+                "video_url": panopto_session.viewer_url,
             },
         )
         segments = parse_caption_segments(caption_text)
@@ -315,18 +205,17 @@ class PanoptoVideoIndexer:
             chunks = build_chunks(resource, caption_text)
         indexed = self.rag.index_chunks(chunks)
         return PanoptoVideoIndexResult(
-            title=session.title,
+            title=panopto_session.title,
             status="indexed",
-            source_url=session.viewer_url,
+            source_url=panopto_session.viewer_url,
             local_path=str(output_path),
             chunks=indexed,
         )
 
     async def _index_video_transcription(
         self,
-        context: Any,
         course_id: str,
-        session: PanoptoSession,
+        panopto_session: PanoptoSession,
         details: dict[str, Any],
     ) -> PanoptoVideoIndexResult:
         download_url = first_deep_url(
@@ -342,55 +231,56 @@ class PanoptoVideoIndexer:
         )
         if not download_url:
             return PanoptoVideoIndexResult(
-                title=session.title,
+                title=panopto_session.title,
                 status="skipped",
-                source_url=session.viewer_url,
+                source_url=panopto_session.viewer_url,
                 error="No captions or downloadable video URL found",
             )
         if not self.settings.openai_api_key:
             return PanoptoVideoIndexResult(
-                title=session.title,
+                title=panopto_session.title,
                 status="skipped",
-                source_url=session.viewer_url,
+                source_url=panopto_session.viewer_url,
                 error="No captions found and OpenAI API key is required for video transcription",
             )
 
         absolute = urljoin(str(self.settings.panopto_base_url), download_url)
-        response = await context.request.get(absolute)
-        if not response.ok:
+        try:
+            body, _ = await self.session.download(absolute)
+        except Exception as exc:
             return PanoptoVideoIndexResult(
-                title=session.title,
+                title=panopto_session.title,
                 status="failed",
-                source_url=session.viewer_url,
-                error=f"Video download failed with HTTP {response.status}",
+                source_url=panopto_session.viewer_url,
+                error=str(exc),
             )
         media_path = self._write_binary_artifact(
             course_id=course_id,
-            title=session.title,
+            title=panopto_session.title,
             suffix=".mp4",
-            content=await response.body(),
+            content=body,
         )
         transcript = TranscriptExtractor(
             transcript_dir=self.settings.processed_dir / "transcripts"
         ).transcribe_with_openai(course_id, media_path, self.settings.openai_api_key)
         transcript = transcript.model_copy(
             update={
-                "title": f"{session.title} transcript",
-                "source_url": session.viewer_url,
+                "title": f"{panopto_session.title} transcript",
+                "source_url": panopto_session.viewer_url,
                 "metadata": {
                     **transcript.metadata,
                     "source": "panopto_video_transcription",
-                    "session_id": session.id,
-                    "video_url": session.viewer_url,
+                    "session_id": panopto_session.id,
+                    "video_url": panopto_session.viewer_url,
                 },
             }
         )
         chunks = build_chunks(transcript, extract_text(transcript.local_path or Path()))
         indexed = self.rag.index_chunks(chunks)
         return PanoptoVideoIndexResult(
-            title=session.title,
+            title=panopto_session.title,
             status="indexed",
-            source_url=session.viewer_url,
+            source_url=panopto_session.viewer_url,
             local_path=str(transcript.local_path) if transcript.local_path else None,
             chunks=indexed,
         )
@@ -464,20 +354,3 @@ def find_deep_urls(data: Any, keys: tuple[str, ...]) -> list[str]:
 def first_deep_url(data: Any, keys: tuple[str, ...]) -> str | None:
     urls = find_deep_urls(data, keys)
     return urls[0] if urls else None
-
-
-def safe_path_part(value: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-._")
-    return normalized[:120] or "resource"
-
-
-def unique_path(path: Path) -> Path:
-    if not path.exists():
-        return path
-    stem = path.stem
-    suffix = path.suffix
-    for counter in range(2, 10_000):
-        candidate = path.with_name(f"{stem}-{counter}{suffix}")
-        if not candidate.exists():
-            return candidate
-    raise ConfigurationError(f"Could not find available filename for {path}")

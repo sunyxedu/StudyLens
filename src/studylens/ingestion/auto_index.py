@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import mimetypes
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 from urllib.parse import unquote, urlparse
 
-import httpx
 from pydantic import BaseModel, Field
 
 from studylens.config import Settings
 from studylens.domain import CourseSummary, Resource
 from studylens.errors import IngestionError, UnsupportedDocumentError
+from studylens.ingestion._paths import safe_path_part, unique_path
+from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
@@ -53,59 +52,34 @@ class AutoIndexReport(BaseModel):
     items: list[AutoIndexItem] = Field(default_factory=list)
 
 
-class Fetcher(Protocol):
-    def get_text(self, url: str) -> str:
-        ...
-
-    def download(self, url: str) -> tuple[bytes, str | None]:
-        ...
-
-
-@dataclass(slots=True)
-class HttpFetcher:
-    timeout: float = 30.0
-
-    def get_text(self, url: str) -> str:
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            return response.text
-
-    def download(self, url: str) -> tuple[bytes, str | None]:
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            return response.content, response.headers.get("content-type")
-
-
 @dataclass(slots=True)
 class CourseAutoIndexer:
+    """Index a Scientia course end-to-end, optionally including Panopto videos.
+
+    Both Scientia and Panopto sit behind Imperial SSO, so production runs
+    must inject a `BrowserSession`-backed fetcher and a Panopto indexer
+    that shares the same session. Tests can inject any `AsyncFetcher` and
+    a stub `PanoptoVideoIndexer`.
+    """
+
     settings: Settings
     rag: RAGService
-    fetcher: Fetcher | None = None
+    fetcher: AsyncFetcher
     panopto_indexer: PanoptoVideoIndexer | None = None
-    include_panopto: bool = True
 
-    def __post_init__(self) -> None:
-        if self.fetcher is None:
-            self.fetcher = HttpFetcher()
-        if self.include_panopto and self.panopto_indexer is None:
-            self.panopto_indexer = PanoptoVideoIndexer(settings=self.settings, rag=self.rag)
-
-    def index_course(
+    async def index_course(
         self,
         *,
         course_id: str,
         course_title: str | None = None,
         course_url: str | None = None,
     ) -> AutoIndexReport:
-        summary = self._resolve_course(
+        summary = await self._resolve_course(
             course_id=course_id,
             course_title=course_title,
             course_url=course_url,
         )
-        assert self.fetcher is not None
-        html = self.fetcher.get_text(summary.url or course_url or "")
+        html = await self.fetcher.get_text(summary.url or course_url or "")
         course = parse_course_page(html, summary, summary.url or course_url or "")
         resources = [*course.materials, *course.exercises, *course.tutorials]
         report = AutoIndexReport(
@@ -116,9 +90,13 @@ class CourseAutoIndexer:
         )
 
         for resource in resources:
-            report.items.append(self._index_resource(resource))
-        if self.include_panopto and self.panopto_indexer is not None:
-            panopto_items = self._index_panopto(course_id=course.id, course_title=course.title)
+            report.items.append(await self._index_resource(resource))
+
+        if self.panopto_indexer is not None:
+            panopto_items = await self._index_panopto(
+                course_id=course.id,
+                course_title=course.title,
+            )
             report.items.extend(panopto_items)
             report.discovered_resources += sum(1 for item in panopto_items if item.source_url)
 
@@ -126,7 +104,7 @@ class CourseAutoIndexer:
         report.indexed_chunks = sum(item.chunks for item in report.items)
         return report
 
-    def _resolve_course(
+    async def _resolve_course(
         self,
         *,
         course_id: str,
@@ -136,8 +114,7 @@ class CourseAutoIndexer:
         if course_url:
             return CourseSummary(id=course_id, title=course_title or course_id, url=course_url)
 
-        assert self.fetcher is not None
-        timeline_html = self.fetcher.get_text(str(self.settings.scientia_base_url))
+        timeline_html = await self.fetcher.get_text(str(self.settings.scientia_base_url))
         courses = parse_timeline(timeline_html, str(self.settings.scientia_base_url))
         normalized_id = course_id.upper()
         for course in courses:
@@ -150,7 +127,7 @@ class CourseAutoIndexer:
                     return course
         raise IngestionError(f"Could not find {course_id} on Scientia timeline")
 
-    def _index_resource(self, resource: Resource) -> AutoIndexItem:
+    async def _index_resource(self, resource: Resource) -> AutoIndexItem:
         if not resource.source_url:
             return AutoIndexItem(
                 title=resource.title,
@@ -161,7 +138,7 @@ class CourseAutoIndexer:
             )
 
         try:
-            downloaded = self._download_resource(resource)
+            downloaded = await self._download_resource(resource)
             text = extract_text(downloaded.local_path or Path())
             chunks = build_chunks(downloaded, text)
             indexed = self.rag.index_chunks(chunks)
@@ -193,9 +170,8 @@ class CourseAutoIndexer:
                 error=str(exc),
             )
 
-    def _download_resource(self, resource: Resource) -> Resource:
-        assert self.fetcher is not None
-        content, content_type = self.fetcher.download(resource.source_url or "")
+    async def _download_resource(self, resource: Resource) -> Resource:
+        content, content_type = await self.fetcher.download(resource.source_url or "")
         suffix = infer_suffix(resource.source_url or "", content_type)
         if suffix not in SUPPORTED_DOWNLOAD_SUFFIXES:
             raise UnsupportedDocumentError(
@@ -215,13 +191,40 @@ class CourseAutoIndexer:
             }
         )
 
-    def _index_panopto(self, *, course_id: str, course_title: str) -> list[AutoIndexItem]:
+    async def _index_panopto(
+        self,
+        *,
+        course_id: str,
+        course_title: str,
+    ) -> list[AutoIndexItem]:
         assert self.panopto_indexer is not None
-        results = self.panopto_indexer.index_course_videos(
+        results = await self.panopto_indexer.index_course_videos(
             course_id=course_id,
             course_title=course_title,
         )
         return [panopto_result_to_item(result) for result in results]
+
+
+def build_auto_indexer(
+    settings: Settings,
+    rag: RAGService,
+    session: BrowserSession,
+    *,
+    include_panopto: bool = True,
+) -> CourseAutoIndexer:
+    """Default wiring: BrowserFetcher + Panopto indexer sharing one session."""
+
+    panopto = (
+        PanoptoVideoIndexer(settings=settings, rag=rag, session=session)
+        if include_panopto
+        else None
+    )
+    return CourseAutoIndexer(
+        settings=settings,
+        rag=rag,
+        fetcher=BrowserFetcher(session),
+        panopto_indexer=panopto,
+    )
 
 
 def infer_suffix(url: str, content_type: str | None) -> str:
@@ -238,23 +241,6 @@ def infer_suffix(url: str, content_type: str | None) -> str:
         if guessed:
             return guessed.lower()
     return ".txt"
-
-
-def safe_path_part(value: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-._")
-    return normalized[:120] or "resource"
-
-
-def unique_path(path: Path) -> Path:
-    if not path.exists():
-        return path
-    stem = path.stem
-    suffix = path.suffix
-    for counter in range(2, 10_000):
-        candidate = path.with_name(f"{stem}-{counter}{suffix}")
-        if not candidate.exists():
-            return candidate
-    raise IngestionError(f"Could not find available filename for {path}")
 
 
 def panopto_result_to_item(result: PanoptoVideoIndexResult) -> AutoIndexItem:
