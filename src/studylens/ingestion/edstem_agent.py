@@ -32,10 +32,12 @@ from claude_agent_sdk import (
 from studylens.config import Settings
 from studylens.ingestion.browser_session import BrowserSession
 
-# Match prefixes like "COMP 50002", "EE3-19", "MATH50001", "BIOE70008".
-# Allow optional whitespace / hyphen between department and number.
+# Match prefixes like "COMP 50002", "MATH50001", "COMPM0101", and lab-stream
+# variants like "COMP 50007.1". Preserving the `.N` suffix matters: parallel
+# streams (50007.1 / 50007.2) are separate Scientia modules and the wrong one
+# is empty for the student.
 COURSE_CODE_RE = re.compile(
-    r"\b(?P<dept>[A-Z]{2,5})\s*[-\s]?\s*(?P<num>\d{3,5})\b"
+    r"\b(?P<dept>[A-Z]{2,5})\s*[-\s]?\s*(?P<num>\d{3,5}(?:\.\d+)?)\b"
 )
 PAGE_TEXT_LIMIT = 2_000
 MAX_LINKS = 80

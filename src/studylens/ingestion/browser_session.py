@@ -87,12 +87,29 @@ class BrowserSession:
         return self._context
 
     async def fetch_text(self, url: str) -> str:
+        """Raw HTTP GET via the context's request API. No JS rendering.
+
+        Use this for REST APIs and other server-rendered endpoints. For SPA
+        pages whose content is built client-side (Scientia, EdStem, etc.),
+        use `fetch_rendered_html` instead — request.get returns the empty
+        shell HTML, not the rendered DOM.
+        """
         response = await self.context.request.get(url)
         if not response.ok:
             raise IngestionError(
                 f"GET {url} returned HTTP {response.status}; check SSO state freshness"
             )
         return await response.text()
+
+    async def fetch_rendered_html(self, url: str, *, timeout_ms: int = 30_000) -> str:
+        """Open a Page, navigate, wait for networkidle, return rendered HTML.
+
+        Slower (~3-8 s) but mandatory for SPAs that build their DOM in JS.
+        """
+        async with self.page() as page:
+            await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            await page.wait_for_load_state("networkidle", timeout=timeout_ms)
+            return await page.content()
 
     async def download(self, url: str) -> tuple[bytes, str | None]:
         response = await self.context.request.get(url)
@@ -114,13 +131,19 @@ class BrowserSession:
 
 
 class BrowserFetcher:
-    """AsyncFetcher impl backed by a BrowserSession."""
+    """AsyncFetcher impl backed by a BrowserSession.
+
+    `get_text` returns the FULLY RENDERED page HTML because the Imperial sites
+    we crawl (Scientia, course pages, EdStem) are SPAs — a raw HTTP GET gives
+    you the empty shell, not the course list. Downloads stay on the request
+    API since they're binary blobs (PDFs etc.) with no JS to run.
+    """
 
     def __init__(self, session: BrowserSession) -> None:
         self._session = session
 
     async def get_text(self, url: str) -> str:
-        return await self._session.fetch_text(url)
+        return await self._session.fetch_rendered_html(url)
 
     async def download(self, url: str) -> tuple[bytes, str | None]:
         return await self._session.download(url)

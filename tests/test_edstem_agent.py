@@ -96,6 +96,8 @@ def test_extract_course_code_handles_imperial_formats() -> None:
     assert extract_course_code("COMP70001 Advanced Algorithms") == "COMP70001"
     assert extract_course_code("MATH50001 — Analysis") == "MATH50001"
     assert extract_course_code("BIOE70008: Modelling") == "BIOE70008"
+    # Lab-stream sub-codes survive: 50007.1 vs 50007.2 are different modules
+    assert extract_course_code("COMP 50007.1: Computing Practical 2 (Lab)") == "COMP50007.1"
     assert extract_course_code("Welcome to the dashboard") is None
     assert extract_course_code("Course 101 — General") is None
 

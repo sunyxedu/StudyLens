@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -132,19 +133,14 @@ class CourseAutoIndexer:
         timeline_html = await self.fetcher.get_text(base_url)
         courses = await self.course_extractor.extract_courses(timeline_html, base_url)
 
-        normalized_id = course_id.upper()
-        for course in courses:
-            if course.id.upper() == normalized_id and course.url:
-                return course
+        match = _match_course(courses, course_id=course_id, course_title=course_title)
+        if match is not None:
+            return match
 
-        needle = course_title.casefold()
-        for course in courses:
-            if needle in course.title.casefold() and course.url:
-                return course
-
+        available = ", ".join(c.id for c in courses[:8]) or "(none)"
         raise IngestionError(
-            f"Could not find {course_id} ({course_title}) on the Scientia timeline. "
-            "Check the code/title, and refresh BROWSER_STORAGE_STATE if SSO expired."
+            f"Could not find {course_id} ({course_title}) on Scientia /modules. "
+            f"Available IDs: {available}. Refresh BROWSER_STORAGE_STATE if SSO expired."
         )
 
     async def _index_resource(self, resource: Resource) -> AutoIndexItem:
@@ -276,6 +272,58 @@ def build_auto_indexer(
         exams_indexer=exams,
         edstem_indexer=edstem,
     )
+
+
+_CODE_PREFIX_RE = re.compile(r"^\s*[A-Z]{2,5}\s*\d{3,5}(?:\.\d+)?\s*[:\-—]\s*", re.IGNORECASE)
+
+
+def _digit_tail(code: str) -> str:
+    """Strip a leading alpha department prefix so codes can be compared.
+
+    Imperial uses two parallel conventions: EdStem labels courses `COMP50001`
+    while Scientia drops the prefix and lists them as `50001`. Comparing the
+    digit-and-dot tail lets us match across both.
+    """
+    return re.sub(r"^[A-Za-z]+", "", code).strip()
+
+
+def _strip_code_prefix(title: str) -> str:
+    """Remove a leading `COMP 50001: ` prefix from an EdStem-style title."""
+    return _CODE_PREFIX_RE.sub("", title).strip()
+
+
+def _match_course(
+    courses: list[CourseSummary],
+    *,
+    course_id: str,
+    course_title: str,
+) -> CourseSummary | None:
+    """Find the Scientia course matching an EdStem-style code + title.
+
+    Search order:
+    1. Exact case-insensitive ID match (handles COMPM0101 ↔ COMPM0101).
+    2. Digit-tail match (handles COMP50001 ↔ 50001).
+    3. Title substring match against the code-stripped EdStem title.
+    """
+    wanted_id = course_id.upper()
+    wanted_tail = _digit_tail(wanted_id)
+
+    for course in courses:
+        if course.url and course.id.upper() == wanted_id:
+            return course
+
+    if wanted_tail:
+        for course in courses:
+            if course.url and _digit_tail(course.id.upper()) == wanted_tail:
+                return course
+
+    needle = _strip_code_prefix(course_title).casefold()
+    if needle:
+        for course in courses:
+            if course.url and needle in course.title.casefold():
+                return course
+
+    return None
 
 
 def infer_suffix(url: str, content_type: str | None) -> str:

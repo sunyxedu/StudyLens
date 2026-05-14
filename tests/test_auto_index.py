@@ -8,7 +8,7 @@ from qdrant_client import QdrantClient
 from studylens.config import Settings
 from studylens.domain import CourseSummary
 from studylens.ingestion._paths import safe_path_part
-from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix
+from studylens.ingestion.auto_index import CourseAutoIndexer, _match_course, infer_suffix
 from studylens.ingestion.edstem import EdStemIndexResult
 from studylens.ingestion.exams import ExamIndexResult
 from studylens.ingestion.panopto import PanoptoVideoIndexResult
@@ -19,7 +19,7 @@ from studylens.retrieval.qa import TemplateLLM
 class FakeAsyncFetcher:
     def __init__(self) -> None:
         self.text = {
-            "https://scientia.doc.ic.ac.uk/2526/timeline": "<html>timeline placeholder</html>",
+            "https://scientia.doc.ic.ac.uk/2526/modules": "<html>timeline placeholder</html>",
             "https://scientia.doc.ic.ac.uk/2526/modules/COMP70001": """
                 <h2>Materials</h2><a href="notes.txt">Lecture notes</a>
                 <h2>Exercises</h2><a href="exercise.html">Problem Sheet 1</a>
@@ -241,3 +241,74 @@ def test_auto_index_helpers_infer_suffix_and_safe_path_names() -> None:
     assert infer_suffix("https://example.test/file", "text/html; charset=utf-8") == ".html"
     assert infer_suffix("https://example.test/file.pdf", "text/plain") == ".pdf"
     assert safe_path_part(" Week 1: DP / graphs ") == "Week-1-DP-graphs"
+
+
+def test_match_course_bridges_edstem_and_scientia_id_formats() -> None:
+    scientia_courses = [
+        CourseSummary(
+            id="50001",
+            title="Algorithm Design and Analysis",
+            url="https://scientia.test/2526/modules/50001/materials",
+        ),
+        CourseSummary(
+            id="50007.1",
+            title="Computing Practical 2 (Lab)",
+            url="https://scientia.test/2526/modules/50007.1/materials",
+        ),
+        CourseSummary(
+            id="50007.2",
+            title="Computing Practical 2 (Intro to Compilers)",
+            url="https://scientia.test/2526/modules/50007.2/materials",
+        ),
+        CourseSummary(
+            id="COMPM0804",
+            title="Student Support and Wellbeing",
+            url="https://scientia.test/2526/modules/COMPM0804/materials",
+        ),
+    ]
+
+    # COMP50001 (EdStem) → 50001 (Scientia) by digit-tail match
+    match = _match_course(
+        scientia_courses,
+        course_id="COMP50001",
+        course_title="COMP 50001: Algorithm Design and Analysis",
+    )
+    assert match is not None
+    assert match.id == "50001"
+
+    # COMP50007.1 should pick the .1 lab stream, not .2
+    match = _match_course(
+        scientia_courses,
+        course_id="COMP50007.1",
+        course_title="COMP 50007.1: Computing Practical 2 (Lab)",
+    )
+    assert match is not None
+    assert match.id == "50007.1"
+
+    # MSc COMPM0804 ↔ COMPM0804 via exact match
+    match = _match_course(
+        scientia_courses,
+        course_id="COMPM0804",
+        course_title="COMP COMPM0804: Student Support and Wellbeing",
+    )
+    assert match is not None
+    assert match.id == "COMPM0804"
+
+    # Title-only fallback when ID can't be derived
+    match = _match_course(
+        scientia_courses,
+        course_id="UNKNOWN",
+        course_title="Algorithm Design and Analysis",
+    )
+    assert match is not None
+    assert match.id == "50001"
+
+    # Truly unknown course → None
+    assert (
+        _match_course(
+            scientia_courses,
+            course_id="COMP99999",
+            course_title="Nonexistent",
+        )
+        is None
+    )
