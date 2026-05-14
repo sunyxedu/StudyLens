@@ -1,24 +1,63 @@
+"""Per-course ingestion orchestrator.
+
+The pipeline is split into two phases on purpose:
+
+  Phase 1 — crawl_course()
+    Agent-driven discovery (Scientia, Panopto) and deterministic discovery
+    (past exams, EdStem) per course. Everything that's found is downloaded
+    to `data/raw/{course_id}/{kind}/...` and a manifest `_crawl.json` is
+    written. No vectors, no LLM tokens spent on indexing yet.
+
+  Phase 2 — index_local()
+    Pure CPU: reads the manifest, extracts text, chunks, embeds, and
+    upserts into Qdrant. Can be re-run without re-crawling (useful when
+    you change chunk size or swap embedding models).
+
+  sync_course() = crawl_course() then index_local()
+
+The disk layout uses ResourceKind values literally — material/, exercise/,
+tutorial/, transcript/, past_exam/, edstem_note/ — so the kind in the
+Qdrant payload equals the folder name equals the type annotation.
+"""
+
 from __future__ import annotations
 
 import mimetypes
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+import httpx
 from pydantic import BaseModel, Field
 
 from studylens.config import Settings
-from studylens.domain import CourseSummary, Resource
+from studylens.domain import CourseSummary, DocumentChunk, Resource
+from studylens.domain.models import ResourceKind
 from studylens.errors import IngestionError, UnsupportedDocumentError
 from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, BrowserSession
+from studylens.ingestion.captions import build_caption_chunks, parse_caption_segments
 from studylens.ingestion.documents import build_chunks, extract_text
-from studylens.ingestion.edstem import EdStemIndexer, EdStemIndexResult, build_edstem_indexer
-from studylens.ingestion.exams import ExamIndexResult, ExamsIndexer, build_exams_indexer
+from studylens.ingestion.edstem import EdStemCrawler
+from studylens.ingestion.exams import ExamsClient
 from studylens.ingestion.llm_extractor import LLMCourseExtractor
-from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
-from studylens.ingestion.scientia import derive_tab_urls, parse_course_tab
+from studylens.ingestion.manifest import (
+    CourseManifest,
+    ManifestItem,
+    now_iso,
+    read_manifest,
+    write_manifest,
+)
+from studylens.ingestion.panopto_agent import (
+    DiscoveredVideo,
+    discover_course_videos,
+)
+from studylens.ingestion.scientia_agent import (
+    DiscoveredResource,
+    discover_course_resources,
+)
 from studylens.retrieval.qa import RAGService
 
 SUPPORTED_DOWNLOAD_SUFFIXES = {
@@ -32,6 +71,8 @@ SUPPORTED_DOWNLOAD_SUFFIXES = {
     ".html",
     ".htm",
     ".pdf",
+    ".srt",
+    ".vtt",
 }
 
 
@@ -56,81 +97,168 @@ class AutoIndexReport(BaseModel):
     items: list[AutoIndexItem] = Field(default_factory=list)
 
 
+# Injection hooks: tests replace these with fakes that return canned data.
+ScientiaDiscoverer = Callable[
+    ["CourseAutoIndexer", CourseSummary],
+    Awaitable[tuple[list[DiscoveredResource], str | None]],
+]
+PanoptoDiscoverer = Callable[
+    ["CourseAutoIndexer", CourseSummary],
+    Awaitable[tuple[list[DiscoveredVideo], str | None]],
+]
+ExamsDiscoverer = Callable[
+    ["CourseAutoIndexer", CourseSummary],
+    Awaitable[tuple[list[Resource], str | None]],
+]
+EdStemDiscoverer = Callable[
+    ["CourseAutoIndexer", CourseSummary],
+    Awaitable[tuple[list[Resource], str | None]],
+]
+
+
 @dataclass(slots=True)
 class CourseAutoIndexer:
-    """Index a Scientia course end-to-end, optionally including Panopto videos.
-
-    Both Scientia and Panopto sit behind Imperial SSO, so production runs
-    must inject a `BrowserSession`-backed fetcher and a Panopto indexer
-    that shares the same session. Tests can inject any `AsyncFetcher` and
-    a stub `PanoptoVideoIndexer`.
-    """
+    """Two-phase course ingestion: crawl → manifest → index_local."""
 
     settings: Settings
     rag: RAGService
     fetcher: AsyncFetcher
     course_extractor: LLMCourseExtractor
-    panopto_indexer: PanoptoVideoIndexer | None = None
-    exams_indexer: ExamsIndexer | None = None
-    edstem_indexer: EdStemIndexer | None = None
+    session: BrowserSession | None = None
+    enable_scientia: bool = True
+    enable_panopto: bool = True
+    enable_exams: bool = True
+    enable_edstem: bool = True
+    # Test seams.
+    scientia_discoverer: ScientiaDiscoverer | None = None
+    panopto_discoverer: PanoptoDiscoverer | None = None
+    exams_discoverer: ExamsDiscoverer | None = None
+    edstem_discoverer: EdStemDiscoverer | None = None
+    panopto_caption_fetcher: Callable[..., Awaitable[bytes | None]] | None = None
+    exams_downloader: Callable[..., Awaitable[tuple[bytes, str | None]]] | None = None
 
+    # ----- Phase 1: crawl -----
+
+    async def crawl_course(
+        self,
+        *,
+        course_id: str,
+        course_title: str,
+    ) -> CourseManifest:
+        summary = await self._resolve_course(
+            course_id=course_id, course_title=course_title
+        )
+        manifest = CourseManifest(
+            course_id=summary.id,
+            course_title=summary.title,
+            course_url=summary.url,
+            crawled_at=now_iso(),
+            items=[],
+        )
+        course_dir = self._course_dir(summary.id)
+
+        if self.enable_scientia and summary.url:
+            manifest.items.extend(await self._crawl_scientia(summary, course_dir))
+        if self.enable_panopto:
+            manifest.items.extend(await self._crawl_panopto(summary, course_dir))
+        if self.enable_exams:
+            manifest.items.extend(await self._crawl_exams(summary, course_dir))
+        if self.enable_edstem:
+            manifest.items.extend(await self._crawl_edstem(summary, course_dir))
+
+        write_manifest(self.settings.raw_dir, manifest)
+        return manifest
+
+    # ----- Phase 2: index -----
+
+    def index_local(self, course_id: str) -> AutoIndexReport:
+        manifest = read_manifest(self.settings.raw_dir, course_id)
+        if manifest is None:
+            raise IngestionError(
+                f"No crawl manifest for {course_id}. Run crawl_course first."
+            )
+
+        report = AutoIndexReport(
+            course_id=manifest.course_id,
+            course_title=manifest.course_title,
+            source_url=manifest.course_url,
+            discovered_resources=len(manifest.items),
+        )
+        course_dir = self._course_dir(manifest.course_id)
+
+        for item in manifest.items:
+            local_path = course_dir / item.local_path
+            stage = str(item.metadata.get("stage", "scientia"))
+            try:
+                chunks = self._chunks_for_item(item, local_path, manifest.course_id)
+            except UnsupportedDocumentError as exc:
+                report.items.append(
+                    AutoIndexItem(
+                        title=item.title,
+                        kind=item.kind,
+                        status="skipped",
+                        stage=stage,
+                        source_url=item.source_url,
+                        local_path=str(local_path),
+                        chunks=0,
+                        error=str(exc),
+                    )
+                )
+                continue
+            except Exception as exc:  # pragma: no cover - per-file failures noisy.
+                report.items.append(
+                    AutoIndexItem(
+                        title=item.title,
+                        kind=item.kind,
+                        status="failed",
+                        stage=stage,
+                        source_url=item.source_url,
+                        local_path=str(local_path),
+                        chunks=0,
+                        error=str(exc),
+                    )
+                )
+                continue
+
+            indexed = self.rag.index_chunks(chunks)
+            report.items.append(
+                AutoIndexItem(
+                    title=item.title,
+                    kind=item.kind,
+                    status="indexed",
+                    stage=stage,
+                    source_url=item.source_url,
+                    local_path=str(local_path),
+                    chunks=indexed,
+                )
+            )
+
+        report.indexed_resources = sum(1 for it in report.items if it.status == "indexed")
+        report.indexed_chunks = sum(it.chunks for it in report.items)
+        return report
+
+    # ----- Combined entry point -----
+
+    async def sync_course(
+        self,
+        *,
+        course_id: str,
+        course_title: str,
+    ) -> AutoIndexReport:
+        manifest = await self.crawl_course(course_id=course_id, course_title=course_title)
+        return self.index_local(manifest.course_id)
+
+    # Backwards-compat alias for callers (API handler, CLI) that still say
+    # index_course. New code should call sync_course explicitly.
     async def index_course(
         self,
         *,
         course_id: str,
         course_title: str,
     ) -> AutoIndexReport:
-        summary = await self._resolve_course(
-            course_id=course_id,
-            course_title=course_title,
-        )
-        assert summary.url, "resolved course summary must have a URL"
+        return await self.sync_course(course_id=course_id, course_title=course_title)
 
-        resources: list[Resource] = []
-        for kind, tab_url in derive_tab_urls(summary.url).items():
-            try:
-                html = await self.fetcher.get_text(tab_url)
-            except Exception:
-                # Tabs are optional: some courses lack exercises or tutorials.
-                continue
-            resources.extend(
-                parse_course_tab(html, tab_url, course_id=summary.id, kind=kind)
-            )
-
-        report = AutoIndexReport(
-            course_id=summary.id,
-            course_title=summary.title,
-            source_url=summary.url,
-            discovered_resources=len(resources),
-        )
-
-        for resource in resources:
-            report.items.append(await self._index_resource(resource))
-
-        if self.panopto_indexer is not None:
-            panopto_items = await self._index_panopto(
-                course_id=summary.id,
-                course_title=summary.title,
-            )
-            report.items.extend(panopto_items)
-            report.discovered_resources += sum(1 for item in panopto_items if item.source_url)
-
-        if self.exams_indexer is not None:
-            exam_items = await self._index_exams(course_id=summary.id)
-            report.items.extend(exam_items)
-            report.discovered_resources += sum(1 for item in exam_items if item.source_url)
-
-        if self.edstem_indexer is not None:
-            edstem_items = await self._index_edstem(
-                course_id=summary.id,
-                course_title=summary.title,
-            )
-            report.items.extend(edstem_items)
-            report.discovered_resources += sum(1 for item in edstem_items if item.chunks)
-
-        report.indexed_resources = sum(1 for item in report.items if item.status == "indexed")
-        report.indexed_chunks = sum(item.chunks for item in report.items)
-        return report
+    # ----- Internals -----
 
     async def _resolve_course(
         self,
@@ -141,111 +269,321 @@ class CourseAutoIndexer:
         base_url = str(self.settings.scientia_base_url)
         timeline_html = await self.fetcher.get_text(base_url)
         courses = await self.course_extractor.extract_courses(timeline_html, base_url)
-
         match = _match_course(courses, course_id=course_id, course_title=course_title)
         if match is not None:
             return match
-
         available = ", ".join(c.id for c in courses[:8]) or "(none)"
         raise IngestionError(
             f"Could not find {course_id} ({course_title}) on Scientia /modules. "
             f"Available IDs: {available}. Refresh BROWSER_STORAGE_STATE if SSO expired."
         )
 
-    async def _index_resource(self, resource: Resource) -> AutoIndexItem:
-        if not resource.source_url:
-            return AutoIndexItem(
-                title=resource.title,
-                kind=resource.kind,
-                status="skipped",
-                stage="scientia",
-                error="Resource has no source URL",
-            )
+    def _course_dir(self, course_id: str) -> Path:
+        return self.settings.raw_dir / safe_path_part(course_id)
 
+    async def _crawl_scientia(
+        self,
+        summary: CourseSummary,
+        course_dir: Path,
+    ) -> list[ManifestItem]:
+        resources, error = await self._run_scientia_discoverer(summary)
+        if error or not resources:
+            return []
+        items: list[ManifestItem] = []
+        for resource in resources:
+            try:
+                content, content_type = await self.fetcher.download(resource.source_url)
+            except Exception as exc:  # pragma: no cover - download errors are noisy.
+                items.append(
+                    _failed_manifest_item(
+                        course_dir=course_dir,
+                        resource=resource,
+                        stage="scientia",
+                        error=f"download failed: {exc}",
+                    )
+                )
+                continue
+            local_rel = _write_resource_to_disk(
+                course_dir=course_dir,
+                kind=resource.kind,
+                title=resource.title,
+                url=resource.source_url,
+                content=content,
+                content_type=content_type,
+            )
+            if local_rel is None:
+                continue
+            items.append(
+                ManifestItem(
+                    source_url=resource.source_url,
+                    local_path=local_rel,
+                    kind=resource.kind,
+                    title=resource.title,
+                    downloaded_at=now_iso(),
+                    metadata={
+                        "stage": "scientia",
+                        "content_type": content_type,
+                    },
+                )
+            )
+        return items
+
+    async def _run_scientia_discoverer(
+        self,
+        summary: CourseSummary,
+    ) -> tuple[list[DiscoveredResource], str | None]:
+        if self.scientia_discoverer is not None:
+            return await self.scientia_discoverer(self, summary)
+        if self.session is None or not summary.url:
+            return [], "no session or URL for Scientia agent"
+        report = await discover_course_resources(
+            self.session,
+            course_id=summary.id,
+            course_title=summary.title,
+            course_url=summary.url,
+            settings=self.settings,
+        )
+        return report.resources, report.error
+
+    async def _crawl_panopto(
+        self,
+        summary: CourseSummary,
+        course_dir: Path,
+    ) -> list[ManifestItem]:
+        videos, error = await self._run_panopto_discoverer(summary)
+        if error or not videos:
+            return []
+        items: list[ManifestItem] = []
+        for video in videos:
+            try:
+                caption_text = await self._fetch_panopto_caption(video)
+            except Exception as exc:  # pragma: no cover - per-video failures.
+                items.append(
+                    _failed_manifest_item(
+                        course_dir=course_dir,
+                        resource=_video_as_resource(summary.id, video),
+                        stage="panopto",
+                        error=f"caption fetch failed: {exc}",
+                    )
+                )
+                continue
+            if not caption_text:
+                continue
+            local_rel = _write_text_to_disk(
+                course_dir=course_dir,
+                kind="transcript",
+                title=video.title,
+                text=caption_text,
+                suffix=".srt",
+            )
+            items.append(
+                ManifestItem(
+                    source_url=video.viewer_url,
+                    local_path=local_rel,
+                    kind="transcript",
+                    title=video.title,
+                    downloaded_at=now_iso(),
+                    metadata={
+                        "stage": "panopto",
+                        "session_id": video.session_id,
+                        "video_url": video.viewer_url,
+                    },
+                )
+            )
+        return items
+
+    async def _run_panopto_discoverer(
+        self,
+        summary: CourseSummary,
+    ) -> tuple[list[DiscoveredVideo], str | None]:
+        if self.panopto_discoverer is not None:
+            return await self.panopto_discoverer(self, summary)
+        if self.session is None:
+            return [], "no BrowserSession for Panopto agent"
+        report = await discover_course_videos(
+            self.session,
+            course_id=summary.id,
+            course_title=summary.title,
+            settings=self.settings,
+        )
+        return report.videos, report.error
+
+    async def _fetch_panopto_caption(self, video: DiscoveredVideo) -> str | None:
+        if self.panopto_caption_fetcher is not None:
+            result = await self.panopto_caption_fetcher(self, video)
+            return result.decode("utf-8") if isinstance(result, bytes) else result
+        if self.session is None:
+            return None
+        # Try caption URLs that Panopto exposes.
+        candidate_urls = [
+            f"{_panopto_origin(str(self.settings.panopto_base_url))}"
+            f"/Panopto/Pages/Transcription/GenerateSRT.ashx?id={video.session_id}&language=1"
+        ]
+        for url in candidate_urls:
+            try:
+                text = await self.session.fetch_text(url)
+            except Exception:
+                continue
+            if text and "-->" in text and len(text.strip()) > 20:
+                return text
+        return None
+
+    async def _crawl_exams(
+        self,
+        summary: CourseSummary,
+        course_dir: Path,
+    ) -> list[ManifestItem]:
+        resources, error = await self._run_exams_discoverer(summary)
+        if error or not resources:
+            return []
+        items: list[ManifestItem] = []
+        for resource in resources:
+            try:
+                content, content_type = await self._download_exam(resource)
+            except Exception as exc:  # pragma: no cover.
+                items.append(
+                    _failed_manifest_item(
+                        course_dir=course_dir,
+                        resource=resource,
+                        stage="exams",
+                        error=f"download failed: {exc}",
+                    )
+                )
+                continue
+            local_rel = _write_resource_to_disk(
+                course_dir=course_dir,
+                kind="past_exam",
+                title=resource.title,
+                url=resource.source_url or "",
+                content=content,
+                content_type=content_type,
+            )
+            if local_rel is None:
+                continue
+            items.append(
+                ManifestItem(
+                    source_url=resource.source_url or "",
+                    local_path=local_rel,
+                    kind="past_exam",
+                    title=resource.title,
+                    downloaded_at=now_iso(),
+                    metadata={"stage": "exams", "content_type": content_type},
+                )
+            )
+        return items
+
+    async def _run_exams_discoverer(
+        self,
+        summary: CourseSummary,
+    ) -> tuple[list[Resource], str | None]:
+        if self.exams_discoverer is not None:
+            return await self.exams_discoverer(self, summary)
+        if not self.settings.imperial_username or not self.settings.imperial_password:
+            return [], None  # quietly skip when creds aren't configured
+        client = ExamsClient(
+            base_url=str(self.settings.exams_base_url),
+            username=self.settings.imperial_username,
+            password=self.settings.imperial_password,
+        )
         try:
-            downloaded = await self._download_resource(resource)
-            text = extract_text(downloaded.local_path or Path())
-            chunks = build_chunks(downloaded, text)
-            indexed = self.rag.index_chunks(chunks)
-            return AutoIndexItem(
-                title=resource.title,
-                kind=resource.kind,
-                status="indexed",
-                stage="scientia",
-                source_url=resource.source_url,
-                local_path=str(downloaded.local_path) if downloaded.local_path else None,
-                chunks=indexed,
-            )
-        except UnsupportedDocumentError as exc:
-            return AutoIndexItem(
-                title=resource.title,
-                kind=resource.kind,
-                status="skipped",
-                stage="scientia",
-                source_url=resource.source_url,
-                error=str(exc),
-            )
-        except Exception as exc:  # pragma: no cover - exact network/parser failures vary by source.
-            return AutoIndexItem(
-                title=resource.title,
-                kind=resource.kind,
-                status="failed",
-                stage="scientia",
-                source_url=resource.source_url,
-                error=str(exc),
-            )
+            resources = await client.discover_exam_papers(summary.id)
+        except Exception as exc:  # pragma: no cover.
+            return [], str(exc)
+        return resources, None
 
-    async def _download_resource(self, resource: Resource) -> Resource:
-        content, content_type = await self.fetcher.download(resource.source_url or "")
-        suffix = infer_suffix(resource.source_url or "", content_type)
+    async def _download_exam(self, resource: Resource) -> tuple[bytes, str | None]:
+        if self.exams_downloader is not None:
+            return await self.exams_downloader(self, resource)
+        if not resource.source_url:
+            raise ValueError("exam resource has no source_url")
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True,
+            auth=(
+                self.settings.imperial_username or "",
+                self.settings.imperial_password or "",
+            ),
+        ) as client:
+            response = await client.get(resource.source_url)
+            response.raise_for_status()
+            return response.content, response.headers.get("content-type")
+
+    async def _crawl_edstem(
+        self,
+        summary: CourseSummary,
+        course_dir: Path,
+    ) -> list[ManifestItem]:
+        resources, error = await self._run_edstem_discoverer(summary)
+        if error or not resources:
+            return []
+        items: list[ManifestItem] = []
+        for resource in resources:
+            body = str(resource.metadata.get("body") or "").strip()
+            if not body:
+                continue
+            local_rel = _write_text_to_disk(
+                course_dir=course_dir,
+                kind="edstem_note",
+                title=resource.title,
+                text=body,
+                suffix=".txt",
+            )
+            items.append(
+                ManifestItem(
+                    source_url=resource.source_url or "",
+                    local_path=local_rel,
+                    kind="edstem_note",
+                    title=resource.title,
+                    downloaded_at=now_iso(),
+                    metadata={"stage": "edstem"},
+                )
+            )
+        return items
+
+    async def _run_edstem_discoverer(
+        self,
+        summary: CourseSummary,
+    ) -> tuple[list[Resource], str | None]:
+        if self.edstem_discoverer is not None:
+            return await self.edstem_discoverer(self, summary)
+        if self.session is None:
+            return [], None
+        crawler = EdStemCrawler(
+            session=self.session,
+            base_url=str(self.settings.edstem_base_url),
+        )
+        try:
+            resources = await crawler.collect_scope_notes(summary.id, summary.title)
+        except Exception as exc:  # pragma: no cover.
+            return [], str(exc)
+        return resources, None
+
+    def _chunks_for_item(
+        self,
+        item: ManifestItem,
+        local_path: Path,
+        course_id: str,
+    ) -> list[DocumentChunk]:
+        resource = Resource(
+            course_id=course_id,
+            title=item.title,
+            kind=item.kind,
+            source_url=item.source_url or None,
+            local_path=local_path,
+            metadata=dict(item.metadata or {}),
+        )
+        suffix = local_path.suffix.lower()
+        if item.kind == "transcript" and suffix in {".srt", ".vtt"}:
+            text = local_path.read_text(encoding="utf-8")
+            segments = parse_caption_segments(text)
+            chunks = build_caption_chunks(resource, segments)
+            return chunks or build_chunks(resource, text)
         if suffix not in SUPPORTED_DOWNLOAD_SUFFIXES:
             raise UnsupportedDocumentError(
-                f"Unsupported downloaded document type: {suffix or 'unknown'}"
+                f"Unsupported document type for {local_path.name}: {suffix or 'unknown'}"
             )
-
-        output_dir = self.settings.raw_dir / safe_path_part(resource.course_id) / resource.kind
-        output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{safe_path_part(resource.title)}{suffix}"
-        output_path = unique_path(output_dir / filename)
-        output_path.write_bytes(content)
-        return resource.model_copy(
-            update={
-                "local_path": output_path,
-                "mime_type": content_type,
-                "metadata": {**resource.metadata, "auto_indexed": True},
-            }
-        )
-
-    async def _index_panopto(
-        self,
-        *,
-        course_id: str,
-        course_title: str,
-    ) -> list[AutoIndexItem]:
-        assert self.panopto_indexer is not None
-        results = await self.panopto_indexer.index_course_videos(
-            course_id=course_id,
-            course_title=course_title,
-        )
-        return [panopto_result_to_item(result) for result in results]
-
-    async def _index_exams(self, *, course_id: str) -> list[AutoIndexItem]:
-        assert self.exams_indexer is not None
-        results = await self.exams_indexer.index_course_exams(course_id=course_id)
-        return [exam_result_to_item(result) for result in results]
-
-    async def _index_edstem(
-        self,
-        *,
-        course_id: str,
-        course_title: str,
-    ) -> list[AutoIndexItem]:
-        assert self.edstem_indexer is not None
-        results = await self.edstem_indexer.index_course_scope_notes(
-            course_id=course_id,
-            course_title=course_title,
-        )
-        return [edstem_result_to_item(result) for result in results]
+        text = extract_text(local_path)
+        return build_chunks(resource, text)
 
 
 def build_auto_indexer(
@@ -257,47 +595,34 @@ def build_auto_indexer(
     include_exams: bool = True,
     include_edstem: bool = True,
 ) -> CourseAutoIndexer:
-    """Default wiring: BrowserFetcher + LLM extractor + Panopto/exams/EdStem.
+    """Default wiring used by the API handler and CLI."""
 
-    Raises ConfigurationError when ANTHROPIC_API_KEY is unset —
-    the timeline lookup requires Claude. Callers that pass course_url
-    explicitly skip the timeline entirely and don't hit this dependency.
-    """
-
-    extractor = LLMCourseExtractor.from_settings(settings)
-    panopto = (
-        PanoptoVideoIndexer(settings=settings, rag=rag, session=session)
-        if include_panopto
-        else None
-    )
-    exams = build_exams_indexer(settings, rag) if include_exams else None
-    edstem = build_edstem_indexer(settings, rag, session) if include_edstem else None
     return CourseAutoIndexer(
         settings=settings,
         rag=rag,
         fetcher=BrowserFetcher(session),
-        course_extractor=extractor,
-        panopto_indexer=panopto,
-        exams_indexer=exams,
-        edstem_indexer=edstem,
+        course_extractor=LLMCourseExtractor.from_settings(settings),
+        session=session,
+        enable_scientia=True,
+        enable_panopto=include_panopto,
+        enable_exams=include_exams,
+        enable_edstem=include_edstem,
     )
 
 
-_CODE_PREFIX_RE = re.compile(r"^\s*[A-Z]{2,5}\s*\d{3,5}(?:\.\d+)?\s*[:\-—]\s*", re.IGNORECASE)
+# ----- pure helpers -----
+
+
+_CODE_PREFIX_RE = re.compile(
+    r"^\s*[A-Z]{2,5}\s*\d{3,5}(?:\.\d+)?\s*[:\-—]\s*", re.IGNORECASE
+)
 
 
 def _digit_tail(code: str) -> str:
-    """Strip a leading alpha department prefix so codes can be compared.
-
-    Imperial uses two parallel conventions: EdStem labels courses `COMP50001`
-    while Scientia drops the prefix and lists them as `50001`. Comparing the
-    digit-and-dot tail lets us match across both.
-    """
     return re.sub(r"^[A-Za-z]+", "", code).strip()
 
 
 def _strip_code_prefix(title: str) -> str:
-    """Remove a leading `COMP 50001: ` prefix from an EdStem-style title."""
     return _CODE_PREFIX_RE.sub("", title).strip()
 
 
@@ -307,31 +632,20 @@ def _match_course(
     course_id: str,
     course_title: str,
 ) -> CourseSummary | None:
-    """Find the Scientia course matching an EdStem-style code + title.
-
-    Search order:
-    1. Exact case-insensitive ID match (handles COMPM0101 ↔ COMPM0101).
-    2. Digit-tail match (handles COMP50001 ↔ 50001).
-    3. Title substring match against the code-stripped EdStem title.
-    """
     wanted_id = course_id.upper()
     wanted_tail = _digit_tail(wanted_id)
-
     for course in courses:
         if course.url and course.id.upper() == wanted_id:
             return course
-
     if wanted_tail:
         for course in courses:
             if course.url and _digit_tail(course.id.upper()) == wanted_tail:
                 return course
-
     needle = _strip_code_prefix(course_title).casefold()
     if needle:
         for course in courses:
             if course.url and needle in course.title.casefold():
                 return course
-
     return None
 
 
@@ -351,38 +665,74 @@ def infer_suffix(url: str, content_type: str | None) -> str:
     return ".txt"
 
 
-def panopto_result_to_item(result: PanoptoVideoIndexResult) -> AutoIndexItem:
-    return AutoIndexItem(
-        title=result.title,
+def _panopto_origin(base_url: str) -> str:
+    parsed = urlparse(base_url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _video_as_resource(course_id: str, video: DiscoveredVideo) -> Resource:
+    return Resource(
+        course_id=course_id,
+        title=video.title,
         kind="transcript",
-        status=result.status,
-        stage="panopto",
-        source_url=result.source_url,
-        local_path=result.local_path,
-        chunks=result.chunks,
-        error=result.error,
+        source_url=video.viewer_url,
+        metadata={"session_id": video.session_id},
     )
 
 
-def exam_result_to_item(result: ExamIndexResult) -> AutoIndexItem:
-    return AutoIndexItem(
-        title=result.title,
-        kind="past_exam",
-        status=result.status,
-        stage="exams",
-        source_url=result.source_url,
-        local_path=result.local_path,
-        chunks=result.chunks,
-        error=result.error,
-    )
+def _kind_dir(course_dir: Path, kind: ResourceKind) -> Path:
+    out = course_dir / kind
+    out.mkdir(parents=True, exist_ok=True)
+    return out
 
 
-def edstem_result_to_item(result: EdStemIndexResult) -> AutoIndexItem:
-    return AutoIndexItem(
-        title=result.title,
-        kind="edstem_note",
-        status=result.status,
-        stage="edstem",
-        chunks=result.chunks,
-        error=result.error,
+def _write_resource_to_disk(
+    *,
+    course_dir: Path,
+    kind: ResourceKind,
+    title: str,
+    url: str,
+    content: bytes,
+    content_type: str | None,
+) -> str | None:
+    suffix = infer_suffix(url, content_type)
+    if suffix not in SUPPORTED_DOWNLOAD_SUFFIXES:
+        # Still write the file so user can inspect, but the indexer skips it.
+        # Actually no — saving useless bytes wastes disk. Skip entirely.
+        return None
+    folder = _kind_dir(course_dir, kind)
+    target = unique_path(folder / f"{safe_path_part(title)}{suffix}")
+    target.write_bytes(content)
+    return str(target.relative_to(course_dir))
+
+
+def _write_text_to_disk(
+    *,
+    course_dir: Path,
+    kind: ResourceKind,
+    title: str,
+    text: str,
+    suffix: str,
+) -> str:
+    folder = _kind_dir(course_dir, kind)
+    target = unique_path(folder / f"{safe_path_part(title)}{suffix}")
+    target.write_text(text, encoding="utf-8")
+    return str(target.relative_to(course_dir))
+
+
+def _failed_manifest_item(
+    *,
+    course_dir: Path,
+    resource: Resource,
+    stage: str,
+    error: str,
+) -> ManifestItem:
+    """Record a discovery hit we couldn't download, so it shows up in the report."""
+    return ManifestItem(
+        source_url=resource.source_url or "",
+        local_path="",  # no file
+        kind=resource.kind,
+        title=resource.title,
+        downloaded_at=now_iso(),
+        metadata={"stage": stage, "error": error},
     )
