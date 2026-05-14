@@ -8,7 +8,7 @@ from typing import Any
 from qdrant_client import QdrantClient
 
 from studylens.config import Settings
-from studylens.domain import CourseSummary, Resource
+from studylens.domain import CourseSummary
 from studylens.ingestion._paths import safe_path_part
 from studylens.ingestion.auto_index import (
     CourseAutoIndexer,
@@ -62,7 +62,6 @@ def _build_indexer(
     sci: Any = None,
     pan: Any = None,
     exams: Any = None,
-    edstem: Any = None,
     caption: Any = None,
     course_url: str = "https://scientia.test/2526/modules/COMP70001/materials",
 ) -> CourseAutoIndexer:
@@ -95,7 +94,6 @@ def _build_indexer(
         scientia_discoverer=sci or _empty_resources,
         panopto_discoverer=pan or _empty_resources,
         exams_discoverer=exams or _empty_resources,
-        edstem_discoverer=edstem or _empty_resources,
         panopto_caption_fetcher=caption,
     )
 
@@ -166,12 +164,16 @@ def test_match_course_bridges_edstem_and_scientia_id_formats() -> None:
 # ----- crawl + index integration -----------------------------------------
 
 
-def test_crawl_writes_scientia_files_and_manifest(tmp_path: Path) -> None:
-    pdf_url = "https://scientia.test/api/resources/1/file/notes.pdf"
+def test_crawl_writes_scientia_files_with_original_filename(tmp_path: Path) -> None:
+    pdf_url = "https://scientia.test/api/resources/1/file/COMP70001-Sheet01.pdf"
 
     async def fake_sci(self: Any, summary: CourseSummary):
         return [
-            DiscoveredResource(title="Lecture 1", source_url=pdf_url, kind="material"),
+            DiscoveredResource(
+                title="Sheet 1.pdf",  # agent's normalised title
+                source_url=pdf_url,
+                kind="exercise",
+            ),
         ], None
 
     indexer = _build_indexer(
@@ -184,23 +186,21 @@ def test_crawl_writes_scientia_files_and_manifest(tmp_path: Path) -> None:
         indexer.crawl_course(course_id="COMP70001", course_title="Advanced Algorithms")
     )
 
-    assert manifest.course_id == "COMP70001"
-    assert [it.kind for it in manifest.items] == ["material"]
-    assert manifest.items[0].source_url == pdf_url
-
+    assert [it.kind for it in manifest.items] == ["exercise"]
     course_root = tmp_path / "data" / "raw" / "COMP70001"
-    assert (course_root / "material" / "Lecture-1.pdf").exists()
+    # The on-disk filename comes from the URL path, not from the title — so
+    # it matches what the lecturer uploaded on Scientia.
+    assert (course_root / "exercise" / "COMP70001-Sheet01.pdf").exists()
     manifest_data = json.loads((course_root / "_crawl.json").read_text(encoding="utf-8"))
-    assert manifest_data["course_id"] == "COMP70001"
-    assert manifest_data["items"][0]["kind"] == "material"
+    assert manifest_data["items"][0]["local_path"] == "exercise/COMP70001-Sheet01.pdf"
 
 
 def test_sync_course_chains_crawl_then_index(tmp_path: Path) -> None:
-    txt_url = "https://scientia.test/api/resources/1/file/notes.txt"
+    txt_url = "https://scientia.test/api/resources/1/file/Lecture-1.txt"
 
     async def fake_sci(self: Any, summary: CourseSummary):
         return [
-            DiscoveredResource(title="Lecture 1", source_url=txt_url, kind="material"),
+            DiscoveredResource(title="Lecture 1.txt", source_url=txt_url, kind="material"),
         ], None
 
     indexer = _build_indexer(
@@ -254,35 +254,6 @@ def test_panopto_caption_writes_transcript_to_disk(tmp_path: Path) -> None:
     assert any(
         f.suffix == ".srt"
         for f in (course_root / "transcript").iterdir()
-    )
-
-
-def test_edstem_scope_notes_are_written_to_disk(tmp_path: Path) -> None:
-    async def fake_edstem(self: Any, summary: CourseSummary):
-        return [
-            Resource(
-                course_id=summary.id,
-                title="Exam scope update",
-                kind="edstem_note",
-                metadata={
-                    "source": "edstem",
-                    "body": "Lecture 9 is not examinable this year.",
-                    "course_title": summary.title,
-                },
-            )
-        ], None
-
-    indexer = _build_indexer(tmp_path, edstem=fake_edstem)
-
-    report = asyncio.run(
-        indexer.sync_course(course_id="COMP70001", course_title="Advanced Algorithms")
-    )
-
-    scope_items = [it for it in report.items if it.kind == "edstem_note"]
-    assert scope_items and scope_items[0].status == "indexed"
-    course_root = tmp_path / "data" / "raw" / "COMP70001"
-    assert any(
-        f.suffix == ".txt" for f in (course_root / "edstem_note").iterdir()
     )
 
 

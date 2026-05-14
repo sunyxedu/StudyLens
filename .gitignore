@@ -24,3 +24,4 @@ StudyLens.md
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/vector/.gitkeep
+/data/

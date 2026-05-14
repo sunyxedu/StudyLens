@@ -40,7 +40,6 @@ from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, BrowserSession
 from studylens.ingestion.captions import build_caption_chunks, parse_caption_segments
 from studylens.ingestion.documents import build_chunks, extract_text
-from studylens.ingestion.edstem import EdStemCrawler
 from studylens.ingestion.exams_agent import discover_past_exams
 from studylens.ingestion.llm_extractor import LLMCourseExtractor
 from studylens.ingestion.manifest import (
@@ -110,12 +109,6 @@ ExamsDiscoverer = Callable[
     ["CourseAutoIndexer", CourseSummary],
     Awaitable[tuple[list[Resource], str | None]],
 ]
-EdStemDiscoverer = Callable[
-    ["CourseAutoIndexer", CourseSummary],
-    Awaitable[tuple[list[Resource], str | None]],
-]
-
-
 @dataclass(slots=True)
 class CourseAutoIndexer:
     """Two-phase course ingestion: crawl → manifest → index_local."""
@@ -128,12 +121,10 @@ class CourseAutoIndexer:
     enable_scientia: bool = True
     enable_panopto: bool = True
     enable_exams: bool = True
-    enable_edstem: bool = True
     # Test seams.
     scientia_discoverer: ScientiaDiscoverer | None = None
     panopto_discoverer: PanoptoDiscoverer | None = None
     exams_discoverer: ExamsDiscoverer | None = None
-    edstem_discoverer: EdStemDiscoverer | None = None
     panopto_caption_fetcher: Callable[..., Awaitable[bytes | None]] | None = None
     exams_downloader: Callable[..., Awaitable[tuple[bytes, str | None]]] | None = None
 
@@ -177,11 +168,6 @@ class CourseAutoIndexer:
                     manifest.items.extend(await self._crawl_exams(summary, course_dir))
                 except Exception as exc:  # pragma: no cover - stage-level recovery
                     manifest.items.append(_stage_error_item("exams", exc))
-            if self.enable_edstem:
-                try:
-                    manifest.items.extend(await self._crawl_edstem(summary, course_dir))
-                except Exception as exc:  # pragma: no cover - stage-level recovery
-                    manifest.items.append(_stage_error_item("edstem", exc))
         finally:
             write_manifest(self.settings.raw_dir, manifest)
         return manifest
@@ -484,6 +470,13 @@ class CourseAutoIndexer:
                     )
                 )
                 continue
+            # Every year's paper is just `COMP50001.pdf`, so we'd collide on
+            # disk; tag the filename with the academic year to keep them
+            # distinct and human-recognisable.
+            year = str(resource.metadata.get("academic_year") or "").strip()
+            stem = _filename_from_url(resource.source_url or "") or summary.id
+            stem_no_ext = stem.rsplit(".", 1)[0] if "." in stem else stem
+            desired = f"{stem_no_ext}-{year}" if year else stem_no_ext
             local_rel = _write_resource_to_disk(
                 course_dir=course_dir,
                 kind="past_exam",
@@ -491,6 +484,7 @@ class CourseAutoIndexer:
                 url=resource.source_url or "",
                 content=content,
                 content_type=content_type,
+                desired_name=desired,
             )
             if local_rel is None:
                 continue
@@ -559,56 +553,6 @@ class CourseAutoIndexer:
             response.raise_for_status()
             return response.content, response.headers.get("content-type")
 
-    async def _crawl_edstem(
-        self,
-        summary: CourseSummary,
-        course_dir: Path,
-    ) -> list[ManifestItem]:
-        resources, error = await self._run_edstem_discoverer(summary)
-        if error or not resources:
-            return []
-        items: list[ManifestItem] = []
-        for resource in resources:
-            body = str(resource.metadata.get("body") or "").strip()
-            if not body:
-                continue
-            local_rel = _write_text_to_disk(
-                course_dir=course_dir,
-                kind="edstem_note",
-                title=resource.title,
-                text=body,
-                suffix=".txt",
-            )
-            items.append(
-                ManifestItem(
-                    source_url=resource.source_url or "",
-                    local_path=local_rel,
-                    kind="edstem_note",
-                    title=resource.title,
-                    downloaded_at=now_iso(),
-                    metadata={"stage": "edstem"},
-                )
-            )
-        return items
-
-    async def _run_edstem_discoverer(
-        self,
-        summary: CourseSummary,
-    ) -> tuple[list[Resource], str | None]:
-        if self.edstem_discoverer is not None:
-            return await self.edstem_discoverer(self, summary)
-        if self.session is None:
-            return [], None
-        crawler = EdStemCrawler(
-            session=self.session,
-            base_url=str(self.settings.edstem_base_url),
-        )
-        try:
-            resources = await crawler.collect_scope_notes(summary.id, summary.title)
-        except Exception as exc:  # pragma: no cover.
-            return [], str(exc)
-        return resources, None
-
     def _chunks_for_item(
         self,
         item: ManifestItem,
@@ -644,7 +588,6 @@ def build_auto_indexer(
     *,
     include_panopto: bool = True,
     include_exams: bool = True,
-    include_edstem: bool = True,
 ) -> CourseAutoIndexer:
     """Default wiring used by the API handler and CLI."""
 
@@ -657,7 +600,6 @@ def build_auto_indexer(
         enable_scientia=True,
         enable_panopto=include_panopto,
         enable_exams=include_exams,
-        enable_edstem=include_edstem,
     )
 
 
@@ -737,6 +679,23 @@ def _kind_dir(course_dir: Path, kind: ResourceKind) -> Path:
     return out
 
 
+def _filename_from_url(url: str) -> str | None:
+    """Pull the file's basename out of the URL path.
+
+    Scientia and exams.doc.ic.ac.uk both serve files at paths like
+    `/api/resources/20873/file/COMP50001-Sheet01-answers.pdf` — the last
+    segment is the original filename the lecturer uploaded. We use it
+    verbatim so the local copy is recognisable.
+    """
+    parsed = urlparse(url)
+    last = unquote(parsed.path).rstrip("/").rsplit("/", 1)[-1]
+    if not last:
+        return None
+    # Strip path separators defensively; otherwise leave the name alone.
+    cleaned = last.replace("/", "_").replace("\\", "_").replace("\x00", "")
+    return cleaned or None
+
+
 def _write_resource_to_disk(
     *,
     course_dir: Path,
@@ -745,19 +704,29 @@ def _write_resource_to_disk(
     url: str,
     content: bytes,
     content_type: str | None,
+    desired_name: str | None = None,
 ) -> str | None:
     suffix = infer_suffix(url, content_type)
     if suffix not in SUPPORTED_DOWNLOAD_SUFFIXES:
         return None
     folder = _kind_dir(course_dir, kind)
-    safe_name = safe_path_part(title)
-    # Strip a redundant trailing extension from the title — Scientia anchors
-    # look like `Lecture 6.pdf file`, so the title already ends in `.pdf`
-    # after the agent peels off the ` file` marker. Without this we end up
-    # writing `Lecture-6.pdf.pdf` everywhere.
-    if safe_name.lower().endswith(suffix):
-        safe_name = safe_name[: -len(suffix)] or "resource"
-    target = unique_path(folder / f"{safe_name}{suffix}")
+    if desired_name:
+        name = desired_name
+        if not name.lower().endswith(suffix):
+            name = f"{name}{suffix}"
+    else:
+        # Prefer the filename Scientia/exams serve us so the local copy
+        # matches what the lecturer uploaded. Fall back to a safe title
+        # only when the URL has no usable path segment (rare).
+        name = _filename_from_url(url)
+        if not name:
+            safe_name = safe_path_part(title)
+            if safe_name.lower().endswith(suffix):
+                safe_name = safe_name[: -len(suffix)] or "resource"
+            name = f"{safe_name}{suffix}"
+        elif not name.lower().endswith(suffix):
+            name = f"{name}{suffix}"
+    target = unique_path(folder / name)
     target.write_bytes(content)
     return str(target.relative_to(course_dir))
 
