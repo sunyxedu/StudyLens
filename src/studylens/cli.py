@@ -15,20 +15,9 @@ from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.edstem import build_edstem_indexer
 from studylens.ingestion.exams import build_exams_indexer
-from studylens.ingestion.scientia import parse_course_page, parse_timeline
+from studylens.ingestion.scientia import parse_course_page
 
 app = typer.Typer(help="StudyLens course ingestion and retrieval CLI.")
-
-
-@app.command()
-def inspect_scientia(
-    html_file: Path,
-    base_url: str = "https://scientia.doc.ic.ac.uk/2526/timeline",
-) -> None:
-    """Parse a saved Scientia timeline HTML file."""
-
-    courses = parse_timeline(html_file.read_text(encoding="utf-8"), base_url)
-    typer.echo(json.dumps([course.model_dump() for course in courses], indent=2))
 
 
 @app.command()

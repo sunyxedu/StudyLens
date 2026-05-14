@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_chat_model: str = "gpt-4.1-mini"
 
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-sonnet-4-6"
+
     imperial_username: str | None = None
     imperial_password: str | None = None
     browser_storage_state: Path | None = None

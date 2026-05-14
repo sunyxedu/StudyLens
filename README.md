@@ -19,7 +19,7 @@ uv sync --extra dev --extra browser --extra documents
 cp .env.example .env
 ```
 
-Set credentials in `.env`. Do not hard-code Imperial, EdStem, or exam credentials.
+Set credentials in `.env`. Do not hard-code Imperial, EdStem, or exam credentials. `STUDYLENS_ANTHROPIC_API_KEY` is required for the Scientia timeline lookup — auto-index uses Claude (default `claude-sonnet-4-6`) to extract the course list from the live HTML. Pasting an explicit course URL into the UI skips the lookup, so the key is only needed when you want StudyLens to find the course on the timeline for you.
 
 To refresh browser login state:
 
@@ -50,7 +50,6 @@ uv run --extra dev pytest
 
 ```bash
 uv run studylens --help
-uv run studylens inspect-scientia path/to/course.html
 uv run studylens auto-index COMP70001 --course-title "Advanced Algorithms"
 uv run studylens index-exams COMP70001
 uv run studylens index-edstem COMP70001 "Advanced Algorithms"

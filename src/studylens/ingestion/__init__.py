@@ -22,7 +22,8 @@ from studylens.ingestion.exams import (
     ExamsIndexer,
     build_exams_indexer,
 )
-from studylens.ingestion.scientia import parse_course_page, parse_timeline
+from studylens.ingestion.llm_extractor import LLMCourseExtractor
+from studylens.ingestion.scientia import parse_course_page
 
 __all__ = [
     "AsyncFetcher",
@@ -37,6 +38,7 @@ __all__ = [
     "ExamsClient",
     "ExamsIndexer",
     "HttpFetcher",
+    "LLMCourseExtractor",
     "build_auto_indexer",
     "build_chunks",
     "build_edstem_indexer",
@@ -44,5 +46,4 @@ __all__ = [
     "chunk_text",
     "extract_text",
     "parse_course_page",
-    "parse_timeline",
 ]

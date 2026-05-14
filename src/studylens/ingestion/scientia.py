@@ -1,33 +1,18 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 
 from studylens.domain import Course, CourseSummary, Resource
-from studylens.domain.models import ResourceKind, stable_id
+from studylens.domain.models import ResourceKind
 
-COURSE_CODE_RE = re.compile(r"\b([A-Z]{3,5}\d{4,5}|COMP\d{5}|CO\d{3,5})\b")
 IGNORED_LINK_PREFIXES = ("mailto:", "javascript:", "#")
 
 
 def clean_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
-
-
-def infer_course_id(title: str, url: str | None = None) -> str:
-    for candidate in (title, url or ""):
-        match = COURSE_CODE_RE.search(candidate.upper())
-        if match:
-            return match.group(1)
-    parsed = urlparse(url or "")
-    tail = parsed.path.rstrip("/").split("/")[-1]
-    if tail:
-        normalized = re.sub(r"[^A-Za-z0-9]+", "-", tail).strip("-").upper()
-        if normalized:
-            return normalized[:32]
-    return stable_id(title, url)[:12].upper()
 
 
 def classify_resource(text: str, href: str, context: str = "") -> ResourceKind:
@@ -45,37 +30,6 @@ def classify_resource(text: str, href: str, context: str = "") -> ResourceKind:
     ):
         return "material"
     return "material"
-
-
-def parse_timeline(html: str, base_url: str) -> list[CourseSummary]:
-    """Parse Scientia's timeline page into deduplicated course summaries."""
-
-    soup = BeautifulSoup(html, "html.parser")
-    courses: dict[str, CourseSummary] = {}
-
-    for anchor in soup.find_all("a", href=True):
-        href = str(anchor.get("href"))
-        if href.startswith(IGNORED_LINK_PREFIXES):
-            continue
-        label = clean_text(anchor.get_text(" "))
-        if not label:
-            continue
-
-        absolute = urljoin(base_url, href)
-        combined = f"{label} {href}"
-        looks_like_course = bool(COURSE_CODE_RE.search(combined.upper())) or any(
-            token in href.lower() for token in ("module", "course", "class")
-        )
-        if not looks_like_course:
-            continue
-
-        course_id = infer_course_id(label, absolute)
-        courses.setdefault(
-            course_id,
-            CourseSummary(id=course_id, title=label, url=absolute, metadata={"source": "scientia"}),
-        )
-
-    return sorted(courses.values(), key=lambda course: (course.id, course.title))
 
 
 def _nearest_heading(anchor: Tag) -> str:

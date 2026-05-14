@@ -15,8 +15,9 @@ from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, Br
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.edstem import EdStemIndexer, EdStemIndexResult, build_edstem_indexer
 from studylens.ingestion.exams import ExamIndexResult, ExamsIndexer, build_exams_indexer
+from studylens.ingestion.llm_extractor import LLMCourseExtractor
 from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
-from studylens.ingestion.scientia import parse_course_page, parse_timeline
+from studylens.ingestion.scientia import parse_course_page
 from studylens.retrieval.qa import RAGService
 
 SUPPORTED_DOWNLOAD_SUFFIXES = {
@@ -67,6 +68,7 @@ class CourseAutoIndexer:
     settings: Settings
     rag: RAGService
     fetcher: AsyncFetcher
+    course_extractor: LLMCourseExtractor
     panopto_indexer: PanoptoVideoIndexer | None = None
     exams_indexer: ExamsIndexer | None = None
     edstem_indexer: EdStemIndexer | None = None
@@ -131,8 +133,9 @@ class CourseAutoIndexer:
         if course_url:
             return CourseSummary(id=course_id, title=course_title or course_id, url=course_url)
 
-        timeline_html = await self.fetcher.get_text(str(self.settings.scientia_base_url))
-        courses = parse_timeline(timeline_html, str(self.settings.scientia_base_url))
+        base_url = str(self.settings.scientia_base_url)
+        timeline_html = await self.fetcher.get_text(base_url)
+        courses = await self.course_extractor.extract_courses(timeline_html, base_url)
         normalized_id = course_id.upper()
         for course in courses:
             if course.id.upper() == normalized_id:
@@ -249,8 +252,14 @@ def build_auto_indexer(
     include_exams: bool = True,
     include_edstem: bool = True,
 ) -> CourseAutoIndexer:
-    """Default wiring: BrowserFetcher + Panopto + exams + EdStem (when configured)."""
+    """Default wiring: BrowserFetcher + LLM extractor + Panopto/exams/EdStem.
 
+    Raises ConfigurationError when STUDYLENS_ANTHROPIC_API_KEY is unset —
+    the timeline lookup requires Claude. Callers that pass course_url
+    explicitly skip the timeline entirely and don't hit this dependency.
+    """
+
+    extractor = LLMCourseExtractor.from_settings(settings)
     panopto = (
         PanoptoVideoIndexer(settings=settings, rag=rag, session=session)
         if include_panopto
@@ -262,6 +271,7 @@ def build_auto_indexer(
         settings=settings,
         rag=rag,
         fetcher=BrowserFetcher(session),
+        course_extractor=extractor,
         panopto_indexer=panopto,
         exams_indexer=exams,
         edstem_indexer=edstem,

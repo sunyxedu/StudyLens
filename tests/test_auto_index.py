@@ -6,6 +6,7 @@ from pathlib import Path
 from qdrant_client import QdrantClient
 
 from studylens.config import Settings
+from studylens.domain import CourseSummary
 from studylens.ingestion._paths import safe_path_part
 from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix
 from studylens.ingestion.edstem import EdStemIndexResult
@@ -18,9 +19,7 @@ from studylens.retrieval.qa import TemplateLLM
 class FakeAsyncFetcher:
     def __init__(self) -> None:
         self.text = {
-            "https://scientia.doc.ic.ac.uk/2526/timeline": """
-                <a href="/2526/modules/COMP70001">COMP70001 Advanced Algorithms</a>
-            """,
+            "https://scientia.doc.ic.ac.uk/2526/timeline": "<html>timeline placeholder</html>",
             "https://scientia.doc.ic.ac.uk/2526/modules/COMP70001": """
                 <h2>Materials</h2><a href="notes.txt">Lecture notes</a>
                 <h2>Exercises</h2><a href="exercise.html">Problem Sheet 1</a>
@@ -47,6 +46,31 @@ class FakeAsyncFetcher:
 
     async def download(self, url: str) -> tuple[bytes, str | None]:
         return self.downloads[url]
+
+
+class FakeCourseExtractor:
+    """Stand-in that returns a fixed course list without calling Claude."""
+
+    def __init__(self, courses: list[CourseSummary]) -> None:
+        self._courses = courses
+        self.calls = 0
+
+    async def extract_courses(self, html: str, base_url: str) -> list[CourseSummary]:
+        self.calls += 1
+        return list(self._courses)
+
+
+def make_extractor() -> FakeCourseExtractor:
+    return FakeCourseExtractor(
+        [
+            CourseSummary(
+                id="COMP70001",
+                title="COMP70001 Advanced Algorithms",
+                url="https://scientia.doc.ic.ac.uk/2526/modules/COMP70001",
+                metadata={"source": "scientia"},
+            )
+        ]
+    )
 
 
 class FakePanoptoIndexer:
@@ -114,10 +138,12 @@ def test_course_auto_indexer_downloads_extracts_and_indexes_supported_resources(
         vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
     )
     service = make_service()
+    extractor = make_extractor()
     indexer = CourseAutoIndexer(
         settings=settings,
         rag=service,
         fetcher=FakeAsyncFetcher(),
+        course_extractor=extractor,
     )
 
     report = asyncio.run(indexer.index_course(course_id="COMP70001"))
@@ -126,6 +152,7 @@ def test_course_auto_indexer_downloads_extracts_and_indexes_supported_resources(
     assert report.discovered_resources == 3
     assert report.indexed_resources == 2
     assert report.indexed_chunks == 2
+    assert extractor.calls == 1  # timeline lookup ran
     assert {item.status for item in report.items} == {"indexed", "skipped"}
     assert service.vector_store.count(course_id="COMP70001") == 2
     assert (tmp_path / "data" / "raw" / "COMP70001" / "material" / "Lecture-notes.txt").exists()
@@ -142,6 +169,7 @@ def test_course_auto_indexer_includes_panopto_video_results(tmp_path: Path) -> N
         settings=settings,
         rag=service,
         fetcher=FakeAsyncFetcher(),
+        course_extractor=make_extractor(),
         panopto_indexer=FakePanoptoIndexer(),
     )
 
@@ -164,6 +192,7 @@ def test_course_auto_indexer_runs_all_four_stages_when_all_attached(tmp_path: Pa
         settings=settings,
         rag=service,
         fetcher=FakeAsyncFetcher(),
+        course_extractor=make_extractor(),
         panopto_indexer=FakePanoptoIndexer(),
         exams_indexer=FakeExamsIndexer(),
         edstem_indexer=FakeEdStemIndexer(),
@@ -177,7 +206,7 @@ def test_course_auto_indexer_runs_all_four_stages_when_all_attached(tmp_path: Pa
     assert any(item.stage == "edstem" and item.status == "indexed" for item in report.items)
 
 
-def test_course_auto_indexer_uses_explicit_course_url_without_timeline(tmp_path: Path) -> None:
+def test_course_auto_indexer_uses_explicit_course_url_without_extractor(tmp_path: Path) -> None:
     fetcher = FakeAsyncFetcher()
     settings = Settings(
         data_dir=tmp_path / "data",
@@ -185,7 +214,13 @@ def test_course_auto_indexer_uses_explicit_course_url_without_timeline(tmp_path:
         vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
     )
     service = make_service()
-    indexer = CourseAutoIndexer(settings=settings, rag=service, fetcher=fetcher)
+    extractor = FakeCourseExtractor([])
+    indexer = CourseAutoIndexer(
+        settings=settings,
+        rag=service,
+        fetcher=fetcher,
+        course_extractor=extractor,
+    )
 
     report = asyncio.run(
         indexer.index_course(
@@ -197,6 +232,7 @@ def test_course_auto_indexer_uses_explicit_course_url_without_timeline(tmp_path:
 
     assert report.course_title == "Advanced Algorithms"
     assert report.discovered_resources == 3
+    assert extractor.calls == 0  # explicit URL skips the timeline LLM lookup
 
 
 def test_auto_index_helpers_infer_suffix_and_safe_path_names() -> None:
