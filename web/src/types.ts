@@ -56,6 +56,7 @@ export interface AutoIndexItem {
   title: string;
   kind: ResourceKind;
   status: "indexed" | "skipped" | "failed" | string;
+  stage?: "scientia" | "panopto" | string;
   source_url?: string | null;
   local_path?: string | null;
   chunks: number;

@@ -77,6 +77,15 @@ test("render helpers produce compact labels", () => {
   assert.equal(scoreLabel(0.873), "87%");
   assert.equal(clippedText("abc", 10), "abc");
   assert.equal(clippedText("abcdef", 5), "abcd…");
-  assert.equal(autoIndexItemMeta({ title: "Notes", kind: "material", status: "indexed", chunks: 2 }), "material · 2 chunks");
+  assert.equal(
+    autoIndexItemMeta({
+      title: "Notes",
+      kind: "material",
+      stage: "scientia",
+      status: "indexed",
+      chunks: 2
+    }),
+    "scientia · material · 2 chunks"
+  );
   assert.equal(autoIndexItemMeta({ title: "Slides", kind: "material", status: "skipped", chunks: 0 }), "material · skipped");
 });

@@ -22,8 +22,9 @@ export function clippedText(text: string, limit = 700): string {
 }
 
 export function autoIndexItemMeta(item: AutoIndexItem): string {
+  const stage = item.stage ? `${item.stage} · ` : "";
   if (item.status === "indexed") {
-    return `${item.kind} · ${item.chunks} chunks`;
+    return `${stage}${item.kind} · ${item.chunks} chunks`;
   }
-  return `${item.kind} · ${item.status}`;
+  return `${stage}${item.kind} · ${item.status}`;
 }

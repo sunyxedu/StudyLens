@@ -4,6 +4,7 @@ from qdrant_client import QdrantClient
 
 from studylens.config import Settings
 from studylens.ingestion.auto_index import CourseAutoIndexer, infer_suffix, safe_path_part
+from studylens.ingestion.panopto import PanoptoVideoIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
 from studylens.retrieval.qa import TemplateLLM
 
@@ -42,6 +43,26 @@ class FakeFetcher:
         return self.downloads[url]
 
 
+class FakePanoptoIndexer:
+    def index_course_videos(
+        self,
+        *,
+        course_id: str,
+        course_title: str,
+    ) -> list[PanoptoVideoIndexResult]:
+        assert course_id == "COMP70001"
+        assert "Advanced Algorithms" in course_title
+        return [
+            PanoptoVideoIndexResult(
+                title="Lecture video",
+                status="indexed",
+                source_url="https://panopto.test/viewer?id=1",
+                local_path="data/raw/COMP70001/panopto/lecture.srt",
+                chunks=3,
+            )
+        ]
+
+
 def make_service(tmp_path: Path) -> RAGService:
     embeddings = HashEmbeddingClient(dimensions=64)
     store = QdrantVectorStore(
@@ -61,7 +82,12 @@ def test_course_auto_indexer_downloads_extracts_and_indexes_supported_resources(
         vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
     )
     service = make_service(tmp_path)
-    indexer = CourseAutoIndexer(settings=settings, rag=service, fetcher=FakeFetcher())
+    indexer = CourseAutoIndexer(
+        settings=settings,
+        rag=service,
+        fetcher=FakeFetcher(),
+        include_panopto=False,
+    )
 
     report = indexer.index_course(course_id="COMP70001")
 
@@ -74,8 +100,29 @@ def test_course_auto_indexer_downloads_extracts_and_indexes_supported_resources(
     assert (tmp_path / "data" / "raw" / "COMP70001" / "material" / "Lecture-notes.txt").exists()
 
 
+def test_course_auto_indexer_includes_panopto_video_results(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
+    )
+    service = make_service(tmp_path)
+    indexer = CourseAutoIndexer(
+        settings=settings,
+        rag=service,
+        fetcher=FakeFetcher(),
+        panopto_indexer=FakePanoptoIndexer(),
+    )
+
+    report = indexer.index_course(course_id="COMP70001")
+
+    assert report.discovered_resources == 4
+    assert report.indexed_resources == 3
+    assert report.indexed_chunks == 5
+    assert any(item.stage == "panopto" and item.chunks == 3 for item in report.items)
+
+
 def test_auto_index_helpers_infer_suffix_and_safe_path_names() -> None:
     assert infer_suffix("https://example.test/file", "text/html; charset=utf-8") == ".html"
     assert infer_suffix("https://example.test/file.pdf", "text/plain") == ".pdf"
     assert safe_path_part(" Week 1: DP / graphs ") == "Week-1-DP-graphs"
-

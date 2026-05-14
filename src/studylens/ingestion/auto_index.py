@@ -14,6 +14,7 @@ from studylens.config import Settings
 from studylens.domain import CourseSummary, Resource
 from studylens.errors import IngestionError, UnsupportedDocumentError
 from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.panopto import PanoptoVideoIndexer, PanoptoVideoIndexResult
 from studylens.ingestion.scientia import parse_course_page, parse_timeline
 from studylens.retrieval.qa import RAGService
 
@@ -35,6 +36,7 @@ class AutoIndexItem(BaseModel):
     title: str
     kind: str
     status: str
+    stage: str = "scientia"
     source_url: str | None = None
     local_path: str | None = None
     chunks: int = 0
@@ -81,10 +83,14 @@ class CourseAutoIndexer:
     settings: Settings
     rag: RAGService
     fetcher: Fetcher | None = None
+    panopto_indexer: PanoptoVideoIndexer | None = None
+    include_panopto: bool = True
 
     def __post_init__(self) -> None:
         if self.fetcher is None:
             self.fetcher = HttpFetcher()
+        if self.include_panopto and self.panopto_indexer is None:
+            self.panopto_indexer = PanoptoVideoIndexer(settings=self.settings, rag=self.rag)
 
     def index_course(
         self,
@@ -111,6 +117,10 @@ class CourseAutoIndexer:
 
         for resource in resources:
             report.items.append(self._index_resource(resource))
+        if self.include_panopto and self.panopto_indexer is not None:
+            panopto_items = self._index_panopto(course_id=course.id, course_title=course.title)
+            report.items.extend(panopto_items)
+            report.discovered_resources += sum(1 for item in panopto_items if item.source_url)
 
         report.indexed_resources = sum(1 for item in report.items if item.status == "indexed")
         report.indexed_chunks = sum(item.chunks for item in report.items)
@@ -146,6 +156,7 @@ class CourseAutoIndexer:
                 title=resource.title,
                 kind=resource.kind,
                 status="skipped",
+                stage="scientia",
                 error="Resource has no source URL",
             )
 
@@ -158,6 +169,7 @@ class CourseAutoIndexer:
                 title=resource.title,
                 kind=resource.kind,
                 status="indexed",
+                stage="scientia",
                 source_url=resource.source_url,
                 local_path=str(downloaded.local_path) if downloaded.local_path else None,
                 chunks=indexed,
@@ -167,6 +179,7 @@ class CourseAutoIndexer:
                 title=resource.title,
                 kind=resource.kind,
                 status="skipped",
+                stage="scientia",
                 source_url=resource.source_url,
                 error=str(exc),
             )
@@ -175,6 +188,7 @@ class CourseAutoIndexer:
                 title=resource.title,
                 kind=resource.kind,
                 status="failed",
+                stage="scientia",
                 source_url=resource.source_url,
                 error=str(exc),
             )
@@ -200,6 +214,14 @@ class CourseAutoIndexer:
                 "metadata": {**resource.metadata, "auto_indexed": True},
             }
         )
+
+    def _index_panopto(self, *, course_id: str, course_title: str) -> list[AutoIndexItem]:
+        assert self.panopto_indexer is not None
+        results = self.panopto_indexer.index_course_videos(
+            course_id=course_id,
+            course_title=course_title,
+        )
+        return [panopto_result_to_item(result) for result in results]
 
 
 def infer_suffix(url: str, content_type: str | None) -> str:
@@ -233,3 +255,16 @@ def unique_path(path: Path) -> Path:
         if not candidate.exists():
             return candidate
     raise IngestionError(f"Could not find available filename for {path}")
+
+
+def panopto_result_to_item(result: PanoptoVideoIndexResult) -> AutoIndexItem:
+    return AutoIndexItem(
+        title=result.title,
+        kind="transcript",
+        status=result.status,
+        stage="panopto",
+        source_url=result.source_url,
+        local_path=result.local_path,
+        chunks=result.chunks,
+        error=result.error,
+    )

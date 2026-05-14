@@ -68,7 +68,7 @@ npm run dev
 The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000`.
 After `npm run build`, the API also serves the built UI from `http://localhost:8000/app`.
 
-In the UI, use `Index` to sync a course automatically from Scientia. It downloads and indexes supported materials, exercises, and tutorials. `studylens index-text` remains available as a fallback for local notes or transcripts.
+In the UI, use `Index` to sync a course automatically. It downloads and indexes supported Scientia materials, exercises, and tutorials, then indexes Panopto video captions/transcripts when `STUDYLENS_BROWSER_STORAGE_STATE` is configured. Captions are kept with timestamps and linked back to the video URL. `studylens index-text` remains available as a fallback for local notes or transcripts.
 
 ## Extension
 
