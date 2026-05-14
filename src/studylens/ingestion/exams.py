@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin
@@ -88,13 +89,39 @@ def parse_exam_links(html: str, base_url: str, course_id: str) -> list[Resource]
     return resources
 
 
+YEAR_ARCHIVE_RE = re.compile(r"pastpapers/papers\.\d{2}-\d{2}")
+YEAR_LABEL_RE = re.compile(r"papers\.(\d{2}-\d{2})")
+
+
+def find_year_archive_urls(html: str, base_url: str) -> list[str]:
+    """Return the year-archive URLs linked from the exams root index.
+
+    Each `pastpapers/papers.YY-YY` page is a flat index of every paper
+    sat that academic year, with anchors like `COMP50001.pdf` resolved
+    against the archive URL.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    seen: dict[str, None] = {}
+    for anchor in soup.find_all("a", href=True):
+        href = str(anchor.get("href"))
+        if not YEAR_ARCHIVE_RE.search(href):
+            continue
+        absolute = urljoin(base_url, href)
+        if not absolute.endswith("/"):
+            absolute = absolute + "/"  # urljoin treats the last segment as a dir
+        seen.setdefault(absolute, None)
+    return list(seen)
+
+
 @dataclass(slots=True)
 class ExamsClient:
     """HTTP-Basic client for https://exams.doc.ic.ac.uk/.
 
-    Discovery tries a course-specific page first (`{base}{course_id}/`),
-    then falls back to filtering the root index. Any 401 propagates as a
-    ConfigurationError because the only fix is fresh credentials.
+    The site is a flat server-rendered index. The root page links to each
+    academic year's archive (`pastpapers/papers.YY-YY/`); each archive
+    page in turn lists every paper for every course as
+    `COMP{course}.pdf`. Discovery walks the root → year archives → filters
+    PDFs whose URL or anchor text mentions the course code.
     """
 
     base_url: str
@@ -116,26 +143,6 @@ class ExamsClient:
             follow_redirects=True,
             auth=(username, password),
         ) as client:
-            course_url = urljoin(self.base_url, f"{course_id}/")
-            try:
-                course_response = await client.get(course_url)
-            except httpx.HTTPError:
-                course_response = None
-
-            if course_response is not None and course_response.status_code == 401:
-                raise ConfigurationError(
-                    "Exams credentials rejected (HTTP 401); refresh "
-                    "IMPERIAL_USERNAME / IMPERIAL_PASSWORD"
-                )
-            if (
-                course_response is not None
-                and course_response.is_success
-                and "html" in (course_response.headers.get("content-type") or "").lower()
-            ):
-                resources = parse_all_pdfs(course_response.text, course_url, course_id)
-                if resources:
-                    return resources
-
             root_response = await client.get(self.base_url)
             if root_response.status_code == 401:
                 raise ConfigurationError(
@@ -143,7 +150,36 @@ class ExamsClient:
                     "IMPERIAL_USERNAME / IMPERIAL_PASSWORD"
                 )
             root_response.raise_for_status()
-            return parse_exam_links(root_response.text, self.base_url, course_id)
+            year_urls = find_year_archive_urls(root_response.text, self.base_url)
+
+            seen_pdf_urls: set[str] = set()
+            resources: list[Resource] = []
+            for year_url in year_urls:
+                year_match = YEAR_LABEL_RE.search(year_url)
+                year_label = year_match.group(1) if year_match else None
+                try:
+                    year_response = await client.get(year_url)
+                except httpx.HTTPError:
+                    continue
+                if not year_response.is_success:
+                    continue
+                for resource in parse_exam_links(
+                    year_response.text, year_url, course_id
+                ):
+                    if resource.source_url in seen_pdf_urls:
+                        continue
+                    seen_pdf_urls.add(resource.source_url or "")
+                    if year_label:
+                        resource = resource.model_copy(
+                            update={
+                                "metadata": {
+                                    **resource.metadata,
+                                    "academic_year": year_label,
+                                },
+                            }
+                        )
+                    resources.append(resource)
+            return resources
 
     async def download(self, url: str) -> tuple[bytes, str | None]:
         username, password = self._require_credentials()
