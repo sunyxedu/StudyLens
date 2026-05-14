@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "StudyLens",
+  "description": "Ask StudyLens questions about the current Imperial course page.",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://scientia.doc.ic.ac.uk/*",
+    "https://imperial.cloud.panopto.eu/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "StudyLens",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://scientia.doc.ic.ac.uk/*",
+        "https://imperial.cloud.panopto.eu/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
+

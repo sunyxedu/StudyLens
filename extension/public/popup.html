@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StudyLens</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="header">
+        <div>
+          <h1>StudyLens</h1>
+          <p id="page-title">Current course page</p>
+        </div>
+        <button id="open-options" class="icon-button" title="Settings" aria-label="Settings">⚙</button>
+      </header>
+
+      <label class="field">
+        <span>Course ID</span>
+        <input id="course-id" placeholder="COMP70001" autocomplete="off" />
+      </label>
+
+      <label class="field">
+        <span>Question</span>
+        <textarea id="question" rows="4" placeholder="Ask about this lecture or course"></textarea>
+      </label>
+
+      <button id="ask" class="primary">Ask</button>
+      <section id="answer" class="answer" aria-live="polite"></section>
+      <section id="citations" class="citations"></section>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
+
