@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-6"
 
+    panopto_agent_model: str = "claude-sonnet-4-6"
+    panopto_agent_max_turns: int = 80
+
     imperial_username: str | None = None
     imperial_password: str | None = None
     browser_storage_state: Path | None = None

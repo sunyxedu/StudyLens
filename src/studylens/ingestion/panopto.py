@@ -12,6 +12,7 @@ from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.captions import build_caption_chunks, parse_caption_segments
 from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.panopto_agent import discover_course_videos
 from studylens.ingestion.video import TranscriptExtractor
 from studylens.retrieval.qa import RAGService
 
@@ -56,13 +57,12 @@ class PanoptoVideoIndexer:
         course_title: str,
     ) -> list[PanoptoVideoIndexResult]:
         try:
-            sessions = await self._search_sessions(
+            report = await discover_course_videos(
+                self.session,
                 course_id=course_id,
                 course_title=course_title,
+                settings=self.settings,
             )
-            results: list[PanoptoVideoIndexResult] = []
-            for panopto_session in sessions[: self.max_videos]:
-                results.append(await self._index_session(course_id, panopto_session))
         except Exception as exc:  # pragma: no cover - live Panopto failures are tenant-specific.
             return [
                 PanoptoVideoIndexResult(
@@ -73,51 +73,44 @@ class PanoptoVideoIndexer:
                 )
             ]
 
-        if not results:
+        if report.error:
+            return [
+                PanoptoVideoIndexResult(
+                    title="Panopto videos",
+                    status="failed",
+                    error=report.error,
+                    discovered=bool(report.videos),
+                )
+            ]
+
+        sessions = [
+            PanoptoSession(id=v.session_id, title=v.title, viewer_url=v.viewer_url)
+            for v in report.videos
+        ]
+        if not sessions:
             return [
                 PanoptoVideoIndexResult(
                     title="Panopto videos",
                     status="skipped",
-                    error="No Panopto sessions found for this course query",
+                    error="Agent returned no Panopto sessions for this course",
                     discovered=False,
                 )
             ]
+
+        results: list[PanoptoVideoIndexResult] = []
+        for panopto_session in sessions[: self.max_videos]:
+            try:
+                results.append(await self._index_session(course_id, panopto_session))
+            except Exception as exc:  # pragma: no cover - per-session failures.
+                results.append(
+                    PanoptoVideoIndexResult(
+                        title=panopto_session.title,
+                        status="failed",
+                        source_url=panopto_session.viewer_url,
+                        error=str(exc),
+                    )
+                )
         return results
-
-    async def _search_sessions(
-        self,
-        *,
-        course_id: str,
-        course_title: str,
-    ) -> list[PanoptoSession]:
-        query = f"{course_id} {course_title}".strip()
-        async with self.session.page() as page:
-            await page.goto(
-                f"{self.settings.panopto_base_url}#isSharedWithMe=true",
-                wait_until="domcontentloaded",
-            )
-            textbox = page.get_by_role("textbox").first
-            await textbox.fill(query)
-            await page.keyboard.press("Enter")
-            await page.wait_for_load_state("networkidle")
-            links = await page.locator("a").evaluate_all(
-                "(nodes) => nodes.map(a => ({text: (a.innerText || '').trim(), href: a.href}))"
-                ".filter(x => x.href)"
-            )
-
-        sessions: dict[str, PanoptoSession] = {}
-        for item in links:
-            href = str(item.get("href", "")).strip()
-            session_id = extract_session_id(href)
-            if not session_id or session_id in sessions:
-                continue
-            title = str(item.get("text", "")).strip() or f"Panopto session {session_id}"
-            sessions[session_id] = PanoptoSession(
-                id=session_id,
-                title=title,
-                viewer_url=href,
-            )
-        return list(sessions.values())
 
     async def _index_session(
         self,

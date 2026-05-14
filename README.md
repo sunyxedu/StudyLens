@@ -21,6 +21,8 @@ cp .env.example .env
 
 Set credentials in `.env`. Do not hard-code Imperial, EdStem, or exam credentials. `STUDYLENS_ANTHROPIC_API_KEY` is required for the Scientia timeline lookup — auto-index uses Claude (default `claude-sonnet-4-6`) to extract the course list from the live HTML. Pasting an explicit course URL into the UI skips the lookup, so the key is only needed when you want StudyLens to find the course on the timeline for you.
 
+Panopto video discovery is driven by a Claude Agent SDK loop (drives a Playwright `Page` through small tools — `goto`, `list_links`, `click_text`, etc.). This uses the locally installed `claude` CLI (the SDK is a wrapper around it), so make sure `claude` is on your PATH and logged in. Tune the loop with `STUDYLENS_PANOPTO_AGENT_MAX_TURNS` and `STUDYLENS_PANOPTO_AGENT_MODEL`.
+
 To refresh browser login state:
 
 ```bash
