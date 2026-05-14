@@ -84,4 +84,4 @@ npm install
 npm run build
 ```
 
-Load `extension/dist` as an unpacked extension in a Chromium browser.
+Load `extension/dist` as an unpacked extension in a Chromium browser. On Panopto / YouTube pages the popup switches into video mode automatically and restricts retrieval to indexed `transcript` chunks, so questions land against the lecture audio rather than slides or exercises.

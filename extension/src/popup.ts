@@ -1,9 +1,10 @@
 import { StudyLensClient } from "./api.js";
-import { collectPageContext } from "./pageContext.js";
+import { collectPageContext, isVideoPageUrl } from "./pageContext.js";
 import { loadSettings } from "./storage.js";
 import type { Answer, PageContext } from "./types.js";
 
 const pageTitle = document.querySelector<HTMLParagraphElement>("#page-title");
+const modePill = document.querySelector<HTMLSpanElement>("#mode-pill");
 const courseIdInput = document.querySelector<HTMLInputElement>("#course-id");
 const questionInput = document.querySelector<HTMLTextAreaElement>("#question");
 const askButton = document.querySelector<HTMLButtonElement>("#ask");
@@ -34,6 +35,7 @@ async function getActivePageContext(): Promise<PageContext> {
       selectedText: "",
       visibleText: "",
       inferredCourseId: null,
+      isVideoPage: isVideoPageUrl(tab.url || ""),
     };
   }
   return collectPageContext();
@@ -58,6 +60,19 @@ function setBusy(isBusy: boolean): void {
   }
 }
 
+function updateModePill(context: PageContext): void {
+  if (!modePill) {
+    return;
+  }
+  if (context.isVideoPage) {
+    modePill.textContent = "Video mode · transcripts only";
+    modePill.classList.remove("hidden");
+  } else {
+    modePill.textContent = "";
+    modePill.classList.add("hidden");
+  }
+}
+
 async function init(): Promise<void> {
   pageContext = await getActivePageContext();
   if (pageTitle) {
@@ -66,6 +81,7 @@ async function init(): Promise<void> {
   if (courseIdInput && pageContext.inferredCourseId) {
     courseIdInput.value = pageContext.inferredCourseId;
   }
+  updateModePill(pageContext);
 }
 
 askButton?.addEventListener("click", async () => {
@@ -83,6 +99,7 @@ askButton?.addEventListener("click", async () => {
     const answer = await client.ask({
       question,
       course_id: courseIdInput?.value.trim() || pageContext?.inferredCourseId || undefined,
+      kinds: pageContext?.isVideoPage ? ["transcript"] : undefined,
       include_exercises: false,
     });
     renderAnswer(answer);

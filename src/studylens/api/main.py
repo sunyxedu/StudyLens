@@ -192,6 +192,7 @@ def create_app(
         answer = _service(request).answer(
             payload.question,
             course_id=payload.course_id,
+            kinds=set(payload.kinds) if payload.kinds else None,
             top_k=payload.top_k,
             include_exercises=payload.include_exercises,
         )

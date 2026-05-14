@@ -108,3 +108,19 @@ button {
   min-height: 18px;
 }
 
+.pill {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #d8eadd;
+  color: #1f6b3c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.pill.hidden {
+  display: none;
+}
+

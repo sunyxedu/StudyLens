@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { collectPageContext, extractCourseId } from "../dist/pageContext.js";
+import { collectPageContext, extractCourseId, isVideoPageUrl } from "../dist/pageContext.js";
 
 test("extractCourseId finds Imperial-style course identifiers", () => {
   assert.equal(extractCourseId("Welcome to COMP70001 Advanced Algorithms"), "COMP70001");
@@ -21,5 +21,25 @@ test("collectPageContext trims visible and selected text", () => {
   assert.equal(context.inferredCourseId, "COMP70001");
   assert.equal(context.selectedText, "selected paragraph");
   assert.equal(context.visibleText.length, 5000);
+  assert.equal(context.isVideoPage, false);
+});
+
+test("isVideoPageUrl detects Panopto and YouTube hosts", () => {
+  assert.equal(isVideoPageUrl("https://imperial.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=abc"), true);
+  assert.equal(isVideoPageUrl("https://www.youtube.com/watch?v=xyz"), true);
+  assert.equal(isVideoPageUrl("https://youtu.be/xyz"), true);
+  assert.equal(isVideoPageUrl("https://scientia.doc.ic.ac.uk/2526/modules/COMP70001"), false);
+});
+
+test("collectPageContext marks Panopto pages as video pages", () => {
+  const context = collectPageContext({
+    title: "COMP70001 lecture 3",
+    location: { href: "https://imperial.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=abc" },
+    body: { innerText: "Slides about edit distance" },
+    getSelection: () => null
+  });
+
+  assert.equal(context.isVideoPage, true);
+  assert.equal(context.inferredCourseId, "COMP70001");
 });
 

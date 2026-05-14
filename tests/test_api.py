@@ -131,6 +131,47 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
     assert response.json()["indexed_chunks"] == 4
 
 
+def test_ask_with_kinds_filters_retrieval(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.post(
+        "/chunks",
+        json={
+            "course_id": "COMP70001",
+            "title": "Lecture 1 notes",
+            "kind": "material",
+            "text": "Dynamic programming uses memoization to avoid repeated subproblems.",
+        },
+    )
+    client.post(
+        "/chunks",
+        json={
+            "course_id": "COMP70001",
+            "title": "Lecture 1 transcript",
+            "kind": "transcript",
+            "text": "Today we will talk about dynamic programming and recurrences.",
+        },
+    )
+
+    transcript_only = client.post(
+        "/ask",
+        json={
+            "course_id": "COMP70001",
+            "question": "What did the lecturer say about DP?",
+            "kinds": ["transcript"],
+            "include_exercises": False,
+        },
+    )
+
+    assert transcript_only.status_code == 200
+    body = transcript_only.json()
+    citation_kinds = {citation["resource_id"] for citation in body["citations"]}
+    assert citation_kinds  # has at least one citation
+    # All citations are transcript-derived. We don't have kind on Citation, but
+    # we can check titles since each chunk's title is distinct.
+    citation_titles = {citation["title"] for citation in body["citations"]}
+    assert citation_titles == {"Lecture 1 transcript"}
+
+
 def test_index_exams_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
     class FakeExamsIndexer:
         async def index_course_exams(self, *, course_id: str) -> list[ExamIndexResult]:

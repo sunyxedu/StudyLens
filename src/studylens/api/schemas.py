@@ -60,6 +60,7 @@ class IndexEdStemResponse(BaseModel):
 class AskRequest(BaseModel):
     question: str
     course_id: str | None = None
+    kinds: set[ResourceKind] | None = None
     top_k: int = Field(default=5, ge=1, le=20)
     include_exercises: bool = True
 

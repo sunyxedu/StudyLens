@@ -14,9 +14,20 @@ export interface Answer {
   follow_up?: string | null;
 }
 
+export type ResourceKind =
+  | "material"
+  | "exercise"
+  | "tutorial"
+  | "video"
+  | "transcript"
+  | "edstem_note"
+  | "past_exam"
+  | "generated";
+
 export interface AskRequest {
   question: string;
   course_id?: string | null;
+  kinds?: ResourceKind[];
   top_k?: number;
   include_exercises?: boolean;
 }
@@ -27,6 +38,7 @@ export interface PageContext {
   selectedText: string;
   visibleText: string;
   inferredCourseId?: string | null;
+  isVideoPage?: boolean;
 }
 
 export interface StudyLensSettings {

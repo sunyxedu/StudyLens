@@ -32,6 +32,33 @@ test("StudyLensClient.ask posts expected payload", async () => {
   assert.equal(JSON.parse(calls[0].init.body).include_exercises, false);
 });
 
+test("StudyLensClient.ask forwards kinds when provided", async () => {
+  const calls = [];
+  const fetchImpl = async (input, init) => {
+    calls.push({ input, init });
+    return new Response(
+      JSON.stringify({
+        question: "What did the lecturer cover about DP?",
+        answer: "Memoization and tabulation.",
+        citations: [],
+        follow_up: null
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  };
+  const client = new StudyLensClient("http://localhost:8000", fetchImpl);
+
+  await client.ask({
+    question: "What did the lecturer cover about DP?",
+    course_id: "COMP70001",
+    kinds: ["transcript"]
+  });
+
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.kinds, ["transcript"]);
+  assert.equal(body.include_exercises, false);
+});
+
 test("StudyLensClient.ask raises useful API errors", async () => {
   const client = new StudyLensClient("http://localhost:8000", async () => {
     return new Response("broken", { status: 500, statusText: "Server Error" });

@@ -100,10 +100,11 @@ class RAGService:
         question: str,
         *,
         course_id: str | None = None,
+        kinds: set[str] | None = None,
         top_k: int = 5,
         include_exercises: bool = True,
     ) -> Answer:
-        results = self.retrieve(question, course_id=course_id, top_k=top_k)
+        results = self.retrieve(question, course_id=course_id, kinds=kinds, top_k=top_k)
         system = (
             "You are StudyLens, a concise course tutor. Answer only from retrieved context. "
             "If the evidence is insufficient, say what is missing. "
