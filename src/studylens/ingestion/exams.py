@@ -105,7 +105,7 @@ class ExamsClient:
     def _require_credentials(self) -> tuple[str, str]:
         if not self.username or not self.password:
             raise ConfigurationError(
-                "Exams access requires STUDYLENS_IMPERIAL_USERNAME and STUDYLENS_IMPERIAL_PASSWORD"
+                "Exams access requires IMPERIAL_USERNAME and IMPERIAL_PASSWORD"
             )
         return self.username, self.password
 
@@ -125,7 +125,7 @@ class ExamsClient:
             if course_response is not None and course_response.status_code == 401:
                 raise ConfigurationError(
                     "Exams credentials rejected (HTTP 401); refresh "
-                    "STUDYLENS_IMPERIAL_USERNAME / STUDYLENS_IMPERIAL_PASSWORD"
+                    "IMPERIAL_USERNAME / IMPERIAL_PASSWORD"
                 )
             if (
                 course_response is not None
@@ -140,7 +140,7 @@ class ExamsClient:
             if root_response.status_code == 401:
                 raise ConfigurationError(
                     "Exams credentials rejected (HTTP 401); refresh "
-                    "STUDYLENS_IMPERIAL_USERNAME / STUDYLENS_IMPERIAL_PASSWORD"
+                    "IMPERIAL_USERNAME / IMPERIAL_PASSWORD"
                 )
             root_response.raise_for_status()
             return parse_exam_links(root_response.text, self.base_url, course_id)
@@ -172,7 +172,7 @@ class ExamsIndexer:
                     title="Past exams",
                     status="skipped",
                     error=(
-                        "Set STUDYLENS_IMPERIAL_USERNAME and STUDYLENS_IMPERIAL_PASSWORD "
+                        "Set IMPERIAL_USERNAME and IMPERIAL_PASSWORD "
                         "to index past exam papers"
                     ),
                     discovered=False,

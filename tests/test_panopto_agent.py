@@ -59,7 +59,7 @@ class FakeSession:
 
 
 def make_settings(tmp_path: Any) -> Settings:
-    return Settings(data_dir=tmp_path / "data", panopto_agent_max_turns=10)
+    return Settings(data_dir=tmp_path / "data", agent_max_turns=10)
 
 
 def _assistant_submit(videos: list[dict[str, str]]) -> AssistantMessage:

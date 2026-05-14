@@ -114,7 +114,7 @@ class EdStemIndexer:
                     title="EdStem scope notes",
                     status="skipped",
                     error=(
-                        "Set STUDYLENS_BROWSER_STORAGE_STATE to index EdStem scope notes"
+                        "Set BROWSER_STORAGE_STATE to index EdStem scope notes"
                     ),
                     discovered=False,
                 )

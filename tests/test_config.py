@@ -25,7 +25,7 @@ def test_settings_reads_comma_separated_allowed_origins_from_env(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv(
-        "STUDYLENS_ALLOWED_ORIGINS",
+        "ALLOWED_ORIGINS",
         "http://localhost:5173,chrome-extension://abc",
     )
 

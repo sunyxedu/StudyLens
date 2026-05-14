@@ -307,8 +307,8 @@ async def discover_course_videos(
             mcp_servers={"panopto": server},
             allowed_tools=allowed,
             disallowed_tools=[],
-            max_turns=settings.panopto_agent_max_turns,
-            model=settings.panopto_agent_model,
+            max_turns=settings.agent_max_turns,
+            model=settings.agent_model,
             permission_mode="bypassPermissions",
             system_prompt=_system_prompt(panopto_base_url, course_id, course_title),
         )

@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables or `.env`."""
 
     model_config = SettingsConfigDict(
-        env_prefix="STUDYLENS_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -33,8 +32,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-6"
 
-    panopto_agent_model: str = "claude-sonnet-4-6"
-    panopto_agent_max_turns: int = 80
+    # Shared by every Claude Agent SDK loop (Panopto folder navigation,
+    # EdStem course discovery, anything we add later).
+    agent_model: str = "claude-sonnet-4-6"
+    agent_max_turns: int = 80
 
     imperial_username: str | None = None
     imperial_password: str | None = None

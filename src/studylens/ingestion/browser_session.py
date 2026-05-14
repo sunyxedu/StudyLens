@@ -42,7 +42,7 @@ class BrowserSession:
     def from_settings(cls, settings: Settings) -> BrowserSession:
         if settings.browser_storage_state is None:
             raise ConfigurationError(
-                "BrowserSession requires STUDYLENS_BROWSER_STORAGE_STATE "
+                "BrowserSession requires BROWSER_STORAGE_STATE "
                 "with an authenticated Imperial session"
             )
         if not settings.browser_storage_state.exists():

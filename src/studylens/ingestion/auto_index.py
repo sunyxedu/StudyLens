@@ -144,7 +144,7 @@ class CourseAutoIndexer:
 
         raise IngestionError(
             f"Could not find {course_id} ({course_title}) on the Scientia timeline. "
-            "Check the code/title, and refresh STUDYLENS_BROWSER_STORAGE_STATE if SSO expired."
+            "Check the code/title, and refresh BROWSER_STORAGE_STATE if SSO expired."
         )
 
     async def _index_resource(self, resource: Resource) -> AutoIndexItem:
@@ -254,7 +254,7 @@ def build_auto_indexer(
 ) -> CourseAutoIndexer:
     """Default wiring: BrowserFetcher + LLM extractor + Panopto/exams/EdStem.
 
-    Raises ConfigurationError when STUDYLENS_ANTHROPIC_API_KEY is unset —
+    Raises ConfigurationError when ANTHROPIC_API_KEY is unset —
     the timeline lookup requires Claude. Callers that pass course_url
     explicitly skip the timeline entirely and don't hit this dependency.
     """

@@ -82,7 +82,7 @@ class LLMCourseExtractor:
     def from_settings(cls, settings: Settings) -> LLMCourseExtractor:
         if not settings.anthropic_api_key:
             raise ConfigurationError(
-                "LLM course extraction requires STUDYLENS_ANTHROPIC_API_KEY"
+                "LLM course extraction requires ANTHROPIC_API_KEY"
             )
         return cls(
             client=AsyncAnthropic(api_key=settings.anthropic_api_key),

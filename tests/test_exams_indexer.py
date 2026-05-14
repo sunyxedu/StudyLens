@@ -53,7 +53,7 @@ def test_indexer_skips_when_credentials_missing(tmp_path: Path) -> None:
 
     assert len(results) == 1
     assert results[0].status == "skipped"
-    assert "STUDYLENS_IMPERIAL_USERNAME" in (results[0].error or "")
+    assert "IMPERIAL_USERNAME" in (results[0].error or "")
 
 
 def test_indexer_downloads_extracts_and_indexes_each_paper(tmp_path: Path) -> None:

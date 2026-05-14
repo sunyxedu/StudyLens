@@ -46,7 +46,7 @@ def make_response(courses: list[dict[str, Any]]) -> FakeMessage:
 def test_from_settings_requires_anthropic_key(tmp_path) -> None:
     settings = Settings(data_dir=tmp_path / "data", anthropic_api_key=None)
 
-    with pytest.raises(ConfigurationError, match="STUDYLENS_ANTHROPIC_API_KEY"):
+    with pytest.raises(ConfigurationError, match="ANTHROPIC_API_KEY"):
         LLMCourseExtractor.from_settings(settings)
 
 

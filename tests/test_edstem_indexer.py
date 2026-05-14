@@ -62,7 +62,7 @@ def test_indexer_skips_when_no_session_attached(tmp_path: Path) -> None:
 
     assert len(results) == 1
     assert results[0].status == "skipped"
-    assert "STUDYLENS_BROWSER_STORAGE_STATE" in (results[0].error or "")
+    assert "BROWSER_STORAGE_STATE" in (results[0].error or "")
 
 
 def test_indexer_chunks_and_stores_each_note(tmp_path: Path) -> None:

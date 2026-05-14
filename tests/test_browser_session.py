@@ -12,7 +12,7 @@ from studylens.ingestion.browser_session import BrowserSession
 def test_from_settings_requires_storage_state_path(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "data", browser_storage_state=None)
 
-    with pytest.raises(ConfigurationError, match="STUDYLENS_BROWSER_STORAGE_STATE"):
+    with pytest.raises(ConfigurationError, match="BROWSER_STORAGE_STATE"):
         BrowserSession.from_settings(settings)
 
 
