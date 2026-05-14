@@ -14,6 +14,7 @@ from studylens.ingestion.auto_index import build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
 from studylens.ingestion.edstem import build_edstem_indexer
+from studylens.ingestion.edstem_agent import discover_edstem_courses
 from studylens.ingestion.exams import build_exams_indexer
 from studylens.ingestion.scientia import parse_course_page
 
@@ -55,6 +56,30 @@ def index_text(
     chunks = build_chunks(resource, text)
     indexed = service.index_chunks(chunks)
     typer.echo(f"Indexed {indexed} chunks for {course_id}.")
+
+
+@app.command("list-courses")
+def list_courses() -> None:
+    """Discover the student's enrolled courses from the EdStem dashboard."""
+
+    settings = get_settings()
+
+    async def _run() -> str:
+        async with BrowserSession.from_settings(settings) as session:
+            report = await discover_edstem_courses(session, settings)
+            payload = {
+                "courses": [
+                    {"code": c.code, "title": c.title, "edstem_url": c.edstem_url}
+                    for c in report.courses
+                ],
+                "dropped_titles": report.dropped_titles,
+                "num_turns": report.num_turns,
+                "total_cost_usd": report.total_cost_usd,
+                "error": report.error,
+            }
+            return json.dumps(payload, indent=2)
+
+    typer.echo(asyncio.run(_run()))
 
 
 @app.command("auto-index")

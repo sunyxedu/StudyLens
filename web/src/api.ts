@@ -3,6 +3,7 @@ import type {
   AskRequest,
   AutoIndexCourseRequest,
   AutoIndexReport,
+  DiscoverCoursesResponse,
   GenerateRequest,
   IndexTextRequest,
   PredictedExamRequest,
@@ -43,6 +44,13 @@ export class StudyLensApi {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify(payload),
+    });
+  }
+
+  async discoverCourses(): Promise<DiscoverCoursesResponse> {
+    return this.request("/courses/discover", {
+      method: "POST",
+      headers: jsonHeaders(),
     });
   }
 

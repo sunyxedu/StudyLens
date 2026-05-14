@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <style>
+      .course-row { display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid rgba(0,0,0,0.05); }
+      .course-row input { margin-top:4px; }
+      .course-row .meta { font-size:12px; color:var(--muted); }
+    </style>
     <main class="shell">
       <aside class="sidebar">
         <header class="brand">
@@ -37,7 +42,8 @@
         </section>
 
         <nav class="nav" aria-label="StudyLens views">
-          <button class="nav-item active" data-view="ask" type="button">Ask</button>
+          <button class="nav-item active" data-view="courses" type="button">Courses</button>
+          <button class="nav-item" data-view="ask" type="button">Ask</button>
           <button class="nav-item" data-view="index" type="button">Index</button>
           <button class="nav-item" data-view="retrieve" type="button">Retrieve</button>
           <button class="nav-item" data-view="generate" type="button">Generate</button>
@@ -45,7 +51,26 @@
       </aside>
 
       <section class="workspace">
-        <section class="view active" id="view-ask" aria-labelledby="ask-title">
+        <section class="view active" id="view-courses" aria-labelledby="courses-title">
+          <div class="view-head">
+            <h2 id="courses-title">My Courses</h2>
+            <span class="subtle">Pulled from EdStem dashboard via an agent</span>
+          </div>
+          <p class="subtle">
+            Click <strong>Discover from EdStem</strong> to list this term's courses. Then tick the
+            ones you want, and <strong>Index Selected</strong> runs Scientia + Panopto + exams +
+            EdStem for each.
+          </p>
+          <div class="actions">
+            <button id="courses-discover" class="button primary" type="button">Discover from EdStem</button>
+            <button id="courses-index" class="button secondary" type="button" disabled>Index Selected</button>
+            <span id="courses-status" class="status"></span>
+          </div>
+          <section id="courses-list" class="result-list"></section>
+          <section id="courses-progress" class="result-list"></section>
+        </section>
+
+        <section class="view" id="view-ask" aria-labelledby="ask-title">
           <div class="view-head">
             <h2 id="ask-title">Course Q&A</h2>
             <div class="inline-controls">

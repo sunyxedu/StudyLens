@@ -52,12 +52,15 @@ uv run --extra dev pytest
 
 ```bash
 uv run studylens --help
-uv run studylens auto-index COMP70001 --course-title "Advanced Algorithms"
+uv run studylens list-courses
+uv run studylens auto-index COMP70001 "Advanced Algorithms"
 uv run studylens index-exams COMP70001
 uv run studylens index-edstem COMP70001 "Advanced Algorithms"
 uv run studylens index-text COMP70001 notes.md --title "Lecture 1 Notes"
 uv run studylens ask "What is dynamic programming?" --course-id COMP70001
 ```
+
+`list-courses` runs an agent against the EdStem dashboard and prints the courses you're enrolled in this term (filtered to titles like `COMP 50002: ...`). Use those as inputs to `auto-index`.
 
 `auto-index` runs the Scientia, Panopto, past-exams, and EdStem stages in one pass. Each stage is skipped cleanly when its credentials aren't configured (`BROWSER_STORAGE_STATE` for Scientia / Panopto / EdStem, `IMPERIAL_USERNAME` + `IMPERIAL_PASSWORD` for past exams). `index-exams` and `index-edstem` run those stages in isolation. Cheatsheet and predicted-paper generation auto-include any indexed EdStem scope notes; explicit `scope_notes` in the API request still override.
 

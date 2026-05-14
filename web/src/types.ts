@@ -96,3 +96,17 @@ export interface GenerateRequest {
 export interface PredictedExamRequest extends GenerateRequest {
   question_count: number;
 }
+
+export interface DiscoveredCourse {
+  code: string;
+  title: string;
+  edstem_url?: string | null;
+}
+
+export interface DiscoverCoursesResponse {
+  courses: DiscoveredCourse[];
+  dropped_titles: string[];
+  num_turns: number;
+  total_cost_usd: number;
+  error?: string | null;
+}

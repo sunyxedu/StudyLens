@@ -7,7 +7,7 @@ import {
   saveSettings,
 } from "./state.js";
 import { autoIndexItemMeta, citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
-import type { AutoIndexReport, ResourceKind, SearchResult } from "./types.js";
+import type { AutoIndexReport, DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
   backendUrl: byId<HTMLInputElement>("backend-url"),
@@ -27,6 +27,11 @@ const elements = {
   indexSubmit: byId<HTMLButtonElement>("index-submit"),
   indexStatus: byId<HTMLSpanElement>("index-status"),
   indexResults: byId<HTMLElement>("index-results"),
+  coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
+  coursesIndex: byId<HTMLButtonElement>("courses-index"),
+  coursesStatus: byId<HTMLSpanElement>("courses-status"),
+  coursesList: byId<HTMLElement>("courses-list"),
+  coursesProgress: byId<HTMLElement>("courses-progress"),
   retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
   retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
   retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
@@ -47,6 +52,8 @@ const elements = {
 let api = new StudyLensApi("http://localhost:8000");
 let generationMode: "cheatsheet" | "exam" = "cheatsheet";
 let latestLatex = "";
+let discoveredCourses: DiscoveredCourse[] = [];
+const selectedCourseCodes = new Set<string>();
 
 init();
 
@@ -72,6 +79,8 @@ function init(): void {
   elements.retrieveSubmit.addEventListener("click", handleRetrieve);
   elements.generateSubmit.addEventListener("click", handleGenerate);
   elements.downloadLatex.addEventListener("click", handleDownloadLatex);
+  elements.coursesDiscover.addEventListener("click", handleDiscoverCourses);
+  elements.coursesIndex.addEventListener("click", handleIndexSelected);
 
   void refreshHealth();
 }
@@ -119,6 +128,117 @@ async function handleAsk(): Promise<void> {
     );
     setStatus(elements.askStatus, "Done");
   });
+}
+
+async function handleDiscoverCourses(): Promise<void> {
+  await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering", async () => {
+    const response = await api.discoverCourses();
+    discoveredCourses = response.courses;
+    selectedCourseCodes.clear();
+    renderCourseList();
+    elements.coursesProgress.replaceChildren();
+    elements.coursesIndex.disabled = discoveredCourses.length === 0;
+    if (response.error) {
+      setStatus(elements.coursesStatus, response.error, "error");
+    } else {
+      const dropped = response.dropped_titles.length
+        ? ` (skipped ${response.dropped_titles.length} without a course code)`
+        : "";
+      setStatus(
+        elements.coursesStatus,
+        `Found ${discoveredCourses.length} courses${dropped}`
+      );
+    }
+  });
+}
+
+function renderCourseList(): void {
+  elements.coursesList.replaceChildren(
+    ...discoveredCourses.map((course) => {
+      const row = document.createElement("label");
+      row.className = "course-row";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = course.code;
+      checkbox.checked = selectedCourseCodes.has(course.code);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) selectedCourseCodes.add(course.code);
+        else selectedCourseCodes.delete(course.code);
+      });
+
+      const body = document.createElement("div");
+      const title = document.createElement("div");
+      title.innerHTML = `<strong>${course.code}</strong> · ${escapeHtml(course.title)}`;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = course.edstem_url || "";
+      body.append(title, meta);
+
+      row.append(checkbox, body);
+      return row;
+    })
+  );
+}
+
+async function handleIndexSelected(): Promise<void> {
+  const targets = discoveredCourses.filter((c) => selectedCourseCodes.has(c.code));
+  if (targets.length === 0) {
+    setStatus(elements.coursesStatus, "Tick at least one course first", "error");
+    return;
+  }
+  elements.coursesIndex.disabled = true;
+  elements.coursesDiscover.disabled = true;
+  elements.coursesProgress.replaceChildren();
+  try {
+    for (const course of targets) {
+      const row = appendProgressRow(course.code, course.title, "queued");
+      setStatus(elements.coursesStatus, `Indexing ${course.code}…`);
+      try {
+        const report = await api.autoIndexCourse({
+          course_id: course.code,
+          course_title: course.title,
+        });
+        updateProgressRow(
+          row,
+          "done",
+          `${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks`
+        );
+      } catch (error) {
+        updateProgressRow(
+          row,
+          "failed",
+          error instanceof Error ? error.message : "failed"
+        );
+      }
+    }
+    setStatus(elements.coursesStatus, "Done");
+  } finally {
+    elements.coursesIndex.disabled = false;
+    elements.coursesDiscover.disabled = false;
+  }
+}
+
+function appendProgressRow(code: string, title: string, status: string): HTMLElement {
+  const row = document.createElement("article");
+  row.className = "result-item";
+  row.dataset.code = code;
+  row.innerHTML = `<div class="result-meta"><span class="result-title">${code}</span><span data-role="status">${status}</span></div><p class="result-text">${escapeHtml(title)}</p>`;
+  elements.coursesProgress.appendChild(row);
+  return row;
+}
+
+function updateProgressRow(row: HTMLElement, status: string, summary: string): void {
+  const statusNode = row.querySelector<HTMLElement>('[data-role="status"]');
+  if (statusNode) statusNode.textContent = status;
+  const body = row.querySelector<HTMLElement>(".result-text");
+  if (body) body.textContent = `${body.textContent} — ${summary}`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c)
+  );
 }
 
 async function handleIndex(): Promise<void> {

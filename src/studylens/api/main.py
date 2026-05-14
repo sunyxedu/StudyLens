@@ -13,6 +13,8 @@ from studylens.api.schemas import (
     AskResponse,
     AutoIndexCourseRequest,
     AutoIndexCourseResponse,
+    DiscoverCoursesCourse,
+    DiscoverCoursesResponse,
     GeneratedLatexResponse,
     GenerateRequest,
     HealthResponse,
@@ -34,6 +36,7 @@ from studylens.ingestion.auto_index import AutoIndexReport, build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
 from studylens.ingestion.edstem import EdStemIndexer, build_edstem_indexer
+from studylens.ingestion.edstem_agent import discover_edstem_courses
 from studylens.ingestion.exams import ExamsIndexer, build_exams_indexer
 from studylens.retrieval.qa import RAGService
 
@@ -151,6 +154,22 @@ def create_app(
         )
         results = await indexer.index_course_exams(course_id=payload.course_id)
         return IndexExamsResponse(results=results)
+
+    @application.post("/courses/discover", response_model=DiscoverCoursesResponse)
+    async def courses_discover(request: Request) -> DiscoverCoursesResponse:
+        settings: Settings = request.app.state.settings
+        async with BrowserSession.from_settings(settings) as session:
+            report = await discover_edstem_courses(session, settings)
+        return DiscoverCoursesResponse(
+            courses=[
+                DiscoverCoursesCourse(code=c.code, title=c.title, edstem_url=c.edstem_url)
+                for c in report.courses
+            ],
+            dropped_titles=report.dropped_titles,
+            num_turns=report.num_turns,
+            total_cost_usd=report.total_cost_usd,
+            error=report.error,
+        )
 
     @application.post("/index/edstem", response_model=IndexEdStemResponse)
     async def index_edstem(

@@ -56,6 +56,20 @@ class IndexEdStemResponse(BaseModel):
     results: list[EdStemIndexResult]
 
 
+class DiscoverCoursesCourse(BaseModel):
+    code: str
+    title: str
+    edstem_url: str | None = None
+
+
+class DiscoverCoursesResponse(BaseModel):
+    courses: list[DiscoverCoursesCourse]
+    dropped_titles: list[str] = Field(default_factory=list)
+    num_turns: int = 0
+    total_cost_usd: float = 0.0
+    error: str | None = None
+
+
 class AskRequest(BaseModel):
     question: str
     course_id: str | None = None
