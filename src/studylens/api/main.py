@@ -13,6 +13,7 @@ from studylens.api.schemas import (
     AskResponse,
     AutoIndexCourseRequest,
     AutoIndexCourseResponse,
+    CoursesListResponse,
     DiscoverCoursesCourse,
     DiscoverCoursesResponse,
     GeneratedLatexResponse,
@@ -39,6 +40,7 @@ from studylens.ingestion.edstem import EdStemIndexer, build_edstem_indexer
 from studylens.ingestion.edstem_agent import discover_edstem_courses
 from studylens.ingestion.exams import ExamsIndexer, build_exams_indexer
 from studylens.retrieval.qa import RAGService
+from studylens.storage import CourseRecord, CourseStore
 
 
 class AutoIndexerLike(Protocol):
@@ -67,6 +69,15 @@ def _service(request: Request) -> RAGService:
     return request.app.state.rag_service
 
 
+def _record_to_schema(record: CourseRecord) -> DiscoverCoursesCourse:
+    return DiscoverCoursesCourse(
+        code=record.code,
+        title=record.title,
+        edstem_url=record.edstem_url,
+        updated_at=record.updated_at,
+    )
+
+
 async def _run_auto_index(
     request: Request,
     payload: AutoIndexCourseRequest,
@@ -93,6 +104,7 @@ def create_app(
     auto_indexer: AutoIndexerLike | None = None,
     exams_indexer: ExamsIndexer | None = None,
     edstem_indexer: EdStemIndexer | None = None,
+    course_store: CourseStore | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     service = rag_service or build_rag_service(settings)
@@ -105,6 +117,9 @@ def create_app(
     application.state.auto_indexer = auto_indexer
     application.state.exams_indexer = exams_indexer
     application.state.edstem_indexer = edstem_indexer
+    application.state.course_store = course_store or CourseStore.from_database_url(
+        settings.database_url
+    )
 
     allow_all = (
         "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
@@ -155,16 +170,30 @@ def create_app(
         results = await indexer.index_course_exams(course_id=payload.course_id)
         return IndexExamsResponse(results=results)
 
+    @application.get("/courses", response_model=CoursesListResponse)
+    def courses_list(request: Request) -> CoursesListResponse:
+        store: CourseStore = request.app.state.course_store
+        return CoursesListResponse(
+            courses=[_record_to_schema(r) for r in store.list_all()]
+        )
+
     @application.post("/courses/discover", response_model=DiscoverCoursesResponse)
     async def courses_discover(request: Request) -> DiscoverCoursesResponse:
         settings: Settings = request.app.state.settings
+        store: CourseStore = request.app.state.course_store
         async with BrowserSession.from_settings(settings) as session:
             report = await discover_edstem_courses(session, settings)
+
+        if report.courses:
+            stored = store.replace_all(
+                (c.code, c.title, c.edstem_url) for c in report.courses
+            )
+            payload = [_record_to_schema(r) for r in stored]
+        else:
+            payload = [_record_to_schema(r) for r in store.list_all()]
+
         return DiscoverCoursesResponse(
-            courses=[
-                DiscoverCoursesCourse(code=c.code, title=c.title, edstem_url=c.edstem_url)
-                for c in report.courses
-            ],
+            courses=payload,
             dropped_titles=report.dropped_titles,
             num_turns=report.num_turns,
             total_cost_usd=report.total_cost_usd,

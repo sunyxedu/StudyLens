@@ -47,6 +47,10 @@ export class StudyLensApi {
     });
   }
 
+  async listCourses(): Promise<{ courses: DiscoverCoursesResponse["courses"] }> {
+    return this.request("/courses");
+  }
+
   async discoverCourses(): Promise<DiscoverCoursesResponse> {
     return this.request("/courses/discover", {
       method: "POST",

@@ -213,6 +213,46 @@ def test_index_exams_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
     assert body["results"][0]["chunks"] == 2
 
 
+def test_courses_endpoint_returns_cached_courses(tmp_path: Path) -> None:
+    from studylens.storage import CourseStore
+
+    store = CourseStore(tmp_path / "studylens.db")
+    store.replace_all(
+        [
+            ("COMP50001", "Algorithm Design and Analysis", "https://edstem.org/c/1"),
+            ("COMP50002", "Software Engineering Design", None),
+        ]
+    )
+
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        qdrant_collection="api_courses_test",
+        database_url=f"sqlite:///{tmp_path / 'unused.db'}",
+    )
+    service = RAGService(
+        embeddings=HashEmbeddingClient(dimensions=64),
+        vector_store=QdrantVectorStore(
+            collection_name="api_courses_test",
+            dimensions=64,
+            client=QdrantClient(":memory:"),
+        ),
+        llm=TemplateLLM(),
+    )
+    client = TestClient(
+        create_app(settings=settings, rag_service=service, course_store=store)
+    )
+
+    response = client.get("/courses")
+
+    assert response.status_code == 200
+    body = response.json()
+    codes = [c["code"] for c in body["courses"]]
+    assert codes == ["COMP50001", "COMP50002"]
+    assert body["courses"][0]["edstem_url"] == "https://edstem.org/c/1"
+    assert body["courses"][0]["updated_at"]
+
+
 def test_index_edstem_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
     class FakeEdStemIndexer:
         async def index_course_scope_notes(

@@ -88,6 +88,43 @@ function init(): void {
   updateCoursesActions();
 
   void refreshHealth();
+  void loadCachedCourses();
+}
+
+async function loadCachedCourses(): Promise<void> {
+  try {
+    const { courses } = await api.listCourses();
+    if (courses.length === 0) {
+      setStatus(elements.coursesStatus, "");
+      return;
+    }
+    discoveredCourses = courses;
+    selectedCourseCodes.clear();
+    renderCourseList();
+    updateCoursesSummary();
+    updateCoursesActions();
+    const latest = courses.reduce<string | null>(
+      (acc, c) => (c.updated_at && (!acc || c.updated_at > acc) ? c.updated_at : acc),
+      null
+    );
+    setStatus(
+      elements.coursesStatus,
+      latest ? `Loaded ${courses.length} cached courses · last refreshed ${formatTimestamp(latest)}` : `Loaded ${courses.length} cached courses`
+    );
+  } catch {
+    // Backend offline or first-time setup — leave the panel empty.
+  }
+}
+
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function handleSaveSettings(): void {

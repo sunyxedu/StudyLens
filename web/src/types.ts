@@ -101,6 +101,7 @@ export interface DiscoveredCourse {
   code: string;
   title: string;
   edstem_url?: string | null;
+  updated_at?: string | null;
 }
 
 export interface DiscoverCoursesResponse {
