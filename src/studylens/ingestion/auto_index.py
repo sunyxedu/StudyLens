@@ -157,16 +157,33 @@ class CourseAutoIndexer:
         )
         course_dir = self._course_dir(summary.id)
 
-        if self.enable_scientia and summary.url:
-            manifest.items.extend(await self._crawl_scientia(summary, course_dir))
-        if self.enable_panopto:
-            manifest.items.extend(await self._crawl_panopto(summary, course_dir))
-        if self.enable_exams:
-            manifest.items.extend(await self._crawl_exams(summary, course_dir))
-        if self.enable_edstem:
-            manifest.items.extend(await self._crawl_edstem(summary, course_dir))
-
-        write_manifest(self.settings.raw_dir, manifest)
+        # Each stage is wrapped so a single failure doesn't poison the rest.
+        # The try/finally also guarantees the manifest reflects partial state
+        # if the request is cancelled (browser fetch timeout, Ctrl+C, etc.),
+        # so phase 2 can pick up what did get downloaded.
+        try:
+            if self.enable_scientia and summary.url:
+                try:
+                    manifest.items.extend(await self._crawl_scientia(summary, course_dir))
+                except Exception as exc:  # pragma: no cover - stage-level recovery
+                    manifest.items.append(_stage_error_item("scientia", exc))
+            if self.enable_panopto:
+                try:
+                    manifest.items.extend(await self._crawl_panopto(summary, course_dir))
+                except Exception as exc:  # pragma: no cover - stage-level recovery
+                    manifest.items.append(_stage_error_item("panopto", exc))
+            if self.enable_exams:
+                try:
+                    manifest.items.extend(await self._crawl_exams(summary, course_dir))
+                except Exception as exc:  # pragma: no cover - stage-level recovery
+                    manifest.items.append(_stage_error_item("exams", exc))
+            if self.enable_edstem:
+                try:
+                    manifest.items.extend(await self._crawl_edstem(summary, course_dir))
+                except Exception as exc:  # pragma: no cover - stage-level recovery
+                    manifest.items.append(_stage_error_item("edstem", exc))
+        finally:
+            write_manifest(self.settings.raw_dir, manifest)
         return manifest
 
     # ----- Phase 2: index -----
@@ -187,8 +204,25 @@ class CourseAutoIndexer:
         course_dir = self._course_dir(manifest.course_id)
 
         for item in manifest.items:
-            local_path = course_dir / item.local_path
             stage = str(item.metadata.get("stage", "scientia"))
+            if not item.local_path:
+                # Stage-level failure or download miss; surface in report as
+                # failed/skipped but don't try to read a non-existent file.
+                err = str(item.metadata.get("error") or "no local file")
+                report.items.append(
+                    AutoIndexItem(
+                        title=item.title,
+                        kind=item.kind,
+                        status="failed" if "error" in item.metadata else "skipped",
+                        stage=stage,
+                        source_url=item.source_url,
+                        local_path=None,
+                        chunks=0,
+                        error=err,
+                    )
+                )
+                continue
+            local_path = course_dir / item.local_path
             try:
                 chunks = self._chunks_for_item(item, local_path, manifest.course_id)
             except UnsupportedDocumentError as exc:
@@ -697,11 +731,16 @@ def _write_resource_to_disk(
 ) -> str | None:
     suffix = infer_suffix(url, content_type)
     if suffix not in SUPPORTED_DOWNLOAD_SUFFIXES:
-        # Still write the file so user can inspect, but the indexer skips it.
-        # Actually no — saving useless bytes wastes disk. Skip entirely.
         return None
     folder = _kind_dir(course_dir, kind)
-    target = unique_path(folder / f"{safe_path_part(title)}{suffix}")
+    safe_name = safe_path_part(title)
+    # Strip a redundant trailing extension from the title — Scientia anchors
+    # look like `Lecture 6.pdf file`, so the title already ends in `.pdf`
+    # after the agent peels off the ` file` marker. Without this we end up
+    # writing `Lecture-6.pdf.pdf` everywhere.
+    if safe_name.lower().endswith(suffix):
+        safe_name = safe_name[: -len(suffix)] or "resource"
+    target = unique_path(folder / f"{safe_name}{suffix}")
     target.write_bytes(content)
     return str(target.relative_to(course_dir))
 
@@ -715,7 +754,10 @@ def _write_text_to_disk(
     suffix: str,
 ) -> str:
     folder = _kind_dir(course_dir, kind)
-    target = unique_path(folder / f"{safe_path_part(title)}{suffix}")
+    safe_name = safe_path_part(title)
+    if safe_name.lower().endswith(suffix):
+        safe_name = safe_name[: -len(suffix)] or "resource"
+    target = unique_path(folder / f"{safe_name}{suffix}")
     target.write_text(text, encoding="utf-8")
     return str(target.relative_to(course_dir))
 
@@ -735,4 +777,16 @@ def _failed_manifest_item(
         title=resource.title,
         downloaded_at=now_iso(),
         metadata={"stage": stage, "error": error},
+    )
+
+
+def _stage_error_item(stage: str, exc: BaseException) -> ManifestItem:
+    """Record a whole stage that crashed before producing any item."""
+    return ManifestItem(
+        source_url="",
+        local_path="",
+        kind="material",  # placeholder; index_local will skip (no local_path)
+        title=f"[{stage} stage failed]",
+        downloaded_at=now_iso(),
+        metadata={"stage": stage, "error": f"{type(exc).__name__}: {exc}"},
     )
