@@ -92,7 +92,7 @@ def parse_exam_links(html: str, base_url: str, course_id: str) -> list[Resource]
 YEAR_ARCHIVE_RE = re.compile(r"pastpapers/papers\.\d{2}-\d{2}")
 YEAR_LABEL_RE = re.compile(r"papers\.(\d{2})-(\d{2})")
 ARCHIVE_INDEX_PATH = "archive.html"
-DEFAULT_MAX_YEARS = 10
+DEFAULT_MAX_YEARS = 5
 
 
 def find_year_archive_urls(html: str, base_url: str) -> list[str]:
@@ -152,8 +152,8 @@ class ExamsClient:
         ) as client:
             # Recent years live on the root index; older ones are linked from
             # /archive.html. We merge both, sort by recency, and walk the most
-            # recent N. Going further back than ~10 years rarely helps since
-            # the syllabus drifts and old papers stop being representative.
+            # recent N. Five years is plenty for the predictor since the
+            # syllabus drifts and older papers stop being representative.
             root_response = await client.get(self.base_url)
             if root_response.status_code == 401:
                 raise ConfigurationError(
