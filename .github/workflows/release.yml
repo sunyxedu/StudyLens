@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --extra dev --extra browser --extra documents
+
+      - name: Lint Python
+        run: uv run --frozen ruff check .
+
+      - name: Test Python
+        run: uv run --frozen pytest
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            extension/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck web
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Test web
+        working-directory: web
+        run: npm test
+
+      - name: Build web
+        working-directory: web
+        run: npm run build
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Typecheck extension
+        working-directory: extension
+        run: npm run typecheck
+
+      - name: Test extension
+        working-directory: extension
+        run: npm test
+
+      - name: Build extension
+        working-directory: extension
+        run: npm run build
+
+      - name: Build Python package
+        run: uv build --sdist --wheel
+
+      - name: Package release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp dist/* release/
+          (cd web/dist && zip -r ../../release/studylens-web-${GITHUB_REF_NAME}.zip .)
+          (cd extension/dist && zip -r ../../release/studylens-extension-${GITHUB_REF_NAME}.zip .)
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: studylens-release-assets
+          path: release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Automated StudyLens release for $GITHUB_REF_NAME."
+          fi
