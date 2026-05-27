@@ -8,6 +8,7 @@ the `database_url` configured in settings.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -77,10 +78,8 @@ class CourseStore:
                 )
                 """
             )
-            try:
+            with contextlib.suppress(sqlite3.OperationalError):
                 connection.execute("ALTER TABLE courses ADD COLUMN indexed_at TEXT")
-            except sqlite3.OperationalError:
-                pass  # column already exists
 
     def list_all(self) -> list[CourseRecord]:
         with self._connect() as connection:
