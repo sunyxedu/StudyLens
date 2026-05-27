@@ -6,6 +6,7 @@ import {
   sanitizeFilename,
   saveSettings,
 } from "./state.js";
+import { marked } from "marked";
 import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
 import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
@@ -450,7 +451,7 @@ async function handleAsk(): Promise<void> {
       top_k: numeric(elements.askTopK.value, 5),
       include_exercises: elements.askExercises.checked,
     });
-    elements.answerCard.textContent = answer.answer;
+    elements.answerCard.innerHTML = marked.parse(answer.answer) as string;
     elements.answerCard.classList.remove("hidden");
     elements.citationList.replaceChildren(
       ...answer.citations.map((citation, index) =>

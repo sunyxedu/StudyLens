@@ -11,6 +11,8 @@
   },
   "devDependencies": {
     "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "marked": "^18.0.4"
   }
 }
-
