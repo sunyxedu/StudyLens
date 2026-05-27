@@ -24,26 +24,21 @@
           </label>
           <button id="save-backend" class="button secondary" type="button">Save</button>
         </section>
-
-        <nav class="nav" aria-label="StudyLens views">
-          <button class="nav-item active" data-view="courses" type="button">Courses</button>
-          <button class="nav-item" data-view="ask" type="button">Ask</button>
-          <button class="nav-item" data-view="index" type="button">Index</button>
-          <button class="nav-item" data-view="retrieve" type="button">Retrieve</button>
-          <button class="nav-item" data-view="generate" type="button">Generate</button>
-        </nav>
       </aside>
 
       <section class="workspace">
+
+        <!-- ── Main page: course library ─────────────────────────── -->
         <section class="view active" id="view-courses" aria-labelledby="courses-title">
           <div class="view-head">
-            <h2 id="courses-title">My courses</h2>
+            <h2 id="courses-title">My Courses</h2>
             <span id="courses-summary" class="subtle"></span>
           </div>
           <p class="course-intro">
             <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
             Tick the ones you want, then <strong>Index selected</strong> runs Scientia,
-            Panopto, past exams, and EdStem scope notes for each in one pass.
+            Panopto, past exams, and EdStem for each. Once indexed, click
+            <strong>Enter →</strong> to open a course.
           </p>
           <div class="actions">
             <button id="courses-discover" class="button primary" type="button">Discover</button>
@@ -62,10 +57,30 @@
           </section>
         </section>
 
-        <section class="view" id="view-ask" aria-labelledby="ask-title">
-          <div class="view-head">
-            <h2 id="ask-title">Course Q&A</h2>
-            <div class="inline-controls">
+        <!-- ── Course sub-page ───────────────────────────────────── -->
+        <section class="view" id="view-course">
+
+          <div class="course-page-header">
+            <button id="back-to-courses" class="back-btn" type="button">← Courses</button>
+            <div class="course-page-identity">
+              <span id="course-page-code" class="course-code"></span>
+              <span id="course-page-title" class="course-header-title"></span>
+            </div>
+            <div class="course-page-meta">
+              <button id="reindex-btn" class="reindex-btn" type="button">↻ Re-index</button>
+              <span id="reindex-status" class="reindex-status"></span>
+            </div>
+          </div>
+
+          <nav class="course-nav" role="tablist" aria-label="Course tools">
+            <button class="course-tab active" data-tab="ask" role="tab" type="button">Ask</button>
+            <button class="course-tab" data-tab="generate" role="tab" type="button">Generate</button>
+            <button class="course-tab course-tab-secondary" data-tab="retrieve" role="tab" type="button">Retrieve</button>
+          </nav>
+
+          <!-- Ask tab ──────────────────────────────────────────── -->
+          <div class="tab-panel active" id="tab-ask" role="tabpanel">
+            <div class="tab-controls">
               <label class="toggle">
                 <input id="ask-exercises" type="checkbox" checked />
                 <span>Exercises</span>
@@ -75,112 +90,75 @@
                 <input id="ask-top-k" type="number" min="1" max="20" value="5" />
               </label>
             </div>
-          </div>
-          <label class="field">
-            <span>Course</span>
-            <select id="ask-course">
-              <option value="">All courses</option>
-            </select>
-          </label>
-          <label class="field large">
-            <span>Question</span>
-            <textarea id="ask-question" rows="5" placeholder="What is the invariant in Dijkstra?"></textarea>
-          </label>
-          <div class="actions">
-            <button id="ask-submit" class="button primary" type="button">Ask</button>
-            <span id="ask-status" class="status"></span>
-          </div>
-          <article id="answer-card" class="output hidden"></article>
-          <section id="citation-list" class="result-list"></section>
-        </section>
-
-        <section class="view" id="view-index" aria-labelledby="index-title">
-          <div class="view-head">
-            <h2 id="index-title">Auto Index</h2>
-            <span class="subtle">Scientia, Panopto, past exams, EdStem in one pass</span>
-          </div>
-          <div class="field">
-            <span>Course</span>
-            <select id="index-course">
-              <option value="">— select a course —</option>
-            </select>
-            <span id="index-course-status" class="course-status"></span>
-          </div>
-          <div class="actions">
-            <button id="index-submit" class="button primary" type="button">Sync Course</button>
-            <span id="index-status" class="status"></span>
-          </div>
-          <section id="index-results" class="result-list"></section>
-        </section>
-
-        <section class="view" id="view-retrieve" aria-labelledby="retrieve-title">
-          <div class="view-head">
-            <h2 id="retrieve-title">Retrieve</h2>
-            <label class="compact-field">
-              <span>Top K</span>
-              <input id="retrieve-top-k" type="number" min="1" max="50" value="8" />
+            <label class="field large">
+              <span>Question</span>
+              <textarea id="ask-question" rows="5" placeholder="What is the invariant in Dijkstra?"></textarea>
             </label>
-          </div>
-          <label class="field">
-            <span>Course</span>
-            <select id="retrieve-course">
-              <option value="">All courses</option>
-            </select>
-          </label>
-          <label class="field large">
-            <span>Query</span>
-            <textarea id="retrieve-query" rows="4" placeholder="recurrence relation exam question"></textarea>
-          </label>
-          <div class="kind-grid" id="retrieve-kinds">
-            <label><input type="checkbox" value="material" checked /> Material</label>
-            <label><input type="checkbox" value="exercise" checked /> Exercise</label>
-            <label><input type="checkbox" value="tutorial" checked /> Tutorial</label>
-            <label><input type="checkbox" value="transcript" checked /> Transcript</label>
-            <label><input type="checkbox" value="past_exam" checked /> Past Exam</label>
-            <label><input type="checkbox" value="edstem_note" checked /> EdStem</label>
-          </div>
-          <div class="actions">
-            <button id="retrieve-submit" class="button primary" type="button">Retrieve</button>
-            <span id="retrieve-status" class="status"></span>
-          </div>
-          <section id="retrieve-results" class="result-list"></section>
-        </section>
-
-        <section class="view" id="view-generate" aria-labelledby="generate-title">
-          <div class="view-head">
-            <h2 id="generate-title">Generate</h2>
-            <div class="segmented" role="tablist" aria-label="Generation mode">
-              <button class="segment active" data-mode="cheatsheet" type="button">Cheatsheet</button>
-              <button class="segment" data-mode="exam" type="button">Predicted Paper</button>
+            <div class="actions">
+              <button id="ask-submit" class="button primary" type="button">Ask</button>
+              <span id="ask-status" class="status"></span>
             </div>
+            <article id="answer-card" class="output hidden"></article>
+            <section id="citation-list" class="result-list"></section>
           </div>
-          <label class="field">
-            <span>Course</span>
-            <select id="generate-course">
-              <option value="">— select a course —</option>
-            </select>
-          </label>
-          <label class="field large">
-            <span>Scope Notes</span>
-            <textarea id="scope-notes" rows="5" placeholder="One note per line"></textarea>
-          </label>
-          <div class="generation-controls">
-            <label class="compact-field">
-              <span>Top K</span>
-              <input id="generate-top-k" type="number" min="1" max="80" value="40" />
+
+          <!-- Generate tab ─────────────────────────────────────── -->
+          <div class="tab-panel" id="tab-generate" role="tabpanel">
+            <div class="tab-controls">
+              <div class="segmented" role="tablist" aria-label="Generation mode">
+                <button class="segment active" data-mode="cheatsheet" type="button">Cheatsheet</button>
+                <button class="segment" data-mode="exam" type="button">Predicted Paper</button>
+              </div>
+              <label class="compact-field">
+                <span>Top K</span>
+                <input id="generate-top-k" type="number" min="1" max="80" value="40" />
+              </label>
+              <label id="question-count-field" class="compact-field hidden">
+                <span>Questions</span>
+                <input id="question-count" type="number" min="1" max="8" value="4" />
+              </label>
+            </div>
+            <label class="field large">
+              <span>Scope Notes</span>
+              <textarea id="scope-notes" rows="5" placeholder="One note per line"></textarea>
             </label>
-            <label id="question-count-field" class="compact-field hidden">
-              <span>Questions</span>
-              <input id="question-count" type="number" min="1" max="8" value="4" />
+            <div class="actions">
+              <button id="generate-submit" class="button primary" type="button">Generate</button>
+              <button id="download-latex" class="button secondary" type="button" disabled>Download .tex</button>
+              <span id="generate-status" class="status"></span>
+            </div>
+            <pre id="latex-output" class="latex-output"></pre>
+          </div>
+
+          <!-- Retrieve tab (power-user) ────────────────────────── -->
+          <div class="tab-panel" id="tab-retrieve" role="tabpanel">
+            <div class="tab-controls">
+              <label class="compact-field">
+                <span>Top K</span>
+                <input id="retrieve-top-k" type="number" min="1" max="50" value="8" />
+              </label>
+            </div>
+            <label class="field large">
+              <span>Query</span>
+              <textarea id="retrieve-query" rows="4" placeholder="recurrence relation exam question"></textarea>
             </label>
+            <div class="kind-grid" id="retrieve-kinds">
+              <label><input type="checkbox" value="material" checked /> Material</label>
+              <label><input type="checkbox" value="exercise" checked /> Exercise</label>
+              <label><input type="checkbox" value="tutorial" checked /> Tutorial</label>
+              <label><input type="checkbox" value="transcript" checked /> Transcript</label>
+              <label><input type="checkbox" value="past_exam" checked /> Past Exam</label>
+              <label><input type="checkbox" value="edstem_note" checked /> EdStem</label>
+            </div>
+            <div class="actions">
+              <button id="retrieve-submit" class="button primary" type="button">Retrieve</button>
+              <span id="retrieve-status" class="status"></span>
+            </div>
+            <section id="retrieve-results" class="result-list"></section>
           </div>
-          <div class="actions">
-            <button id="generate-submit" class="button primary" type="button">Generate</button>
-            <button id="download-latex" class="button secondary" type="button" disabled>Download .tex</button>
-            <span id="generate-status" class="status"></span>
-          </div>
-          <pre id="latex-output" class="latex-output"></pre>
+
         </section>
+
       </section>
     </main>
     <script type="module" src="app.js"></script>

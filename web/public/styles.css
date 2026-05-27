@@ -414,6 +414,8 @@ textarea:focus {
 }
 
 .course-card {
+  display: flex;
+  align-items: center;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -425,7 +427,9 @@ textarea:focus {
   background: #fbfaf4;
 }
 
-.course-card label {
+.course-card > label {
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: 18px 100px 1fr;
   align-items: center;
@@ -452,6 +456,26 @@ textarea:focus {
 
 .course-card.selected:hover {
   background: #dfeae4;
+}
+
+.enter-course-btn {
+  flex: none;
+  height: 32px;
+  margin: 0 12px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.enter-course-btn:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 .course-code {
@@ -574,6 +598,174 @@ textarea:focus {
 .progress-status.done { background: #dcebe3; color: #145548; }
 .progress-status.failed { background: #f2ddda; color: #8c332c; }
 
+/* Course sub-page ──────────────────────────────────────────────────── */
+
+#view-course.active {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.course-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.back-btn {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.back-btn:hover {
+  background: #f0ece4;
+  color: var(--ink);
+  border-color: #c8c4bc;
+}
+
+.course-page-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.course-header-title {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-page-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: none;
+}
+
+.reindex-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.reindex-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reindex-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.reindex-status {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+/* Course-level tab navigation ---------------------------------------- */
+
+.course-nav {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-top: 20px;
+}
+
+.course-tab {
+  position: relative;
+  height: 42px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  min-height: unset;
+}
+
+.course-tab.active {
+  color: var(--accent-strong);
+}
+
+.course-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+
+.course-tab:hover:not(.active) {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.course-tab-secondary {
+  margin-left: auto;
+  font-size: 13px;
+  padding: 0 14px;
+  opacity: 0.75;
+}
+
+.course-tab-secondary.active {
+  opacity: 1;
+}
+
+/* Tab panels --------------------------------------------------------- */
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: grid;
+  gap: 18px;
+  padding-top: 20px;
+}
+
+.tab-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* -------------------------------------------------------------------- */
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
@@ -582,16 +774,6 @@ textarea:focus {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--border);
-  }
-
-  .nav {
-    grid-template-columns: repeat(4, 1fr);
-    margin-top: 0;
-  }
-
-  .nav-item {
-    text-align: center;
-    padding: 0 6px;
   }
 
   .workspace {
@@ -605,5 +787,18 @@ textarea:focus {
 
   .kind-grid {
     grid-template-columns: 1fr;
+  }
+
+  .course-page-header {
+    gap: 8px;
+  }
+
+  .course-header-title {
+    font-size: 14px;
+  }
+
+  .course-tab {
+    padding: 0 12px;
+    font-size: 13px;
   }
 }

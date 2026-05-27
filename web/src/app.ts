@@ -6,28 +6,14 @@ import {
   sanitizeFilename,
   saveSettings,
 } from "./state.js";
-import { autoIndexItemMeta, citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
-import type { AutoIndexReport, DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
+import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
+import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
   backendUrl: byId<HTMLInputElement>("backend-url"),
   saveBackend: byId<HTMLButtonElement>("save-backend"),
   healthPill: byId<HTMLSpanElement>("health-pill"),
-  navItems: Array.from(document.querySelectorAll<HTMLButtonElement>(".nav-item")),
-  views: Array.from(document.querySelectorAll<HTMLElement>(".view")),
-  askCourse: byId<HTMLSelectElement>("ask-course"),
-  askExercises: byId<HTMLInputElement>("ask-exercises"),
-  askTopK: byId<HTMLInputElement>("ask-top-k"),
-  askQuestion: byId<HTMLTextAreaElement>("ask-question"),
-  askSubmit: byId<HTMLButtonElement>("ask-submit"),
-  askStatus: byId<HTMLSpanElement>("ask-status"),
-  answerCard: byId<HTMLElement>("answer-card"),
-  citationList: byId<HTMLElement>("citation-list"),
-  indexCourse: byId<HTMLSelectElement>("index-course"),
-  indexCourseStatus: byId<HTMLSpanElement>("index-course-status"),
-  indexSubmit: byId<HTMLButtonElement>("index-submit"),
-  indexStatus: byId<HTMLSpanElement>("index-status"),
-  indexResults: byId<HTMLElement>("index-results"),
+  // Course library (main page)
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
   coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
@@ -36,14 +22,21 @@ const elements = {
   coursesList: byId<HTMLUListElement>("courses-list"),
   coursesProgress: byId<HTMLElement>("courses-progress"),
   coursesProgressList: byId<HTMLUListElement>("courses-progress-list"),
-  retrieveCourse: byId<HTMLSelectElement>("retrieve-course"),
-  retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
-  retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
-  retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
-  retrieveSubmit: byId<HTMLButtonElement>("retrieve-submit"),
-  retrieveStatus: byId<HTMLSpanElement>("retrieve-status"),
-  retrieveResults: byId<HTMLElement>("retrieve-results"),
-  generateCourse: byId<HTMLSelectElement>("generate-course"),
+  // Course sub-page header
+  backToCoursesBtn: byId<HTMLButtonElement>("back-to-courses"),
+  coursePageCode: byId<HTMLSpanElement>("course-page-code"),
+  coursePageTitle: byId<HTMLSpanElement>("course-page-title"),
+  reindexBtn: byId<HTMLButtonElement>("reindex-btn"),
+  reindexStatus: byId<HTMLSpanElement>("reindex-status"),
+  // Ask tab
+  askExercises: byId<HTMLInputElement>("ask-exercises"),
+  askTopK: byId<HTMLInputElement>("ask-top-k"),
+  askQuestion: byId<HTMLTextAreaElement>("ask-question"),
+  askSubmit: byId<HTMLButtonElement>("ask-submit"),
+  askStatus: byId<HTMLSpanElement>("ask-status"),
+  answerCard: byId<HTMLElement>("answer-card"),
+  citationList: byId<HTMLElement>("citation-list"),
+  // Generate tab
   modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment")),
   scopeNotes: byId<HTMLTextAreaElement>("scope-notes"),
   generateTopK: byId<HTMLInputElement>("generate-top-k"),
@@ -53,12 +46,20 @@ const elements = {
   downloadLatex: byId<HTMLButtonElement>("download-latex"),
   generateStatus: byId<HTMLSpanElement>("generate-status"),
   latexOutput: byId<HTMLPreElement>("latex-output"),
+  // Retrieve tab
+  retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
+  retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
+  retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
+  retrieveSubmit: byId<HTMLButtonElement>("retrieve-submit"),
+  retrieveStatus: byId<HTMLSpanElement>("retrieve-status"),
+  retrieveResults: byId<HTMLElement>("retrieve-results"),
 };
 
 let api = new StudyLensApi("http://localhost:8000");
 let generationMode: "cheatsheet" | "exam" = "cheatsheet";
 let latestLatex = "";
 let discoveredCourses: DiscoveredCourse[] = [];
+let currentCourse: DiscoveredCourse | null = null;
 const selectedCourseCodes = new Set<string>();
 
 init();
@@ -69,112 +70,65 @@ function init(): void {
   elements.backendUrl.value = settings.backendUrl;
   api = new StudyLensApi(settings.backendUrl);
 
-  elements.navItems.forEach((button) => {
-    button.addEventListener("click", () => activateView(button.dataset.view || "ask"));
-  });
+  elements.saveBackend.addEventListener("click", handleSaveSettings);
+  elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
+  elements.reindexBtn.addEventListener("click", handleReindex);
+  elements.askSubmit.addEventListener("click", handleAsk);
+  elements.generateSubmit.addEventListener("click", handleGenerate);
+  elements.downloadLatex.addEventListener("click", handleDownloadLatex);
+  elements.retrieveSubmit.addEventListener("click", handleRetrieve);
+  elements.coursesDiscover.addEventListener("click", handleDiscoverCourses);
+  elements.coursesIndex.addEventListener("click", handleIndexSelected);
+  elements.coursesSelectAll.addEventListener("click", handleSelectAllCourses);
   elements.modeButtons.forEach((button) => {
     button.addEventListener("click", () =>
       setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet")
     );
   });
-  elements.saveBackend.addEventListener("click", handleSaveSettings);
-  elements.indexCourse.addEventListener("change", updateIndexCourseStatus);
-  elements.askSubmit.addEventListener("click", handleAsk);
-  elements.indexSubmit.addEventListener("click", handleIndex);
-  elements.retrieveSubmit.addEventListener("click", handleRetrieve);
-  elements.generateSubmit.addEventListener("click", handleGenerate);
-  elements.downloadLatex.addEventListener("click", handleDownloadLatex);
-  elements.coursesDiscover.addEventListener("click", handleDiscoverCourses);
-  elements.coursesIndex.addEventListener("click", handleIndexSelected);
-  elements.coursesSelectAll.addEventListener("click", handleSelectAllCourses);
-  updateCoursesActions();
+  document.querySelectorAll<HTMLButtonElement>(".course-tab").forEach((btn) => {
+    btn.addEventListener("click", () => activateCourseTab(btn.dataset.tab ?? "ask"));
+  });
 
+  updateCoursesActions();
   void refreshHealth();
   void loadCachedCourses();
 }
 
-async function loadCachedCourses(): Promise<void> {
-  try {
-    const { courses } = await api.listCourses();
-    if (courses.length === 0) {
-      setStatus(elements.coursesStatus, "");
-      return;
-    }
-    discoveredCourses = courses;
-    selectedCourseCodes.clear();
-    renderCourseList();
-    populateCourseSelects();
-    updateCoursesSummary();
-    updateCoursesActions();
-    const latest = courses.reduce<string | null>(
-      (acc, c) => (c.updated_at && (!acc || c.updated_at > acc) ? c.updated_at : acc),
-      null
-    );
-    setStatus(
-      elements.coursesStatus,
-      latest
-        ? `Loaded ${courses.length} cached courses · last refreshed ${formatTimestamp(latest)}`
-        : `Loaded ${courses.length} cached courses`
-    );
-  } catch {
-    // Backend offline or first-time setup — leave the panel empty.
-  }
+// ── Navigation ────────────────────────────────────────────────────────
+
+function showCoursesPage(): void {
+  byId("view-courses").classList.add("active");
+  byId("view-course").classList.remove("active");
+  currentCourse = null;
 }
 
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+function enterCourse(course: DiscoveredCourse): void {
+  currentCourse = course;
+  elements.coursePageCode.textContent = course.code;
+  elements.coursePageTitle.textContent = stripCodePrefix(course.title);
+  elements.reindexStatus.textContent = course.indexed_at
+    ? `Indexed ${formatTimestamp(course.indexed_at)}`
+    : "";
+  byId("view-courses").classList.remove("active");
+  byId("view-course").classList.add("active");
+  activateCourseTab("ask");
+  // Clear stale results from previous session
+  elements.answerCard.textContent = "";
+  elements.answerCard.classList.add("hidden");
+  elements.citationList.replaceChildren();
+  elements.retrieveResults.replaceChildren();
+}
+
+function activateCourseTab(tab: string): void {
+  document.querySelectorAll<HTMLButtonElement>(".course-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+  document.querySelectorAll<HTMLElement>(".tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `tab-${tab}`);
   });
 }
 
-function populateCourseSelects(): void {
-  populateSelect(elements.askCourse, true);
-  populateSelect(elements.indexCourse, false);
-  populateSelect(elements.retrieveCourse, true);
-  populateSelect(elements.generateCourse, false);
-  updateIndexCourseStatus();
-}
-
-function populateSelect(select: HTMLSelectElement, allowAll: boolean): void {
-  const prev = select.value;
-  select.replaceChildren();
-  const blank = document.createElement("option");
-  blank.value = "";
-  blank.textContent = allowAll ? "All courses" : "— select a course —";
-  select.appendChild(blank);
-  for (const course of discoveredCourses) {
-    const option = document.createElement("option");
-    option.value = course.code;
-    option.textContent = `${course.code} — ${stripCodePrefix(course.title, course.code)}`;
-    select.appendChild(option);
-  }
-  if (prev) select.value = prev;
-}
-
-function updateIndexCourseStatus(): void {
-  const code = elements.indexCourse.value;
-  const el = elements.indexCourseStatus;
-  if (!code) {
-    el.textContent = "";
-    el.className = "course-status";
-    return;
-  }
-  const course = discoveredCourses.find((c) => c.code === code);
-  if (!course) {
-    el.textContent = "";
-    el.className = "course-status";
-    return;
-  }
-  el.className = "course-status";
-  el.textContent = course.indexed_at
-    ? `Last indexed: ${formatTimestamp(course.indexed_at)}`
-    : "Never indexed";
-}
+// ── Settings / health ────────────────────────────────────────────────
 
 function handleSaveSettings(): void {
   const backendUrl = normalizeBaseUrl(elements.backendUrl.value);
@@ -197,31 +151,31 @@ async function refreshHealth(): Promise<void> {
   }
 }
 
-async function handleAsk(): Promise<void> {
-  const question = elements.askQuestion.value.trim();
-  if (!question) {
-    setStatus(elements.askStatus, "Question required", "error");
-    return;
-  }
-  await withBusy(elements.askSubmit, elements.askStatus, "Asking", async () => {
-    const answer = await api.ask({
-      question,
-      course_id: elements.askCourse.value || null,
-      top_k: numeric(elements.askTopK.value, 5),
-      include_exercises: elements.askExercises.checked,
-    });
-    elements.answerCard.textContent = answer.answer;
-    elements.answerCard.classList.remove("hidden");
-    elements.citationList.replaceChildren(
-      ...answer.citations.map((citation, index) =>
-        resultNode(citationLabel(citation, index), citation.quote || "", citation.source_url || "")
-      )
-    );
-    setStatus(elements.askStatus, "Done");
-  });
-}
+// ── Course library ────────────────────────────────────────────────────
 
-type ProgressStatus = "queued" | "running" | "done" | "failed";
+async function loadCachedCourses(): Promise<void> {
+  try {
+    const { courses } = await api.listCourses();
+    if (courses.length === 0) return;
+    discoveredCourses = courses;
+    selectedCourseCodes.clear();
+    renderCourseList();
+    updateCoursesSummary();
+    updateCoursesActions();
+    const latest = courses.reduce<string | null>(
+      (acc, c) => (c.updated_at && (!acc || c.updated_at > acc) ? c.updated_at : acc),
+      null
+    );
+    setStatus(
+      elements.coursesStatus,
+      latest
+        ? `Loaded ${courses.length} courses · last refreshed ${formatTimestamp(latest)}`
+        : `Loaded ${courses.length} courses`
+    );
+  } catch {
+    // Backend offline at startup — leave panel empty.
+  }
+}
 
 async function handleDiscoverCourses(): Promise<void> {
   await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering", async () => {
@@ -229,7 +183,6 @@ async function handleDiscoverCourses(): Promise<void> {
     discoveredCourses = response.courses;
     selectedCourseCodes.clear();
     renderCourseList();
-    populateCourseSelects();
     elements.coursesProgressList.replaceChildren();
     elements.coursesProgress.hidden = true;
     if (response.error) {
@@ -251,6 +204,7 @@ function renderCourseList(): void {
 function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   const li = document.createElement("li");
   li.className = "course-card";
+  if (selectedCourseCodes.has(course.code)) li.classList.add("selected");
 
   const label = document.createElement("label");
   label.htmlFor = `course-${course.code}`;
@@ -260,7 +214,6 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   checkbox.id = `course-${course.code}`;
   checkbox.value = course.code;
   checkbox.checked = selectedCourseCodes.has(course.code);
-  if (checkbox.checked) li.classList.add("selected");
   checkbox.addEventListener("change", () => {
     if (checkbox.checked) {
       selectedCourseCodes.add(course.code);
@@ -280,7 +233,7 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
 
   const title = document.createElement("span");
   title.className = "course-title";
-  title.textContent = stripCodePrefix(course.title, course.code);
+  title.textContent = stripCodePrefix(course.title);
   title.title = course.title;
 
   const meta = document.createElement("span");
@@ -295,24 +248,17 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   info.append(title, meta);
   label.append(checkbox, code, info);
   li.append(label);
-  return li;
-}
 
-function stripCodePrefix(title: string, _code: string): string {
-  // EdStem titles like "COMP 50001: Algorithm Design..." — drop the leading code.
-  const stripped = title
-    .replace(/^\s*[A-Z]{2,5}\s*[-\s]?\s*\d{3,5}(?:[\.\/][A-Za-z0-9]+)?\s*[:\-—]\s*/, "")
-    .trim();
-  return stripped || title;
-}
-
-function shortUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return parsed.host.replace(/^www\./, "") + parsed.pathname;
-  } catch {
-    return url;
+  if (course.indexed_at) {
+    const enterBtn = document.createElement("button");
+    enterBtn.type = "button";
+    enterBtn.className = "enter-course-btn";
+    enterBtn.textContent = "Enter →";
+    enterBtn.addEventListener("click", () => enterCourse(course));
+    li.append(enterBtn);
   }
+
+  return li;
 }
 
 function updateCoursesSummary(dropped: number = 0): void {
@@ -340,9 +286,7 @@ function handleSelectAllCourses(): void {
   const allSelected = selectedCourseCodes.size === discoveredCourses.length;
   selectedCourseCodes.clear();
   if (!allSelected) {
-    for (const course of discoveredCourses) {
-      selectedCourseCodes.add(course.code);
-    }
+    for (const course of discoveredCourses) selectedCourseCodes.add(course.code);
   }
   renderCourseList();
   updateCoursesActions();
@@ -387,6 +331,11 @@ async function handleIndexSelected(): Promise<void> {
           "done",
           `${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks`
         );
+        // Update local indexed_at so the Enter button appears without a reload.
+        const idx = discoveredCourses.findIndex((c) => c.code === course.code);
+        if (idx >= 0) {
+          discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: new Date().toISOString() };
+        }
       } catch (error) {
         setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
       }
@@ -402,6 +351,8 @@ async function handleIndexSelected(): Promise<void> {
   try {
     await Promise.all(workers);
     setStatus(elements.coursesStatus, `Done · ${completed}/${targets.length}`);
+    // Re-render so newly indexed courses get their Enter button.
+    renderCourseList();
   } finally {
     elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
     elements.coursesDiscover.disabled = false;
@@ -423,7 +374,7 @@ function createProgressRow(code: string, title: string, status: ProgressStatus):
 
   const titleNode = document.createElement("span");
   titleNode.className = "progress-title";
-  titleNode.textContent = stripCodePrefix(title, code);
+  titleNode.textContent = stripCodePrefix(title);
   titleNode.title = title;
 
   const summary = document.createElement("span");
@@ -442,6 +393,8 @@ function createProgressRow(code: string, title: string, status: ProgressStatus):
   return li;
 }
 
+type ProgressStatus = "queued" | "running" | "done" | "failed";
+
 function setProgressStatus(row: HTMLElement, status: ProgressStatus, summary: string): void {
   const statusNode = row.querySelector<HTMLElement>('[data-role="status"]');
   if (statusNode) {
@@ -452,63 +405,70 @@ function setProgressStatus(row: HTMLElement, status: ProgressStatus, summary: st
   if (summaryNode) summaryNode.textContent = summary;
 }
 
-async function handleIndex(): Promise<void> {
-  const code = elements.indexCourse.value;
-  if (!code) {
-    setStatus(elements.indexStatus, "Select a course first", "error");
-    return;
-  }
-  const course = discoveredCourses.find((c) => c.code === code);
-  if (!course) {
-    setStatus(elements.indexStatus, "Course not found", "error");
-    return;
-  }
-  await withBusy(elements.indexSubmit, elements.indexStatus, "Syncing", async () => {
+// ── Re-index from course sub-page ─────────────────────────────────────
+
+async function handleReindex(): Promise<void> {
+  if (!currentCourse) return;
+  const course = currentCourse;
+  elements.reindexBtn.disabled = true;
+  elements.reindexStatus.textContent = "Indexing…";
+  elements.reindexStatus.style.color = "var(--muted)";
+  try {
     const report = await api.autoIndexCourse({
       course_id: course.code,
       course_title: course.title,
     });
-    renderIndexReport(report);
-    setStatus(
-      elements.indexStatus,
-      `${report.indexed_resources}/${report.discovered_resources} resources indexed · ${report.indexed_chunks} chunks`
+    const ts = new Date().toISOString();
+    // Update local state
+    const idx = discoveredCourses.findIndex((c) => c.code === course.code);
+    if (idx >= 0) discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: ts };
+    currentCourse = { ...course, indexed_at: ts };
+    elements.reindexStatus.textContent =
+      `Indexed ${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks · ${formatTimestamp(ts)}`;
+    elements.reindexStatus.style.color = "var(--muted)";
+  } catch (error) {
+    elements.reindexStatus.textContent = error instanceof Error ? error.message : "Failed";
+    elements.reindexStatus.style.color = "var(--danger)";
+  } finally {
+    elements.reindexBtn.disabled = false;
+  }
+}
+
+// ── Ask ───────────────────────────────────────────────────────────────
+
+async function handleAsk(): Promise<void> {
+  if (!currentCourse) return;
+  const question = elements.askQuestion.value.trim();
+  if (!question) {
+    setStatus(elements.askStatus, "Question required", "error");
+    return;
+  }
+  await withBusy(elements.askSubmit, elements.askStatus, "Asking", async () => {
+    const answer = await api.ask({
+      question,
+      course_id: currentCourse!.code,
+      top_k: numeric(elements.askTopK.value, 5),
+      include_exercises: elements.askExercises.checked,
+    });
+    elements.answerCard.textContent = answer.answer;
+    elements.answerCard.classList.remove("hidden");
+    elements.citationList.replaceChildren(
+      ...answer.citations.map((citation, index) =>
+        resultNode(citationLabel(citation, index), citation.quote || "", citation.source_url || "")
+      )
     );
+    setStatus(elements.askStatus, "Done");
   });
 }
 
-async function handleRetrieve(): Promise<void> {
-  const query = elements.retrieveQuery.value.trim();
-  if (!query) {
-    setStatus(elements.retrieveStatus, "Query required", "error");
-    return;
-  }
-  await withBusy(elements.retrieveSubmit, elements.retrieveStatus, "Retrieving", async () => {
-    const response = await api.retrieve({
-      query,
-      course_id: elements.retrieveCourse.value || null,
-      kinds: selectedKinds(),
-      top_k: numeric(elements.retrieveTopK.value, 8),
-    });
-    renderResults(response.results);
-    setStatus(elements.retrieveStatus, `${response.results.length} results`);
-  });
-}
+// ── Generate ──────────────────────────────────────────────────────────
 
 async function handleGenerate(): Promise<void> {
-  const code = elements.generateCourse.value;
-  if (!code) {
-    setStatus(elements.generateStatus, "Select a course first", "error");
-    return;
-  }
-  const course = discoveredCourses.find((c) => c.code === code);
-  if (!course) {
-    setStatus(elements.generateStatus, "Course not found", "error");
-    return;
-  }
+  if (!currentCourse) return;
   await withBusy(elements.generateSubmit, elements.generateStatus, "Generating", async () => {
     const base = {
-      course_id: course.code,
-      course_title: course.title,
+      course_id: currentCourse!.code,
+      course_title: currentCourse!.title,
       scope_notes: parseScopeNotes(elements.scopeNotes.value),
       top_k: numeric(elements.generateTopK.value, 40),
     };
@@ -527,23 +487,13 @@ async function handleGenerate(): Promise<void> {
 }
 
 function handleDownloadLatex(): void {
-  if (!latestLatex) return;
-  const code = elements.generateCourse.value || "studylens";
-  const name = `${sanitizeFilename(`${code}-${generationMode}`)}.tex`;
+  if (!latestLatex || !currentCourse) return;
+  const name = `${sanitizeFilename(`${currentCourse.code}-${generationMode}`)}.tex`;
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([latestLatex], { type: "application/x-tex" }));
   link.download = name;
   link.click();
   URL.revokeObjectURL(link.href);
-}
-
-function activateView(view: string): void {
-  elements.navItems.forEach((item) =>
-    item.classList.toggle("active", item.dataset.view === view)
-  );
-  elements.views.forEach((panel) =>
-    panel.classList.toggle("active", panel.id === `view-${view}`)
-  );
 }
 
 function setGenerationMode(mode: "cheatsheet" | "exam"): void {
@@ -554,6 +504,29 @@ function setGenerationMode(mode: "cheatsheet" | "exam"): void {
   elements.questionCountField.classList.toggle("hidden", mode !== "exam");
 }
 
+// ── Retrieve ──────────────────────────────────────────────────────────
+
+async function handleRetrieve(): Promise<void> {
+  if (!currentCourse) return;
+  const query = elements.retrieveQuery.value.trim();
+  if (!query) {
+    setStatus(elements.retrieveStatus, "Query required", "error");
+    return;
+  }
+  await withBusy(elements.retrieveSubmit, elements.retrieveStatus, "Retrieving", async () => {
+    const response = await api.retrieve({
+      query,
+      course_id: currentCourse!.code,
+      kinds: selectedKinds(),
+      top_k: numeric(elements.retrieveTopK.value, 8),
+    });
+    renderResults(response.results);
+    setStatus(elements.retrieveStatus, `${response.results.length} results`);
+  });
+}
+
+// ── Render helpers ────────────────────────────────────────────────────
+
 function renderResults(results: SearchResult[]): void {
   elements.retrieveResults.replaceChildren(
     ...results.map((result) =>
@@ -561,18 +534,6 @@ function renderResults(results: SearchResult[]): void {
         resultTitle(result),
         clippedText(result.chunk.text),
         `${result.chunk.kind} · ${scoreLabel(result.score)} · chunk ${result.chunk.position}`
-      )
-    )
-  );
-}
-
-function renderIndexReport(report: AutoIndexReport): void {
-  elements.indexResults.replaceChildren(
-    ...report.items.map((item) =>
-      resultNode(
-        item.title,
-        item.error || item.local_path || item.source_url || "",
-        autoIndexItemMeta(item)
       )
     )
   );
@@ -599,6 +560,36 @@ function resultNode(title: string, text: string, meta: string): HTMLElement {
   header.append(titleNode, metaNode);
   article.append(header, body);
   return article;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────
+
+function stripCodePrefix(title: string): string {
+  // EdStem titles like "COMP 50001: Algorithm Design..." — drop leading code.
+  const stripped = title
+    .replace(/^\s*[A-Z]{2,5}\s*[-\s]?\s*\d{3,5}(?:[./][A-Za-z0-9]+)?\s*[:\-—]\s*/, "")
+    .trim();
+  return stripped || title;
+}
+
+function shortUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.host.replace(/^www\./, "") + parsed.pathname;
+  } catch {
+    return url;
+  }
+}
+
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 async function withBusy(
@@ -628,8 +619,8 @@ function selectedKinds(): ResourceKind[] {
 }
 
 function numeric(value: string, fallback: number): number {
-  const number = Number.parseInt(value, 10);
-  return Number.isFinite(number) ? number : fallback;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function setStatus(node: HTMLElement, value: string, mode: "ok" | "error" = "ok"): void {
@@ -639,8 +630,6 @@ function setStatus(node: HTMLElement, value: string, mode: "ok" | "error" = "ok"
 
 function byId<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
-  if (!element) {
-    throw new Error(`Missing #${id}`);
-  }
+  if (!element) throw new Error(`Missing #${id}`);
   return element as T;
 }
