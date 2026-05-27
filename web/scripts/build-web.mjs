@@ -23,3 +23,6 @@ cpSync("public", "dist", { recursive: true });
 // KaTeX CSS + fonts are needed at runtime for math rendering.
 cpSync("node_modules/katex/dist/katex.min.css", "dist/katex.min.css");
 cpSync("node_modules/katex/dist/fonts", "dist/fonts", { recursive: true });
+
+// highlight.js theme for code syntax highlighting.
+cpSync("node_modules/highlight.js/styles/github.min.css", "dist/hljs.min.css");
