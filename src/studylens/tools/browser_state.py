@@ -16,8 +16,17 @@ EDSTEM_URL = "https://edstem.org/us/dashboard"
 async def save_browser_state(output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False)
-        context = await browser.new_context()
+        browser = await playwright.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/136.0.0.0 Safari/537.36"
+            )
+        )
         page = await context.new_page()
 
         await page.goto(SCIENTIA_URL, wait_until="domcontentloaded")
