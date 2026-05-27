@@ -27,8 +27,16 @@ const CALLOUT_TITLES: Record<string, string> = {
   NOTE: "Note", TIP: "Tip", IMPORTANT: "Important", WARNING: "Warning", CAUTION: "Caution",
 };
 
+function preprocessMath(text: string): string {
+  // marked strips backslashes from \[ and \( before KaTeX gets a chance to see them.
+  // Convert to $$ / $ so they survive markdown parsing.
+  return text
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_m, math: string) => `$$${math}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_m, math: string) => `$${math}$`);
+}
+
 function renderAnswer(markdown: string): string {
-  const html = marked.parse(markdown) as string;
+  const html = marked.parse(preprocessMath(markdown)) as string;
   // Transform GFM callouts: > [!NOTE] / > [!WARNING] etc.
   return html.replace(
     /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*([\s\S]*?)<\/blockquote>/gi,
