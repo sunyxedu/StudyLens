@@ -33,7 +33,7 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import Settings, get_settings
 from studylens.domain import Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
-from studylens.ingestion.auto_index import AutoIndexReport, build_auto_indexer
+from studylens.ingestion.auto_index import AutoIndexReport, _normalize_course_id, build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
 from studylens.ingestion.edstem import EdStemIndexer, build_edstem_indexer
@@ -158,7 +158,7 @@ def create_app(
     ) -> AutoIndexCourseResponse:
         report = await _run_auto_index(request, payload)
         store: CourseStore = request.app.state.course_store
-        store.mark_indexed(payload.course_id)
+        store.mark_indexed(_normalize_course_id(payload.course_id))
         return AutoIndexCourseResponse(**report.model_dump())
 
     @application.post("/index/exams", response_model=IndexExamsResponse)

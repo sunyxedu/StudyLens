@@ -136,9 +136,11 @@ class CourseAutoIndexer:
         course_id: str,
         course_title: str,
     ) -> CourseManifest:
+        course_id = _normalize_course_id(course_id)
         summary = await self._resolve_course(
             course_id=course_id, course_title=course_title
         )
+        summary = summary.model_copy(update={"id": course_id})
         manifest = CourseManifest(
             course_id=summary.id,
             course_title=summary.title,
@@ -613,6 +615,14 @@ _CODE_PREFIX_RE = re.compile(
 
 def _digit_tail(code: str) -> str:
     return re.sub(r"^[A-Za-z]+", "", code).strip()
+
+
+def _normalize_course_id(code: str) -> str:
+    """Canonical form: uppercase, no spaces, COMP prefix for bare digit codes."""
+    code = code.strip().upper().replace(" ", "")
+    if code.isdigit():
+        return f"COMP{code}"
+    return code
 
 
 def _strip_code_prefix(title: str) -> str:
