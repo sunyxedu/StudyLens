@@ -25,17 +25,8 @@ class MemoryStorage {
 
 test("settings round trip through storage", () => {
   const storage = new MemoryStorage();
-  saveSettings({
-    backendUrl: "http://localhost:8000",
-    courseId: "COMP70001",
-    courseTitle: "Advanced Algorithms",
-  }, storage);
-
-  assert.deepEqual(loadSettings(storage), {
-    backendUrl: "http://localhost:8000",
-    courseId: "COMP70001",
-    courseTitle: "Advanced Algorithms",
-  });
+  saveSettings({ backendUrl: "http://localhost:8000" }, storage);
+  assert.deepEqual(loadSettings(storage), { backendUrl: "http://localhost:8000" });
 });
 
 test("loadSettings tolerates invalid storage", () => {

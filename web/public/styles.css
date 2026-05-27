@@ -405,9 +405,12 @@ textarea:focus {
   list-style: none;
   margin: 0;
   padding: 0;
+  padding-right: 4px;
   display: grid;
   gap: 8px;
   max-width: 760px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .course-card {
@@ -516,6 +519,8 @@ textarea:focus {
   padding: 0;
   display: grid;
   gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
 }
 
 .course-progress-row {

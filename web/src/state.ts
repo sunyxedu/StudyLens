@@ -1,28 +1,20 @@
 export interface AppSettings {
   backendUrl: string;
-  courseId: string;
-  courseTitle: string;
 }
 
 const STORAGE_KEY = "studylens.web.settings";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   backendUrl: "http://localhost:8000",
-  courseId: "COMP70001",
-  courseTitle: "Advanced Algorithms",
 };
 
 export function loadSettings(storage: Storage = localStorage): AppSettings {
   try {
     const raw = storage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_SETTINGS;
-    }
+    if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     return {
       backendUrl: stringOrDefault(parsed.backendUrl, DEFAULT_SETTINGS.backendUrl),
-      courseId: stringOrDefault(parsed.courseId, DEFAULT_SETTINGS.courseId),
-      courseTitle: stringOrDefault(parsed.courseTitle, DEFAULT_SETTINGS.courseTitle),
     };
   } catch {
     return DEFAULT_SETTINGS;

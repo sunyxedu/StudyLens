@@ -25,18 +25,6 @@
           <button id="save-backend" class="button secondary" type="button">Save</button>
         </section>
 
-        <section class="control-group">
-          <label class="field">
-            <span>Course ID</span>
-            <input id="course-id" placeholder="COMP70001" autocomplete="off" />
-          </label>
-          <label class="field">
-            <span>Course Title</span>
-            <input id="course-title" placeholder="Advanced Algorithms" autocomplete="off" />
-          </label>
-          <span id="course-index-status" class="course-status"></span>
-        </section>
-
         <nav class="nav" aria-label="StudyLens views">
           <button class="nav-item active" data-view="courses" type="button">Courses</button>
           <button class="nav-item" data-view="ask" type="button">Ask</button>
@@ -88,6 +76,12 @@
               </label>
             </div>
           </div>
+          <label class="field">
+            <span>Course</span>
+            <select id="ask-course">
+              <option value="">All courses</option>
+            </select>
+          </label>
           <label class="field large">
             <span>Question</span>
             <textarea id="ask-question" rows="5" placeholder="What is the invariant in Dijkstra?"></textarea>
@@ -103,12 +97,15 @@
         <section class="view" id="view-index" aria-labelledby="index-title">
           <div class="view-head">
             <h2 id="index-title">Auto Index</h2>
-            <span class="subtle">Course ID + title — Scientia, Panopto, exams, EdStem in one pass</span>
+            <span class="subtle">Scientia, Panopto, past exams, EdStem in one pass</span>
           </div>
-          <p class="subtle">
-            The agent finds the course on the Scientia timeline using the ID and title above.
-            Make sure both are correct before running.
-          </p>
+          <div class="field">
+            <span>Course</span>
+            <select id="index-course">
+              <option value="">— select a course —</option>
+            </select>
+            <span id="index-course-status" class="course-status"></span>
+          </div>
           <div class="actions">
             <button id="index-submit" class="button primary" type="button">Sync Course</button>
             <span id="index-status" class="status"></span>
@@ -124,6 +121,12 @@
               <input id="retrieve-top-k" type="number" min="1" max="50" value="8" />
             </label>
           </div>
+          <label class="field">
+            <span>Course</span>
+            <select id="retrieve-course">
+              <option value="">All courses</option>
+            </select>
+          </label>
           <label class="field large">
             <span>Query</span>
             <textarea id="retrieve-query" rows="4" placeholder="recurrence relation exam question"></textarea>
@@ -151,6 +154,12 @@
               <button class="segment" data-mode="exam" type="button">Predicted Paper</button>
             </div>
           </div>
+          <label class="field">
+            <span>Course</span>
+            <select id="generate-course">
+              <option value="">— select a course —</option>
+            </select>
+          </label>
           <label class="field large">
             <span>Scope Notes</span>
             <textarea id="scope-notes" rows="5" placeholder="One note per line"></textarea>

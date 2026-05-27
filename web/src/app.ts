@@ -13,10 +13,9 @@ const elements = {
   backendUrl: byId<HTMLInputElement>("backend-url"),
   saveBackend: byId<HTMLButtonElement>("save-backend"),
   healthPill: byId<HTMLSpanElement>("health-pill"),
-  courseId: byId<HTMLInputElement>("course-id"),
-  courseTitle: byId<HTMLInputElement>("course-title"),
   navItems: Array.from(document.querySelectorAll<HTMLButtonElement>(".nav-item")),
   views: Array.from(document.querySelectorAll<HTMLElement>(".view")),
+  askCourse: byId<HTMLSelectElement>("ask-course"),
   askExercises: byId<HTMLInputElement>("ask-exercises"),
   askTopK: byId<HTMLInputElement>("ask-top-k"),
   askQuestion: byId<HTMLTextAreaElement>("ask-question"),
@@ -24,10 +23,11 @@ const elements = {
   askStatus: byId<HTMLSpanElement>("ask-status"),
   answerCard: byId<HTMLElement>("answer-card"),
   citationList: byId<HTMLElement>("citation-list"),
+  indexCourse: byId<HTMLSelectElement>("index-course"),
+  indexCourseStatus: byId<HTMLSpanElement>("index-course-status"),
   indexSubmit: byId<HTMLButtonElement>("index-submit"),
   indexStatus: byId<HTMLSpanElement>("index-status"),
   indexResults: byId<HTMLElement>("index-results"),
-  courseIndexStatus: byId<HTMLSpanElement>("course-index-status"),
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
   coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
@@ -36,12 +36,14 @@ const elements = {
   coursesList: byId<HTMLUListElement>("courses-list"),
   coursesProgress: byId<HTMLElement>("courses-progress"),
   coursesProgressList: byId<HTMLUListElement>("courses-progress-list"),
+  retrieveCourse: byId<HTMLSelectElement>("retrieve-course"),
   retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
   retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
   retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
   retrieveSubmit: byId<HTMLButtonElement>("retrieve-submit"),
   retrieveStatus: byId<HTMLSpanElement>("retrieve-status"),
   retrieveResults: byId<HTMLElement>("retrieve-results"),
+  generateCourse: byId<HTMLSelectElement>("generate-course"),
   modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment")),
   scopeNotes: byId<HTMLTextAreaElement>("scope-notes"),
   generateTopK: byId<HTMLInputElement>("generate-top-k"),
@@ -65,19 +67,18 @@ function init(): void {
   const settings = loadSettings();
   settings.backendUrl = resolveBackendUrl(settings, window.location);
   elements.backendUrl.value = settings.backendUrl;
-  elements.courseId.value = settings.courseId;
-  elements.courseTitle.value = settings.courseTitle;
   api = new StudyLensApi(settings.backendUrl);
 
   elements.navItems.forEach((button) => {
     button.addEventListener("click", () => activateView(button.dataset.view || "ask"));
   });
   elements.modeButtons.forEach((button) => {
-    button.addEventListener("click", () => setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet"));
+    button.addEventListener("click", () =>
+      setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet")
+    );
   });
   elements.saveBackend.addEventListener("click", handleSaveSettings);
-  elements.courseId.addEventListener("change", () => { handleSaveSettings(); updateCourseIndexStatus(); });
-  elements.courseTitle.addEventListener("change", handleSaveSettings);
+  elements.indexCourse.addEventListener("change", updateIndexCourseStatus);
   elements.askSubmit.addEventListener("click", handleAsk);
   elements.indexSubmit.addEventListener("click", handleIndex);
   elements.retrieveSubmit.addEventListener("click", handleRetrieve);
@@ -102,6 +103,7 @@ async function loadCachedCourses(): Promise<void> {
     discoveredCourses = courses;
     selectedCourseCodes.clear();
     renderCourseList();
+    populateCourseSelects();
     updateCoursesSummary();
     updateCoursesActions();
     const latest = courses.reduce<string | null>(
@@ -110,9 +112,10 @@ async function loadCachedCourses(): Promise<void> {
     );
     setStatus(
       elements.coursesStatus,
-      latest ? `Loaded ${courses.length} cached courses · last refreshed ${formatTimestamp(latest)}` : `Loaded ${courses.length} cached courses`
+      latest
+        ? `Loaded ${courses.length} cached courses · last refreshed ${formatTimestamp(latest)}`
+        : `Loaded ${courses.length} cached courses`
     );
-    updateCourseIndexStatus();
   } catch {
     // Backend offline or first-time setup — leave the panel empty.
   }
@@ -129,11 +132,55 @@ function formatTimestamp(iso: string): string {
   });
 }
 
+function populateCourseSelects(): void {
+  populateSelect(elements.askCourse, true);
+  populateSelect(elements.indexCourse, false);
+  populateSelect(elements.retrieveCourse, true);
+  populateSelect(elements.generateCourse, false);
+  updateIndexCourseStatus();
+}
+
+function populateSelect(select: HTMLSelectElement, allowAll: boolean): void {
+  const prev = select.value;
+  select.replaceChildren();
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = allowAll ? "All courses" : "— select a course —";
+  select.appendChild(blank);
+  for (const course of discoveredCourses) {
+    const option = document.createElement("option");
+    option.value = course.code;
+    option.textContent = `${course.code} — ${stripCodePrefix(course.title, course.code)}`;
+    select.appendChild(option);
+  }
+  if (prev) select.value = prev;
+}
+
+function updateIndexCourseStatus(): void {
+  const code = elements.indexCourse.value;
+  const el = elements.indexCourseStatus;
+  if (!code) {
+    el.textContent = "";
+    el.className = "course-status";
+    return;
+  }
+  const course = discoveredCourses.find((c) => c.code === code);
+  if (!course) {
+    el.textContent = "";
+    el.className = "course-status";
+    return;
+  }
+  el.className = "course-status";
+  el.textContent = course.indexed_at
+    ? `Last indexed: ${formatTimestamp(course.indexed_at)}`
+    : "Never indexed";
+}
+
 function handleSaveSettings(): void {
-  const settings = currentSettings();
-  elements.backendUrl.value = settings.backendUrl;
-  api = new StudyLensApi(settings.backendUrl);
-  saveSettings(settings);
+  const backendUrl = normalizeBaseUrl(elements.backendUrl.value);
+  elements.backendUrl.value = backendUrl;
+  api = new StudyLensApi(backendUrl);
+  saveSettings({ backendUrl });
   void refreshHealth();
 }
 
@@ -159,7 +206,7 @@ async function handleAsk(): Promise<void> {
   await withBusy(elements.askSubmit, elements.askStatus, "Asking", async () => {
     const answer = await api.ask({
       question,
-      course_id: courseIdOrNull(),
+      course_id: elements.askCourse.value || null,
       top_k: numeric(elements.askTopK.value, 5),
       include_exercises: elements.askExercises.checked,
     });
@@ -182,6 +229,7 @@ async function handleDiscoverCourses(): Promise<void> {
     discoveredCourses = response.courses;
     selectedCourseCodes.clear();
     renderCourseList();
+    populateCourseSelects();
     elements.coursesProgressList.replaceChildren();
     elements.coursesProgress.hidden = true;
     if (response.error) {
@@ -191,7 +239,6 @@ async function handleDiscoverCourses(): Promise<void> {
     }
     updateCoursesSummary(response.dropped_titles.length);
     updateCoursesActions();
-    updateCourseIndexStatus();
   });
 }
 
@@ -217,10 +264,6 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   checkbox.addEventListener("change", () => {
     if (checkbox.checked) {
       selectedCourseCodes.add(course.code);
-      elements.courseId.value = course.code;
-      elements.courseTitle.value = course.title;
-      saveSettings(currentSettings());
-      updateCourseIndexStatus();
     } else {
       selectedCourseCodes.delete(course.code);
     }
@@ -240,24 +283,23 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   title.textContent = stripCodePrefix(course.title, course.code);
   title.title = course.title;
 
-  info.append(title);
-
-  if (course.edstem_url) {
-    const url = document.createElement("span");
-    url.className = "course-url";
-    url.textContent = shortUrl(course.edstem_url);
-    url.title = course.edstem_url;
-    info.append(url);
+  const meta = document.createElement("span");
+  meta.className = "course-url";
+  if (course.indexed_at) {
+    meta.textContent = `Indexed ${formatTimestamp(course.indexed_at)}`;
+  } else if (course.edstem_url) {
+    meta.textContent = shortUrl(course.edstem_url);
+    meta.title = course.edstem_url;
   }
 
+  info.append(title, meta);
   label.append(checkbox, code, info);
   li.append(label);
   return li;
 }
 
-function stripCodePrefix(title: string, code: string): string {
-  // EdStem titles like "COMP 50001: Algorithm Design and Analysis" — drop the
-  // leading code so the title row doesn't double-print it next to the badge.
+function stripCodePrefix(title: string, _code: string): string {
+  // EdStem titles like "COMP 50001: Algorithm Design..." — drop the leading code.
   const stripped = title
     .replace(/^\s*[A-Z]{2,5}\s*[-\s]?\s*\d{3,5}(?:[\.\/][A-Za-z0-9]+)?\s*[:\-—]\s*/, "")
     .trim();
@@ -279,8 +321,7 @@ function updateCoursesSummary(dropped: number = 0): void {
     return;
   }
   const dropNote = dropped > 0 ? ` · ${dropped} without a code skipped` : "";
-  elements.coursesSummary.textContent =
-    `${discoveredCourses.length} courses${dropNote}`;
+  elements.coursesSummary.textContent = `${discoveredCourses.length} courses${dropNote}`;
 }
 
 function updateCoursesActions(): void {
@@ -307,10 +348,7 @@ function handleSelectAllCourses(): void {
   updateCoursesActions();
 }
 
-// How many courses to index simultaneously. Each one runs its own
-// BrowserSession (Chromium) + Claude Agent SDK subprocess, so the cap
-// keeps RAM and rate limits in check while still being faster than
-// strict serial.
+// Cap simultaneous indexing jobs to keep RAM and rate limits in check.
 const INDEX_CONCURRENCY = 3;
 
 async function handleIndexSelected(): Promise<void> {
@@ -350,11 +388,7 @@ async function handleIndexSelected(): Promise<void> {
           `${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks`
         );
       } catch (error) {
-        setProgressStatus(
-          row,
-          "failed",
-          error instanceof Error ? error.message : "failed"
-        );
+        setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
       }
       completed += 1;
       setStatus(elements.coursesStatus, `${completed}/${targets.length} done`);
@@ -375,11 +409,7 @@ async function handleIndexSelected(): Promise<void> {
   }
 }
 
-function createProgressRow(
-  code: string,
-  title: string,
-  status: ProgressStatus
-): HTMLLIElement {
+function createProgressRow(code: string, title: string, status: ProgressStatus): HTMLLIElement {
   const li = document.createElement("li");
   li.className = "course-progress-row";
   li.dataset.code = code;
@@ -412,11 +442,7 @@ function createProgressRow(
   return li;
 }
 
-function setProgressStatus(
-  row: HTMLElement,
-  status: ProgressStatus,
-  summary: string
-): void {
+function setProgressStatus(row: HTMLElement, status: ProgressStatus, summary: string): void {
   const statusNode = row.querySelector<HTMLElement>('[data-role="status"]');
   if (statusNode) {
     statusNode.className = `progress-status ${status}`;
@@ -427,10 +453,20 @@ function setProgressStatus(
 }
 
 async function handleIndex(): Promise<void> {
+  const code = elements.indexCourse.value;
+  if (!code) {
+    setStatus(elements.indexStatus, "Select a course first", "error");
+    return;
+  }
+  const course = discoveredCourses.find((c) => c.code === code);
+  if (!course) {
+    setStatus(elements.indexStatus, "Course not found", "error");
+    return;
+  }
   await withBusy(elements.indexSubmit, elements.indexStatus, "Syncing", async () => {
     const report = await api.autoIndexCourse({
-      course_id: requireCourseId(),
-      course_title: requireCourseTitle(),
+      course_id: course.code,
+      course_title: course.title,
     });
     renderIndexReport(report);
     setStatus(
@@ -449,7 +485,7 @@ async function handleRetrieve(): Promise<void> {
   await withBusy(elements.retrieveSubmit, elements.retrieveStatus, "Retrieving", async () => {
     const response = await api.retrieve({
       query,
-      course_id: courseIdOrNull(),
+      course_id: elements.retrieveCourse.value || null,
       kinds: selectedKinds(),
       top_k: numeric(elements.retrieveTopK.value, 8),
     });
@@ -459,10 +495,20 @@ async function handleRetrieve(): Promise<void> {
 }
 
 async function handleGenerate(): Promise<void> {
+  const code = elements.generateCourse.value;
+  if (!code) {
+    setStatus(elements.generateStatus, "Select a course first", "error");
+    return;
+  }
+  const course = discoveredCourses.find((c) => c.code === code);
+  if (!course) {
+    setStatus(elements.generateStatus, "Course not found", "error");
+    return;
+  }
   await withBusy(elements.generateSubmit, elements.generateStatus, "Generating", async () => {
     const base = {
-      course_id: requireCourseId(),
-      course_title: requireCourseTitle(),
+      course_id: course.code,
+      course_title: course.title,
       scope_notes: parseScopeNotes(elements.scopeNotes.value),
       top_k: numeric(elements.generateTopK.value, 40),
     };
@@ -481,10 +527,9 @@ async function handleGenerate(): Promise<void> {
 }
 
 function handleDownloadLatex(): void {
-  if (!latestLatex) {
-    return;
-  }
-  const name = `${sanitizeFilename(`${requireCourseId()}-${generationMode}`)}.tex`;
+  if (!latestLatex) return;
+  const code = elements.generateCourse.value || "studylens";
+  const name = `${sanitizeFilename(`${code}-${generationMode}`)}.tex`;
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([latestLatex], { type: "application/x-tex" }));
   link.download = name;
@@ -492,34 +537,20 @@ function handleDownloadLatex(): void {
   URL.revokeObjectURL(link.href);
 }
 
-function updateCourseIndexStatus(): void {
-  const id = elements.courseId.value.trim().toUpperCase();
-  const el = elements.courseIndexStatus;
-  if (!id) {
-    el.textContent = "";
-    el.className = "course-status";
-    return;
-  }
-  const course = discoveredCourses.find((c) => c.code.toUpperCase() === id);
-  if (!course) {
-    el.textContent = "Course not found";
-    el.className = "course-status not-found";
-    return;
-  }
-  el.className = "course-status";
-  el.textContent = course.indexed_at
-    ? `Last indexed: ${formatTimestamp(course.indexed_at)}`
-    : "Never indexed";
-}
-
 function activateView(view: string): void {
-  elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === view));
-  elements.views.forEach((panel) => panel.classList.toggle("active", panel.id === `view-${view}`));
+  elements.navItems.forEach((item) =>
+    item.classList.toggle("active", item.dataset.view === view)
+  );
+  elements.views.forEach((panel) =>
+    panel.classList.toggle("active", panel.id === `view-${view}`)
+  );
 }
 
 function setGenerationMode(mode: "cheatsheet" | "exam"): void {
   generationMode = mode;
-  elements.modeButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === mode));
+  elements.modeButtons.forEach((button) =>
+    button.classList.toggle("active", button.dataset.mode === mode)
+  );
   elements.questionCountField.classList.toggle("hidden", mode !== "exam");
 }
 
@@ -570,7 +601,12 @@ function resultNode(title: string, text: string, meta: string): HTMLElement {
   return article;
 }
 
-async function withBusy(button: HTMLButtonElement, status: HTMLElement, label: string, action: () => Promise<void>): Promise<void> {
+async function withBusy(
+  button: HTMLButtonElement,
+  status: HTMLElement,
+  label: string,
+  action: () => Promise<void>
+): Promise<void> {
   const original = button.textContent || "";
   button.disabled = true;
   button.textContent = label;
@@ -586,37 +622,9 @@ async function withBusy(button: HTMLButtonElement, status: HTMLElement, label: s
 }
 
 function selectedKinds(): ResourceKind[] {
-  return Array.from(elements.retrieveKinds.querySelectorAll<HTMLInputElement>("input:checked")).map(
-    (input) => input.value as ResourceKind
-  );
-}
-
-function currentSettings() {
-  return {
-    backendUrl: normalizeBaseUrl(elements.backendUrl.value),
-    courseId: elements.courseId.value.trim(),
-    courseTitle: elements.courseTitle.value.trim(),
-  };
-}
-
-function courseIdOrNull(): string | null {
-  return elements.courseId.value.trim() || null;
-}
-
-function requireCourseId(): string {
-  const courseId = elements.courseId.value.trim();
-  if (!courseId) {
-    throw new Error("Course ID required");
-  }
-  return courseId;
-}
-
-function requireCourseTitle(): string {
-  const title = elements.courseTitle.value.trim();
-  if (!title) {
-    throw new Error("Course title required");
-  }
-  return title;
+  return Array.from(
+    elements.retrieveKinds.querySelectorAll<HTMLInputElement>("input:checked")
+  ).map((input) => input.value as ResourceKind);
 }
 
 function numeric(value: string, fallback: number): number {
