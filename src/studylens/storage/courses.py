@@ -21,6 +21,7 @@ class CourseRecord:
     title: str
     edstem_url: str | None
     updated_at: str  # ISO-8601 UTC
+    indexed_at: str | None = None  # ISO-8601 UTC, set after a successful auto-index
 
 
 def _sqlite_path(database_url: str) -> Path:
@@ -71,15 +72,20 @@ class CourseStore:
                     code TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
                     edstem_url TEXT,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    indexed_at TEXT
                 )
                 """
             )
+            try:
+                connection.execute("ALTER TABLE courses ADD COLUMN indexed_at TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def list_all(self) -> list[CourseRecord]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT code, title, edstem_url, updated_at FROM courses ORDER BY code"
+                "SELECT code, title, edstem_url, updated_at, indexed_at FROM courses ORDER BY code"
             ).fetchall()
         return [
             CourseRecord(
@@ -87,6 +93,7 @@ class CourseStore:
                 title=row["title"],
                 edstem_url=row["edstem_url"],
                 updated_at=row["updated_at"],
+                indexed_at=row["indexed_at"],
             )
             for row in rows
         ]
@@ -97,18 +104,42 @@ class CourseStore:
         EdStem dashboard is the source of truth — courses the student is no
         longer enrolled in should disappear. The fresh updated_at timestamp
         also doubles as "this is when we last verified the enrolment".
+        indexed_at is preserved for courses that survive the replace.
         """
         timestamp = _now()
-        rows = [(code, title, edstem_url, timestamp) for code, title, edstem_url in courses]
+        course_list = list(courses)
         with self._connect() as connection, connection:
+            existing_indexed = {
+                row["code"]: row["indexed_at"]
+                for row in connection.execute(
+                    "SELECT code, indexed_at FROM courses"
+                ).fetchall()
+            }
             connection.execute("DELETE FROM courses")
-            if rows:
+            if course_list:
                 connection.executemany(
-                    "INSERT INTO courses (code, title, edstem_url, updated_at) "
-                    "VALUES (?, ?, ?, ?)",
-                    rows,
+                    "INSERT INTO courses (code, title, edstem_url, updated_at, indexed_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    [
+                        (code, title, url, timestamp, existing_indexed.get(code))
+                        for code, title, url in course_list
+                    ],
                 )
         return [
-            CourseRecord(code=c, title=t, edstem_url=u, updated_at=timestamp)
-            for c, t, u in (r[:3] for r in rows)
+            CourseRecord(
+                code=code,
+                title=title,
+                edstem_url=url,
+                updated_at=timestamp,
+                indexed_at=existing_indexed.get(code),
+            )
+            for code, title, url in course_list
         ]
+
+    def mark_indexed(self, code: str) -> None:
+        """Record the current UTC time as the last indexed timestamp for a course."""
+        with self._connect() as connection, connection:
+            connection.execute(
+                "UPDATE courses SET indexed_at = ? WHERE code = ?",
+                (_now(), code),
+            )

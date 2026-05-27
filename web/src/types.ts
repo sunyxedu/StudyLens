@@ -102,6 +102,7 @@ export interface DiscoveredCourse {
   title: string;
   edstem_url?: string | null;
   updated_at?: string | null;
+  indexed_at?: string | null;
 }
 
 export interface DiscoverCoursesResponse {

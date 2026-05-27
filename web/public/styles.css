@@ -337,6 +337,18 @@ textarea:focus {
   font-weight: 700;
 }
 
+.course-status {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 15px;
+  margin-top: -4px;
+}
+
+.course-status.not-found {
+  color: var(--danger);
+}
+
 .segmented {
   display: inline-grid;
   grid-template-columns: repeat(2, 1fr);

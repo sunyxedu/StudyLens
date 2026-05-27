@@ -27,6 +27,7 @@ const elements = {
   indexSubmit: byId<HTMLButtonElement>("index-submit"),
   indexStatus: byId<HTMLSpanElement>("index-status"),
   indexResults: byId<HTMLElement>("index-results"),
+  courseIndexStatus: byId<HTMLSpanElement>("course-index-status"),
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
   coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
@@ -75,7 +76,7 @@ function init(): void {
     button.addEventListener("click", () => setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet"));
   });
   elements.saveBackend.addEventListener("click", handleSaveSettings);
-  elements.courseId.addEventListener("change", handleSaveSettings);
+  elements.courseId.addEventListener("change", () => { handleSaveSettings(); updateCourseIndexStatus(); });
   elements.courseTitle.addEventListener("change", handleSaveSettings);
   elements.askSubmit.addEventListener("click", handleAsk);
   elements.indexSubmit.addEventListener("click", handleIndex);
@@ -111,6 +112,7 @@ async function loadCachedCourses(): Promise<void> {
       elements.coursesStatus,
       latest ? `Loaded ${courses.length} cached courses · last refreshed ${formatTimestamp(latest)}` : `Loaded ${courses.length} cached courses`
     );
+    updateCourseIndexStatus();
   } catch {
     // Backend offline or first-time setup — leave the panel empty.
   }
@@ -189,6 +191,7 @@ async function handleDiscoverCourses(): Promise<void> {
     }
     updateCoursesSummary(response.dropped_titles.length);
     updateCoursesActions();
+    updateCourseIndexStatus();
   });
 }
 
@@ -212,8 +215,15 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   checkbox.checked = selectedCourseCodes.has(course.code);
   if (checkbox.checked) li.classList.add("selected");
   checkbox.addEventListener("change", () => {
-    if (checkbox.checked) selectedCourseCodes.add(course.code);
-    else selectedCourseCodes.delete(course.code);
+    if (checkbox.checked) {
+      selectedCourseCodes.add(course.code);
+      elements.courseId.value = course.code;
+      elements.courseTitle.value = course.title;
+      saveSettings(currentSettings());
+      updateCourseIndexStatus();
+    } else {
+      selectedCourseCodes.delete(course.code);
+    }
     li.classList.toggle("selected", checkbox.checked);
     updateCoursesActions();
   });
@@ -480,6 +490,26 @@ function handleDownloadLatex(): void {
   link.download = name;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+function updateCourseIndexStatus(): void {
+  const id = elements.courseId.value.trim().toUpperCase();
+  const el = elements.courseIndexStatus;
+  if (!id) {
+    el.textContent = "";
+    el.className = "course-status";
+    return;
+  }
+  const course = discoveredCourses.find((c) => c.code.toUpperCase() === id);
+  if (!course) {
+    el.textContent = "Course not found";
+    el.className = "course-status not-found";
+    return;
+  }
+  el.className = "course-status";
+  el.textContent = course.indexed_at
+    ? `Last indexed: ${formatTimestamp(course.indexed_at)}`
+    : "Never indexed";
 }
 
 function activateView(view: string): void {

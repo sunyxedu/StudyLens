@@ -75,6 +75,7 @@ def _record_to_schema(record: CourseRecord) -> DiscoverCoursesCourse:
         title=record.title,
         edstem_url=record.edstem_url,
         updated_at=record.updated_at,
+        indexed_at=record.indexed_at,
     )
 
 
@@ -156,6 +157,8 @@ def create_app(
         request: Request,
     ) -> AutoIndexCourseResponse:
         report = await _run_auto_index(request, payload)
+        store: CourseStore = request.app.state.course_store
+        store.mark_indexed(payload.course_id)
         return AutoIndexCourseResponse(**report.model_dump())
 
     @application.post("/index/exams", response_model=IndexExamsResponse)

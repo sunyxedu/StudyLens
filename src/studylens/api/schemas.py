@@ -61,6 +61,7 @@ class DiscoverCoursesCourse(BaseModel):
     title: str
     edstem_url: str | None = None
     updated_at: str | None = None
+    indexed_at: str | None = None
 
 
 class DiscoverCoursesResponse(BaseModel):
