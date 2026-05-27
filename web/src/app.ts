@@ -7,6 +7,9 @@ import {
   saveSettings,
 } from "./state.js";
 import { marked } from "marked";
+import markedKatex from "marked-katex-extension";
+
+marked.use(markedKatex({ throwOnError: false }));
 import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
 import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
