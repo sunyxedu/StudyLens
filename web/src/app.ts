@@ -82,6 +82,7 @@ const elements = {
   chatMessages: byId<HTMLElement>("chat-messages"),
   chatEmpty: byId<HTMLElement>("chat-empty"),
   askExercises: byId<HTMLInputElement>("ask-exercises"),
+  askTopK: byId<HTMLInputElement>("ask-top-k"),
   askQuestion: byId<HTMLTextAreaElement>("ask-question"),
   askSubmit: byId<HTMLButtonElement>("ask-submit"),
   askStatus: byId<HTMLSpanElement>("ask-status"),
@@ -583,7 +584,7 @@ async function handleSendMessage(): Promise<void> {
     const answer = await api.ask({
       question: contextQuestion,
       course_id: currentCourse.code,
-      top_k: 5,
+      top_k: numeric(elements.askTopK.value, 5),
       include_exercises: elements.askExercises.checked,
     });
     thinkingEl.remove();
