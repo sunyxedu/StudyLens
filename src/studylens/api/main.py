@@ -35,6 +35,7 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import Settings, get_settings
 from studylens.domain import Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
+from studylens.generation.common import ManifestCourseContextProvider
 from studylens.ingestion.auto_index import AutoIndexReport, _normalize_course_id, build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
@@ -115,8 +116,15 @@ def create_app(
     application = FastAPI(title="StudyLens", version="0.1.0")
     application.state.settings = settings
     application.state.rag_service = service
-    application.state.cheatsheet_generator = CheatsheetGenerator(rag=service, llm=service.llm)
-    application.state.exam_generator = PredictedExamGenerator(rag=service, llm=service.llm)
+    course_context = ManifestCourseContextProvider(settings.raw_dir)
+    application.state.cheatsheet_generator = CheatsheetGenerator(
+        context_provider=course_context,
+        llm=service.llm,
+    )
+    application.state.exam_generator = PredictedExamGenerator(
+        context_provider=course_context,
+        llm=service.llm,
+    )
     application.state.auto_indexer = auto_indexer
     application.state.exams_indexer = exams_indexer
     application.state.edstem_indexer = edstem_indexer

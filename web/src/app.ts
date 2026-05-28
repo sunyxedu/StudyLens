@@ -36,7 +36,6 @@ const elements = {
   // Generate tab
   modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment")),
   scopeNotes: byId<HTMLTextAreaElement>("scope-notes"),
-  generateTopK: byId<HTMLInputElement>("generate-top-k"),
   questionCountField: byId<HTMLElement>("question-count-field"),
   questionCount: byId<HTMLInputElement>("question-count"),
   generateSubmit: byId<HTMLButtonElement>("generate-submit"),
@@ -279,8 +278,32 @@ function handleSelectAllCourses(): void {
   updateCoursesActions();
 }
 
+async function confirmIndexedCourse(code: string): Promise<DiscoveredCourse | null> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (attempt > 0) await delay(5000);
+    try {
+      const { courses } = await api.listCourses();
+      const indexedCourse = courses.find((course) => course.code === code && course.indexed_at);
+      if (indexedCourse) {
+        const idx = discoveredCourses.findIndex((course) => course.code === code);
+        if (idx >= 0) discoveredCourses[idx] = indexedCourse;
+        if (currentCourse?.code === code) currentCourse = indexedCourse;
+        renderCourseList();
+        updateCoursesSummary();
+        updateCoursesActions();
+        return indexedCourse;
+      }
+    } catch {
+      // Keep the original indexing error if the status check also fails.
+    }
+  }
+  return null;
+}
+
 // Cap simultaneous indexing jobs to keep RAM and rate limits in check.
 const INDEX_CONCURRENCY = 3;
+const CHEATSHEET_CONTEXT_TOP_K = 40;
+const PREDICTED_EXAM_CONTEXT_TOP_K = 50;
 
 async function handleIndexSelected(): Promise<void> {
   const targets = discoveredCourses.filter((c) => selectedCourseCodes.has(c.code));
@@ -324,7 +347,17 @@ async function handleIndexSelected(): Promise<void> {
           discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: new Date().toISOString() };
         }
       } catch (error) {
-        setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
+        setProgressStatus(row, "running", "Checking index status…");
+        const indexedCourse = await confirmIndexedCourse(course.code);
+        if (indexedCourse?.indexed_at) {
+          setProgressStatus(
+            row,
+            "done",
+            `Indexed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`
+          );
+        } else {
+          setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
+        }
       }
       completed += 1;
       setStatus(elements.coursesStatus, `${completed}/${targets.length} done`);
@@ -414,8 +447,17 @@ async function handleReindex(): Promise<void> {
       `Indexed ${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks · ${formatTimestamp(ts)}`;
     elements.reindexStatus.style.color = "var(--muted)";
   } catch (error) {
-    elements.reindexStatus.textContent = error instanceof Error ? error.message : "Failed";
-    elements.reindexStatus.style.color = "var(--danger)";
+    elements.reindexStatus.textContent = "Checking index status…";
+    const indexedCourse = await confirmIndexedCourse(course.code);
+    if (indexedCourse?.indexed_at) {
+      currentCourse = indexedCourse;
+      elements.reindexStatus.textContent =
+        `Indexed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`;
+      elements.reindexStatus.style.color = "var(--muted)";
+    } else {
+      elements.reindexStatus.textContent = error instanceof Error ? error.message : "Failed";
+      elements.reindexStatus.style.color = "var(--danger)";
+    }
   } finally {
     elements.reindexBtn.disabled = false;
   }
@@ -457,7 +499,10 @@ async function handleGenerate(): Promise<void> {
       course_id: currentCourse!.code,
       course_title: currentCourse!.title,
       scope_notes: parseScopeNotes(elements.scopeNotes.value),
-      top_k: numeric(elements.generateTopK.value, 40),
+      top_k:
+        generationMode === "cheatsheet"
+          ? CHEATSHEET_CONTEXT_TOP_K
+          : PREDICTED_EXAM_CONTEXT_TOP_K,
     };
     const response =
       generationMode === "cheatsheet"
@@ -608,6 +653,10 @@ function selectedKinds(): ResourceKind[] {
 function numeric(value: string, fallback: number): number {
   const n = Number.parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function setStatus(node: HTMLElement, value: string, mode: "ok" | "error" = "ok"): void {
