@@ -10,7 +10,7 @@ The repository is organized as a Python backend, a TypeScript web app, and a Typ
 - `tests`: parser, retrieval, generation, API, and config tests.
 - `data`: local runtime data. The contents are intentionally ignored by git.
 
-Qdrant is the default vector store. Local development uses an embedded Qdrant database under `data/vector/qdrant`; production can point `QDRANT_URL` and `QDRANT_API_KEY` at a managed or self-hosted Qdrant instance.
+Qdrant is the default vector store. Local development uses an embedded Qdrant database under `data/vector/qdrant`; production can point `QDRANT_URL` and `QDRANT_API_KEY` at a managed or self-hosted Qdrant instance. If the configured embedding dimensions change, StudyLens recreates the Qdrant collection because vectors from different embedding sizes cannot share one collection.
 
 ## Setup
 
@@ -75,6 +75,7 @@ npm run dev
 
 The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000`.
 After `npm run build`, the API also serves the built UI from `http://localhost:8000/app`.
+For Vercel deployments, set `STUDYLENS_BACKEND_URL` to your Railway API origin, for example `https://your-api.up.railway.app`. On Railway, include the Vercel origin in `ALLOWED_ORIGINS` if you do not allow all origins.
 
 In the UI, use `Index` to sync a course automatically. It downloads and indexes supported Scientia materials, exercises, and tutorials, then indexes Panopto video captions/transcripts. Captions are kept with timestamps and linked back to the video URL. `studylens index-text` remains available as a fallback for local notes or transcripts.
 

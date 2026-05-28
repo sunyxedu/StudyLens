@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_embedding_dimensions: int = 1536
     openai_chat_model: str = "gpt-4.1-mini"
 
     anthropic_api_key: str | None = None

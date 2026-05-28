@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import pytest
 from qdrant_client import QdrantClient
+from qdrant_client.http import models
 
 from studylens.domain import DocumentChunk
 from studylens.retrieval import (
@@ -59,6 +61,29 @@ def test_qdrant_vector_store_search_count_filter_and_clear() -> None:
 
     store.clear()
     assert store.count() == 0
+
+
+def test_qdrant_vector_store_recreates_collection_when_dimensions_change() -> None:
+    client = QdrantClient(":memory:")
+    client.create_collection(
+        collection_name="dimension_change",
+        vectors_config=models.VectorParams(size=32, distance=models.Distance.COSINE),
+    )
+
+    with pytest.warns(RuntimeWarning, match="Recreating Qdrant collection"):
+        store = QdrantVectorStore(
+            collection_name="dimension_change",
+            dimensions=64,
+            client=client,
+        )
+
+    info = client.get_collection("dimension_change")
+    assert info.config.params.vectors.size == 64
+
+    embeddings = HashEmbeddingClient(dimensions=64)
+    chunk = make_chunk("Dimension changes should reindex cleanly.")
+    assert store.upsert([(chunk, embeddings.embed([chunk.text])[0])]) == 1
+    assert store.count() == 1
 
 
 def test_sqlite_vector_store_remains_available_as_fallback(tmp_path: Path) -> None:
