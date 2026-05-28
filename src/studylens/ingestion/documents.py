@@ -136,3 +136,47 @@ def build_chunks(
         )
         for index, chunk in enumerate(chunk_text(text, max_chars=max_chars, overlap=overlap))
     ]
+
+
+def build_pdf_chunks(
+    resource: Resource,
+    path: Path,
+    *,
+    max_chars: int = 1400,
+    overlap: int = 180,
+) -> list[DocumentChunk]:
+    """Build chunks from a PDF, storing the 1-indexed page number in each chunk's metadata."""
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise UnsupportedDocumentError("Install studylens[documents] to parse PDFs") from exc
+
+    reader = PdfReader(str(path))
+    chunks: list[DocumentChunk] = []
+    position = 0
+
+    for page_num, page in enumerate(reader.pages, start=1):
+        page_text = normalize_text(page.extract_text() or "")
+        if not page_text:
+            continue
+        for text_chunk in chunk_text(page_text, max_chars=max_chars, overlap=overlap):
+            chunks.append(
+                DocumentChunk(
+                    course_id=resource.course_id,
+                    resource_id=resource.id or "",
+                    kind=resource.kind,
+                    text=text_chunk,
+                    position=position,
+                    title=resource.title,
+                    source_url=resource.source_url,
+                    metadata={**resource.metadata, "page": page_num},
+                )
+            )
+            position += 1
+
+    # Fallback: scanned / image-only PDFs produce no text per page.
+    if not chunks:
+        flat = normalize_text("\n\n".join(p.extract_text() or "" for p in reader.pages))
+        return build_chunks(resource, flat, max_chars=max_chars, overlap=overlap)
+
+    return chunks

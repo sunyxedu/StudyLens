@@ -80,26 +80,44 @@
 
           <!-- Ask tab ──────────────────────────────────────────── -->
           <div class="tab-panel active" id="tab-ask" role="tabpanel">
-            <div class="tab-controls">
-              <label class="toggle">
-                <input id="ask-exercises" type="checkbox" checked />
-                <span>Exercises</span>
-              </label>
-              <label class="compact-field">
-                <span>Top K</span>
-                <input id="ask-top-k" type="number" min="1" max="20" value="5" />
-              </label>
+            <div class="chat-workspace">
+
+              <!-- Conversation list sidebar -->
+              <aside class="chat-sidebar">
+                <button id="new-conv-btn" class="button primary chat-new-btn" type="button">+ New chat</button>
+                <ul id="conv-list" class="conv-list" role="list"></ul>
+              </aside>
+
+              <!-- Active chat -->
+              <div class="chat-main">
+                <div class="chat-messages" id="chat-messages">
+                  <div class="chat-empty" id="chat-empty">
+                    <div class="chat-empty-icon">◎</div>
+                    <p class="chat-empty-title">Ask about this course</p>
+                    <p class="chat-empty-sub">Your questions are answered using the course materials, lectures, and exercises.</p>
+                  </div>
+                </div>
+
+                <div class="chat-input-area">
+                  <div class="chat-input-row">
+                    <textarea id="ask-question" class="chat-textarea" rows="1" placeholder="Ask a question about this course…"></textarea>
+                    <button id="ask-submit" class="chat-send-btn" type="button" aria-label="Send">↑</button>
+                  </div>
+                  <div class="chat-input-meta">
+                    <label class="toggle chat-toggle">
+                      <input id="ask-exercises" type="checkbox" checked />
+                      <span>Include exercises</span>
+                    </label>
+                    <label class="compact-field chat-topk">
+                      <span>Top K</span>
+                      <input id="ask-top-k" type="number" min="1" max="20" value="5" />
+                    </label>
+                    <span id="ask-status" class="status"></span>
+                  </div>
+                </div>
+              </div>
+
             </div>
-            <label class="field large">
-              <span>Question</span>
-              <textarea id="ask-question" rows="5" placeholder="What is the invariant in Dijkstra?"></textarea>
-            </label>
-            <div class="actions">
-              <button id="ask-submit" class="button primary" type="button">Ask</button>
-              <span id="ask-status" class="status"></span>
-            </div>
-            <article id="answer-card" class="output hidden"></article>
-            <section id="citation-list" class="result-list"></section>
           </div>
 
           <!-- Generate tab ─────────────────────────────────────── -->

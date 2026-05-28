@@ -110,6 +110,8 @@ class Citation(BaseModel):
     source_url: str | None = None
     position: int | None = None
     quote: str | None = None
+    page: int | None = None
+    start_seconds: float | None = None
 
 
 class SearchResult(BaseModel):

@@ -13,7 +13,7 @@ from studylens.config import Settings
 from studylens.domain import Resource
 from studylens.errors import ConfigurationError, UnsupportedDocumentError
 from studylens.ingestion._paths import safe_path_part, unique_path
-from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.documents import build_chunks, build_pdf_chunks, extract_text
 from studylens.retrieval.qa import RAGService
 
 
@@ -309,7 +309,10 @@ class ExamsIndexer:
         )
 
         try:
-            text = extract_text(output_path)
+            if output_path.suffix.lower() == ".pdf":
+                chunks = build_pdf_chunks(local, output_path)
+            else:
+                chunks = build_chunks(local, extract_text(output_path))
         except UnsupportedDocumentError as exc:
             return ExamIndexResult(
                 title=resource.title,
@@ -318,7 +321,6 @@ class ExamsIndexer:
                 local_path=str(output_path),
                 error=str(exc),
             )
-        chunks = build_chunks(local, text)
         indexed = self.rag.index_chunks(chunks)
         return ExamIndexResult(
             title=resource.title,

@@ -5,6 +5,13 @@ import {
   resolveBackendUrl,
   sanitizeFilename,
 } from "./state.js";
+import {
+  addMessage,
+  buildQuestion,
+  createConversation,
+  loadConversations,
+  saveConversations,
+} from "./chat.js";
 import { marked } from "marked";
 import type { Tokens } from "marked";
 import markedKatex from "marked-katex-extension";
@@ -45,8 +52,8 @@ function renderAnswer(markdown: string): string {
     }
   );
 }
-import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
-import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
+import { citationLabel, clippedText, formatSeconds, resultTitle, scoreLabel } from "./render.js";
+import type { ChatMessage, Conversation, DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
   // Course library (main page)
@@ -69,14 +76,16 @@ const elements = {
   coursePageTitle: byId<HTMLSpanElement>("course-page-title"),
   reindexBtn: byId<HTMLButtonElement>("reindex-btn"),
   reindexStatus: byId<HTMLSpanElement>("reindex-status"),
-  // Ask tab
+  // Ask / chat tab
+  newConvBtn: byId<HTMLButtonElement>("new-conv-btn"),
+  convList: byId<HTMLUListElement>("conv-list"),
+  chatMessages: byId<HTMLElement>("chat-messages"),
+  chatEmpty: byId<HTMLElement>("chat-empty"),
   askExercises: byId<HTMLInputElement>("ask-exercises"),
   askTopK: byId<HTMLInputElement>("ask-top-k"),
   askQuestion: byId<HTMLTextAreaElement>("ask-question"),
   askSubmit: byId<HTMLButtonElement>("ask-submit"),
   askStatus: byId<HTMLSpanElement>("ask-status"),
-  answerCard: byId<HTMLElement>("answer-card"),
-  citationList: byId<HTMLElement>("citation-list"),
   // Generate tab
   modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment")),
   scopeNotes: byId<HTMLTextAreaElement>("scope-notes"),
@@ -100,9 +109,16 @@ const shell = document.querySelector<HTMLElement>(".shell")!;
 let api = new StudyLensApi("http://localhost:8000");
 let generationMode: "cheatsheet" | "exam" = "cheatsheet";
 let latestLatex = "";
+
+const generateModeState: Record<"cheatsheet" | "exam", { scopeNotes: string; latex: string }> = {
+  cheatsheet: { scopeNotes: "", latex: "" },
+  exam: { scopeNotes: "", latex: "" },
+};
 let discoveredCourses: DiscoveredCourse[] = [];
 let currentCourse: DiscoveredCourse | null = null;
 const selectedCourseCodes = new Set<string>();
+let conversations: Conversation[] = [];
+let activeConversation: Conversation | null = null;
 
 init();
 
@@ -113,7 +129,12 @@ function init(): void {
 
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
-  elements.askSubmit.addEventListener("click", handleAsk);
+  elements.newConvBtn.addEventListener("click", handleNewConversation);
+  elements.askSubmit.addEventListener("click", () => { void handleSendMessage(); });
+  elements.askQuestion.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendMessage(); }
+  });
+  elements.askQuestion.addEventListener("input", () => autoResizeTextarea(elements.askQuestion));
   elements.generateSubmit.addEventListener("click", handleGenerate);
   elements.downloadLatex.addEventListener("click", handleDownloadLatex);
   elements.retrieveSubmit.addEventListener("click", handleRetrieve);
@@ -142,6 +163,8 @@ function showCoursesPage(): void {
   elements.sidebarCourseContext.classList.add("hidden");
   elements.sidebarCourseNav.classList.add("hidden");
   currentCourse = null;
+  conversations = [];
+  activeConversation = null;
 }
 
 function enterCourse(course: DiscoveredCourse): void {
@@ -159,10 +182,8 @@ function enterCourse(course: DiscoveredCourse): void {
   byId("view-courses").classList.remove("active");
   byId("view-course").classList.add("active");
   activateCourseTab("ask");
-  // Clear stale results from previous session
-  elements.answerCard.textContent = "";
-  elements.answerCard.classList.add("hidden");
-  elements.citationList.replaceChildren();
+  setStatus(elements.askStatus, "");
+  initChatForCourse(course.code);
   elements.retrieveResults.replaceChildren();
 }
 
@@ -501,31 +522,199 @@ async function handleReindex(): Promise<void> {
   }
 }
 
-// ── Ask ───────────────────────────────────────────────────────────────
+// ── Chat (Ask tab) ────────────────────────────────────────────────────
 
-async function handleAsk(): Promise<void> {
-  if (!currentCourse) return;
-  const question = elements.askQuestion.value.trim();
-  if (!question) {
-    setStatus(elements.askStatus, "Question required", "error");
-    return;
+function initChatForCourse(courseId: string): void {
+  conversations = loadConversations(courseId);
+  if (conversations.length === 0) {
+    conversations.push(createConversation(courseId));
+    saveConversations(courseId, conversations);
   }
-  await withBusy(elements.askSubmit, elements.askStatus, "Asking", async () => {
+  selectConversation(conversations[0].id);
+}
+
+function selectConversation(id: string): void {
+  const conv = conversations.find((c) => c.id === id);
+  if (!conv) return;
+  activeConversation = conv;
+  renderConversationList();
+  renderMessages(conv);
+}
+
+function handleNewConversation(): void {
+  if (!currentCourse) return;
+  const conv = createConversation(currentCourse.code);
+  conversations.unshift(conv);
+  saveConversations(currentCourse.code, conversations);
+  selectConversation(conv.id);
+}
+
+function handleDeleteConversation(id: string): void {
+  if (!currentCourse) return;
+  conversations = conversations.filter((c) => c.id !== id);
+  if (conversations.length === 0) {
+    conversations.push(createConversation(currentCourse.code));
+  }
+  saveConversations(currentCourse.code, conversations);
+  if (activeConversation?.id === id) {
+    selectConversation(conversations[0].id);
+  } else {
+    renderConversationList();
+  }
+}
+
+async function handleSendMessage(): Promise<void> {
+  if (!currentCourse || !activeConversation) return;
+  const question = elements.askQuestion.value.trim();
+  if (!question) return;
+
+  // Build context from existing history before adding the new message.
+  const contextQuestion = buildQuestion(activeConversation, question);
+
+  elements.askQuestion.value = "";
+  autoResizeTextarea(elements.askQuestion);
+
+  const userMsg = addMessage(activeConversation, { role: "user", content: question, citations: [] });
+  saveConversations(currentCourse.code, conversations);
+  renderConversationList();
+  appendMessageBubble(userMsg);
+
+  const thinkingEl = createThinkingEl();
+  elements.chatMessages.appendChild(thinkingEl);
+  scrollChatToBottom();
+
+  elements.askSubmit.disabled = true;
+  setStatus(elements.askStatus, "");
+
+  try {
     const answer = await api.ask({
-      question,
-      course_id: currentCourse!.code,
+      question: contextQuestion,
+      course_id: currentCourse.code,
       top_k: numeric(elements.askTopK.value, 5),
       include_exercises: elements.askExercises.checked,
     });
-    elements.answerCard.innerHTML = renderAnswer(answer.answer);
-    elements.answerCard.classList.remove("hidden");
-    elements.citationList.replaceChildren(
-      ...answer.citations.map((citation, index) =>
-        resultNode(citationLabel(citation, index), citation.quote || "", citation.source_url || "")
-      )
-    );
-    setStatus(elements.askStatus, "Done");
-  });
+    thinkingEl.remove();
+    const assistantMsg = addMessage(activeConversation, {
+      role: "assistant",
+      content: answer.answer,
+      citations: answer.citations,
+    });
+    saveConversations(currentCourse.code, conversations);
+    appendMessageBubble(assistantMsg);
+    scrollChatToBottom();
+  } catch (error) {
+    thinkingEl.remove();
+    setStatus(elements.askStatus, error instanceof Error ? error.message : "Request failed", "error");
+  } finally {
+    elements.askSubmit.disabled = false;
+  }
+}
+
+function renderConversationList(): void {
+  elements.convList.replaceChildren(
+    ...conversations.map((conv) => {
+      const li = document.createElement("li");
+      li.className = `conv-item${conv.id === activeConversation?.id ? " active" : ""}`;
+
+      const title = document.createElement("span");
+      title.className = "conv-item-title";
+      title.textContent = conv.title;
+      title.title = conv.title;
+
+      const time = document.createElement("span");
+      time.className = "conv-item-time";
+      time.textContent = relativeTime(conv.updatedAt);
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "conv-delete-btn";
+      del.textContent = "×";
+      del.title = "Delete";
+      del.addEventListener("click", (e) => { e.stopPropagation(); handleDeleteConversation(conv.id); });
+
+      li.append(title, time, del);
+      li.addEventListener("click", () => selectConversation(conv.id));
+      return li;
+    })
+  );
+}
+
+function renderMessages(conv: Conversation): void {
+  const existing = Array.from(elements.chatMessages.children).filter(
+    (n) => n !== elements.chatEmpty
+  );
+  existing.forEach((n) => n.remove());
+
+  const isEmpty = conv.messages.length === 0;
+  elements.chatEmpty.classList.toggle("hidden", !isEmpty);
+
+  if (!isEmpty) {
+    conv.messages.forEach((msg) => {
+      elements.chatMessages.appendChild(createMessageEl(msg));
+    });
+    scrollChatToBottom();
+  }
+}
+
+function appendMessageBubble(msg: ChatMessage): void {
+  elements.chatEmpty.classList.add("hidden");
+  elements.chatMessages.appendChild(createMessageEl(msg));
+}
+
+function createMessageEl(msg: ChatMessage): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = `chat-msg chat-msg-${msg.role}`;
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble";
+  if (msg.role === "user") {
+    bubble.textContent = msg.content;
+  } else {
+    bubble.innerHTML = renderAnswer(msg.content);
+  }
+  wrap.appendChild(bubble);
+
+  if (msg.citations.length > 0) {
+    const cites = document.createElement("div");
+    cites.className = "chat-citations";
+    msg.citations.forEach((c, i) => {
+      const chip = document.createElement("a");
+      chip.className = "chat-citation-chip";
+      chip.textContent = citationLabel(c, i);
+      chip.title = citationLabel(c, i);
+      const url = buildCitationUrl(c);
+      if (url) { chip.href = url; chip.target = "_blank"; chip.rel = "noopener noreferrer"; }
+      cites.appendChild(chip);
+    });
+    wrap.appendChild(cites);
+  }
+  return wrap;
+}
+
+function createThinkingEl(): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "chat-msg chat-msg-assistant";
+  wrap.innerHTML = `<div class="chat-thinking"><span>Thinking</span><div class="chat-thinking-dots"><span></span><span></span><span></span></div></div>`;
+  return wrap;
+}
+
+function scrollChatToBottom(): void {
+  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
+function autoResizeTextarea(ta: HTMLTextAreaElement): void {
+  ta.style.height = "auto";
+  ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
+}
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 // ── Generate ──────────────────────────────────────────────────────────
@@ -567,11 +756,25 @@ function handleDownloadLatex(): void {
 }
 
 function setGenerationMode(mode: "cheatsheet" | "exam"): void {
+  // Persist current mode's state before switching.
+  generateModeState[generationMode] = {
+    scopeNotes: elements.scopeNotes.value,
+    latex: latestLatex,
+  };
+
   generationMode = mode;
   elements.modeButtons.forEach((button) =>
     button.classList.toggle("active", button.dataset.mode === mode)
   );
   elements.questionCountField.classList.toggle("hidden", mode !== "exam");
+
+  // Restore the new mode's state.
+  const saved = generateModeState[mode];
+  elements.scopeNotes.value = saved.scopeNotes;
+  latestLatex = saved.latex;
+  elements.latexOutput.textContent = saved.latex;
+  elements.downloadLatex.disabled = !saved.latex;
+  setStatus(elements.generateStatus, "");
 }
 
 // ── Retrieve ──────────────────────────────────────────────────────────
@@ -597,28 +800,69 @@ async function handleRetrieve(): Promise<void> {
 
 // ── Render helpers ────────────────────────────────────────────────────
 
+function buildCitationUrl(c: { source_url?: string | null; start_seconds?: number | null; page?: number | null }): string | null {
+  if (!c.source_url) return null;
+  if (c.start_seconds != null) {
+    const sep = c.source_url.includes("?") ? "&" : "?";
+    return `${c.source_url}${sep}start=${Math.floor(c.start_seconds)}`;
+  }
+  if (c.page != null) return `${c.source_url}#page=${c.page}`;
+  return c.source_url;
+}
+
+function buildChunkUrl(chunk: SearchResult["chunk"]): string | null {
+  const startSeconds = chunk.metadata["start_seconds"];
+  const page = chunk.metadata["page"];
+  return buildCitationUrl({
+    source_url: chunk.source_url,
+    start_seconds: typeof startSeconds === "number" ? startSeconds : null,
+    page: typeof page === "number" ? page : null,
+  });
+}
+
+function chunkLocator(chunk: SearchResult["chunk"]): string {
+  const startSeconds = chunk.metadata["start_seconds"];
+  const page = chunk.metadata["page"];
+  if (typeof startSeconds === "number") return ` · ${formatSeconds(startSeconds)}`;
+  if (typeof page === "number") return ` · p.${page}`;
+  return ` · chunk ${chunk.position}`;
+}
+
 function renderResults(results: SearchResult[]): void {
   elements.retrieveResults.replaceChildren(
     ...results.map((result) =>
       resultNode(
         resultTitle(result),
         clippedText(result.chunk.text),
-        `${result.chunk.kind} · ${scoreLabel(result.score)} · chunk ${result.chunk.position}`
+        `${result.chunk.kind} · ${scoreLabel(result.score)}${chunkLocator(result.chunk)}`,
+        buildChunkUrl(result.chunk),
       )
     )
   );
 }
 
-function resultNode(title: string, text: string, meta: string): HTMLElement {
+function resultNode(title: string, text: string, meta: string, url?: string | null): HTMLElement {
   const article = document.createElement("article");
   article.className = "result-item";
 
   const header = document.createElement("div");
   header.className = "result-meta";
 
-  const titleNode = document.createElement("span");
-  titleNode.className = "result-title";
-  titleNode.textContent = title;
+  let titleEl: HTMLElement;
+  if (url) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "result-title result-title-link";
+    a.textContent = title;
+    titleEl = a;
+  } else {
+    const span = document.createElement("span");
+    span.className = "result-title";
+    span.textContent = title;
+    titleEl = span;
+  }
 
   const metaNode = document.createElement("span");
   metaNode.textContent = meta;
@@ -627,7 +871,7 @@ function resultNode(title: string, text: string, meta: string): HTMLElement {
   body.className = "result-text";
   body.textContent = text;
 
-  header.append(titleNode, metaNode);
+  header.append(titleEl, metaNode);
   article.append(header, body);
   return article;
 }

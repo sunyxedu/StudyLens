@@ -69,6 +69,8 @@ def _citations(results: list[SearchResult]) -> list[Citation]:
             source_url=result.chunk.source_url,
             position=result.chunk.position,
             quote=result.chunk.text[:240],
+            page=result.chunk.metadata.get("page"),
+            start_seconds=result.chunk.metadata.get("start_seconds"),
         )
         for result in results
     ]

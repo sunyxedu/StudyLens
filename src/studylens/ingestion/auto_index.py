@@ -39,7 +39,7 @@ from studylens.errors import IngestionError, UnsupportedDocumentError
 from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.browser_session import AsyncFetcher, BrowserFetcher, BrowserSession
 from studylens.ingestion.captions import build_caption_chunks, parse_caption_segments
-from studylens.ingestion.documents import build_chunks, extract_text
+from studylens.ingestion.documents import build_chunks, build_pdf_chunks, extract_text
 from studylens.ingestion.exams_agent import discover_past_exams
 from studylens.ingestion.llm_extractor import LLMCourseExtractor
 from studylens.ingestion.manifest import (
@@ -190,7 +190,6 @@ class CourseAutoIndexer:
             discovered_resources=len(manifest.items),
         )
         course_dir = self._course_dir(manifest.course_id)
-
         for item in manifest.items:
             stage = str(item.metadata.get("stage", "scientia"))
             if not item.local_path:
@@ -579,6 +578,8 @@ class CourseAutoIndexer:
             raise UnsupportedDocumentError(
                 f"Unsupported document type for {local_path.name}: {suffix or 'unknown'}"
             )
+        if local_path.suffix.lower() == ".pdf":
+            return build_pdf_chunks(resource, local_path)
         text = extract_text(local_path)
         return build_chunks(resource, text)
 

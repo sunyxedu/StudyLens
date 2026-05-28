@@ -9,7 +9,7 @@ from studylens.ingestion.browser_session import (
     BrowserSession,
     HttpFetcher,
 )
-from studylens.ingestion.documents import build_chunks, chunk_text, extract_text
+from studylens.ingestion.documents import build_chunks, build_pdf_chunks, chunk_text, extract_text
 from studylens.ingestion.edstem import (
     EdStemCrawler,
     EdStemIndexer,
@@ -41,6 +41,7 @@ __all__ = [
     "LLMCourseExtractor",
     "build_auto_indexer",
     "build_chunks",
+    "build_pdf_chunks",
     "build_edstem_indexer",
     "build_exams_indexer",
     "chunk_text",

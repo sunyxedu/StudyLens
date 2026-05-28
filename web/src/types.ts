@@ -15,6 +15,8 @@ export interface Citation {
   source_url?: string | null;
   position?: number | null;
   quote?: string | null;
+  page?: number | null;
+  start_seconds?: number | null;
 }
 
 export interface Answer {
@@ -111,4 +113,21 @@ export interface DiscoverCoursesResponse {
   num_turns: number;
   total_cost_usd: number;
   error?: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: Citation[];
+  timestamp: number;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  courseId: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
 }
