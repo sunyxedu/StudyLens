@@ -5,7 +5,7 @@ export interface AppSettings {
 const STORAGE_KEY = "studylens.web.settings";
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  backendUrl: "http://localhost:8000",
+  backendUrl: "https://studylens-production.up.railway.app",
 };
 
 export function loadSettings(storage: Storage = localStorage): AppSettings {
