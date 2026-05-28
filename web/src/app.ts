@@ -141,7 +141,7 @@ function enterCourse(course: DiscoveredCourse): void {
   elements.coursePageCode.textContent = course.code;
   elements.coursePageTitle.textContent = stripCodePrefix(course.title);
   elements.reindexStatus.textContent = course.indexed_at
-    ? `Indexed ${formatTimestamp(course.indexed_at)}`
+    ? `Processed ${formatTimestamp(course.indexed_at)}`
     : "";
   byId("view-courses").classList.remove("active");
   byId("view-course").classList.add("active");
@@ -265,7 +265,7 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   const meta = document.createElement("span");
   meta.className = "course-url";
   if (course.indexed_at) {
-    meta.textContent = `Indexed ${formatTimestamp(course.indexed_at)}`;
+    meta.textContent = `Processed ${formatTimestamp(course.indexed_at)}`;
   } else if (course.edstem_url) {
     meta.textContent = shortUrl(course.edstem_url);
     meta.title = course.edstem_url;
@@ -300,7 +300,7 @@ function updateCoursesActions(): void {
   const selectedCount = selectedCourseCodes.size;
   elements.coursesIndex.disabled = selectedCount === 0;
   elements.coursesIndex.textContent =
-    selectedCount > 0 ? `Index ${selectedCount} selected` : "Index selected";
+    selectedCount > 0 ? `Process ${selectedCount} selected` : "Process selected";
   elements.coursesSelectAll.hidden = discoveredCourses.length === 0;
   elements.coursesSelectAll.textContent =
     selectedCount === discoveredCourses.length && discoveredCourses.length > 0
@@ -370,7 +370,7 @@ async function handleIndexSelected(): Promise<void> {
         `[data-code="${course.code}"]`
       );
       if (!row) continue;
-      setProgressStatus(row, "running", "Indexing…");
+      setProgressStatus(row, "running", "Processing…");
       try {
         const report = await api.autoIndexCourse({
           course_id: course.code,
@@ -387,13 +387,13 @@ async function handleIndexSelected(): Promise<void> {
           discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: new Date().toISOString() };
         }
       } catch (error) {
-        setProgressStatus(row, "running", "Checking index status…");
+        setProgressStatus(row, "running", "Checking status…");
         const indexedCourse = await confirmIndexedCourse(course.code);
         if (indexedCourse?.indexed_at) {
           setProgressStatus(
             row,
             "done",
-            `Indexed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`
+            `Processed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`
           );
         } else {
           setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
@@ -471,7 +471,7 @@ async function handleReindex(): Promise<void> {
   if (!currentCourse) return;
   const course = currentCourse;
   elements.reindexBtn.disabled = true;
-  elements.reindexStatus.textContent = "Indexing…";
+  elements.reindexStatus.textContent = "Processing…";
   elements.reindexStatus.style.color = "var(--muted)";
   try {
     const report = await api.autoIndexCourse({
@@ -484,15 +484,15 @@ async function handleReindex(): Promise<void> {
     if (idx >= 0) discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: ts };
     currentCourse = { ...course, indexed_at: ts };
     elements.reindexStatus.textContent =
-      `Indexed ${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks · ${formatTimestamp(ts)}`;
+      `Processed ${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks · ${formatTimestamp(ts)}`;
     elements.reindexStatus.style.color = "var(--muted)";
   } catch (error) {
-    elements.reindexStatus.textContent = "Checking index status…";
+    elements.reindexStatus.textContent = "Checking status…";
     const indexedCourse = await confirmIndexedCourse(course.code);
     if (indexedCourse?.indexed_at) {
       currentCourse = indexedCourse;
       elements.reindexStatus.textContent =
-        `Indexed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`;
+        `Processed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`;
       elements.reindexStatus.style.color = "var(--muted)";
     } else {
       elements.reindexStatus.textContent = error instanceof Error ? error.message : "Failed";

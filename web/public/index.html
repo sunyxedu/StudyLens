@@ -31,14 +31,14 @@
           </div>
           <p class="course-intro">
             <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
-            Tick the ones you want, then <strong>Index selected</strong> runs Scientia,
-            Panopto, past exams, and EdStem for each. Once indexed, click
+            Tick the ones you want, then <strong>Process selected</strong> runs Scientia,
+            Panopto, past exams, and EdStem for each. Once processed, click
             <strong>Enter →</strong> to open a course.
           </p>
           <div class="actions">
             <button id="courses-discover" class="button primary" type="button">Discover</button>
             <button id="courses-index" class="button primary" type="button" disabled>
-              Index selected
+              Process selected
             </button>
             <button id="courses-select-all" class="button secondary" type="button" hidden>
               Select all
@@ -47,7 +47,7 @@
           </div>
           <ul id="courses-list" class="course-list" role="list"></ul>
           <section id="courses-progress" class="course-progress" hidden>
-            <h3 class="course-progress-title">Indexing progress</h3>
+            <h3 class="course-progress-title">Processing progress</h3>
             <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
           </section>
         </section>
@@ -62,7 +62,7 @@
               <span id="course-page-title" class="course-header-title"></span>
             </div>
             <div class="course-page-meta">
-              <button id="reindex-btn" class="reindex-btn" type="button">↻ Re-index</button>
+              <button id="reindex-btn" class="reindex-btn" type="button">↻ Re-process</button>
               <span id="reindex-status" class="reindex-status"></span>
             </div>
           </div>
