@@ -112,3 +112,20 @@ export interface DiscoverCoursesResponse {
   total_cost_usd: number;
   error?: string | null;
 }
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: Citation[];
+  timestamp: number;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  courseId: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
