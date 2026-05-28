@@ -177,6 +177,7 @@ function enterCourse(course: DiscoveredCourse): void {
   byId("view-courses").classList.remove("active");
   byId("view-course").classList.add("active");
   activateCourseTab("ask");
+  setStatus(elements.askStatus, "");
   initChatForCourse(course.code);
   elements.retrieveResults.replaceChildren();
 }
