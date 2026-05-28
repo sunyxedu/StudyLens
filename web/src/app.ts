@@ -1,17 +1,14 @@
-import { StudyLensApi, normalizeBaseUrl } from "./api.js";
+import { StudyLensApi } from "./api.js";
 import {
   loadSettings,
   parseScopeNotes,
   resolveBackendUrl,
   sanitizeFilename,
-  saveSettings,
 } from "./state.js";
 import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
 import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
-  backendUrl: byId<HTMLInputElement>("backend-url"),
-  saveBackend: byId<HTMLButtonElement>("save-backend"),
   healthPill: byId<HTMLSpanElement>("health-pill"),
   // Course library (main page)
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
@@ -67,10 +64,8 @@ init();
 function init(): void {
   const settings = loadSettings();
   settings.backendUrl = resolveBackendUrl(settings, window.location);
-  elements.backendUrl.value = settings.backendUrl;
   api = new StudyLensApi(settings.backendUrl);
 
-  elements.saveBackend.addEventListener("click", handleSaveSettings);
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.askSubmit.addEventListener("click", handleAsk);
@@ -128,15 +123,7 @@ function activateCourseTab(tab: string): void {
   });
 }
 
-// ── Settings / health ────────────────────────────────────────────────
-
-function handleSaveSettings(): void {
-  const backendUrl = normalizeBaseUrl(elements.backendUrl.value);
-  elements.backendUrl.value = backendUrl;
-  api = new StudyLensApi(backendUrl);
-  saveSettings({ backendUrl });
-  void refreshHealth();
-}
+// ── Health ──────────────────────────────────────────────────────────
 
 async function refreshHealth(): Promise<void> {
   elements.healthPill.textContent = "Checking";
