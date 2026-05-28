@@ -5,6 +5,46 @@ import {
   resolveBackendUrl,
   sanitizeFilename,
 } from "./state.js";
+import { marked } from "marked";
+import type { Tokens } from "marked";
+import markedKatex from "marked-katex-extension";
+import hljs from "highlight.js/lib/common";
+
+marked.use(markedKatex({ throwOnError: false }));
+
+marked.use({
+  renderer: {
+    code({ text, lang }: Tokens.Code): string {
+      const language = lang && hljs.getLanguage(lang) ? lang : "plaintext";
+      const highlighted = hljs.highlight(text, { language }).value;
+      return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>\n`;
+    },
+  },
+});
+
+const CALLOUT_TITLES: Record<string, string> = {
+  NOTE: "Note", TIP: "Tip", IMPORTANT: "Important", WARNING: "Warning", CAUTION: "Caution",
+};
+
+function preprocessMath(text: string): string {
+  // marked strips backslashes from \[ and \( before KaTeX gets a chance to see them.
+  // Convert to $$ / $ so they survive markdown parsing.
+  return text
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_m, math: string) => `$$${math}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_m, math: string) => `$${math}$`);
+}
+
+function renderAnswer(markdown: string): string {
+  const html = marked.parse(preprocessMath(markdown)) as string;
+  // Transform GFM callouts: > [!NOTE] / > [!WARNING] etc.
+  return html.replace(
+    /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*([\s\S]*?)<\/blockquote>/gi,
+    (_match, type: string, inner: string) => {
+      const t = type.toUpperCase();
+      return `<div class="callout callout-${t.toLowerCase()}"><strong class="callout-label">${CALLOUT_TITLES[t]}</strong><p>${inner}</div>`;
+    }
+  );
+}
 import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
 import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
@@ -479,7 +519,7 @@ async function handleAsk(): Promise<void> {
       top_k: numeric(elements.askTopK.value, 5),
       include_exercises: elements.askExercises.checked,
     });
-    elements.answerCard.textContent = answer.answer;
+    elements.answerCard.innerHTML = renderAnswer(answer.answer);
     elements.answerCard.classList.remove("hidden");
     elements.citationList.replaceChildren(
       ...answer.citations.map((citation, index) =>

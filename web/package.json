@@ -10,7 +10,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
+    "marked": "^18.0.4",
+    "marked-katex-extension": "^5.1.9"
   }
 }
-
