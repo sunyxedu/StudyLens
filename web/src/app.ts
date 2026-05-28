@@ -49,7 +49,6 @@ import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js
 import type { DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
-  healthPill: byId<HTMLSpanElement>("health-pill"),
   // Course library (main page)
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
@@ -59,6 +58,11 @@ const elements = {
   coursesList: byId<HTMLUListElement>("courses-list"),
   coursesProgress: byId<HTMLElement>("courses-progress"),
   coursesProgressList: byId<HTMLUListElement>("courses-progress-list"),
+  // Sidebar course context
+  sidebarCourseContext: byId<HTMLElement>("sidebar-course-context"),
+  sidebarCourseCode: byId<HTMLSpanElement>("sidebar-course-code"),
+  sidebarCourseTitle: byId<HTMLSpanElement>("sidebar-course-title"),
+  sidebarCourseNav: byId<HTMLElement>("sidebar-course-nav"),
   // Course sub-page header
   backToCoursesBtn: byId<HTMLButtonElement>("back-to-courses"),
   coursePageCode: byId<HTMLSpanElement>("course-page-code"),
@@ -91,6 +95,8 @@ const elements = {
   retrieveResults: byId<HTMLElement>("retrieve-results"),
 };
 
+const shell = document.querySelector<HTMLElement>(".shell")!;
+
 let api = new StudyLensApi("http://localhost:8000");
 let generationMode: "cheatsheet" | "exam" = "cheatsheet";
 let latestLatex = "";
@@ -119,20 +125,22 @@ function init(): void {
       setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet")
     );
   });
-  document.querySelectorAll<HTMLButtonElement>(".course-tab").forEach((btn) => {
+  document.querySelectorAll<HTMLButtonElement>(".sidebar-nav-item[data-tab]").forEach((btn) => {
     btn.addEventListener("click", () => activateCourseTab(btn.dataset.tab ?? "ask"));
   });
 
   updateCoursesActions();
-  void refreshHealth();
   void loadCachedCourses();
 }
 
 // ── Navigation ────────────────────────────────────────────────────────
 
 function showCoursesPage(): void {
+  shell.classList.add("mode-courses");
   byId("view-courses").classList.add("active");
   byId("view-course").classList.remove("active");
+  elements.sidebarCourseContext.classList.add("hidden");
+  elements.sidebarCourseNav.classList.add("hidden");
   currentCourse = null;
 }
 
@@ -143,6 +151,11 @@ function enterCourse(course: DiscoveredCourse): void {
   elements.reindexStatus.textContent = course.indexed_at
     ? `Processed ${formatTimestamp(course.indexed_at)}`
     : "";
+  elements.sidebarCourseCode.textContent = course.code;
+  elements.sidebarCourseTitle.textContent = stripCodePrefix(course.title);
+  elements.sidebarCourseContext.classList.remove("hidden");
+  elements.sidebarCourseNav.classList.remove("hidden");
+  shell.classList.remove("mode-courses");
   byId("view-courses").classList.remove("active");
   byId("view-course").classList.add("active");
   activateCourseTab("ask");
@@ -154,27 +167,12 @@ function enterCourse(course: DiscoveredCourse): void {
 }
 
 function activateCourseTab(tab: string): void {
-  document.querySelectorAll<HTMLButtonElement>(".course-tab").forEach((btn) => {
+  document.querySelectorAll<HTMLButtonElement>(".sidebar-nav-item[data-tab]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === tab);
   });
   document.querySelectorAll<HTMLElement>(".tab-panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === `tab-${tab}`);
   });
-}
-
-// ── Health ──────────────────────────────────────────────────────────
-
-async function refreshHealth(): Promise<void> {
-  elements.healthPill.textContent = "Checking";
-  elements.healthPill.className = "pill neutral";
-  try {
-    const health = await api.health();
-    elements.healthPill.textContent = health.vector_store;
-    elements.healthPill.className = "pill ok";
-  } catch {
-    elements.healthPill.textContent = "Offline";
-    elements.healthPill.className = "pill error";
-  }
 }
 
 // ── Course library ────────────────────────────────────────────────────

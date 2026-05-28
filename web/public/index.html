@@ -9,15 +9,26 @@
     <link rel="stylesheet" href="hljs.min.css" />
   </head>
   <body>
-    <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">SL</div>
+        <h1>StudyLens</h1>
+      </div>
+    </header>
+    <main class="shell mode-courses">
       <aside class="sidebar">
-        <header class="brand">
-          <div class="brand-mark">SL</div>
-          <div>
-            <h1>StudyLens</h1>
-            <span id="health-pill" class="pill neutral">Checking</span>
-          </div>
-        </header>
+
+        <div id="sidebar-course-context" class="sidebar-course-context hidden">
+          <span id="sidebar-course-code" class="course-code"></span>
+          <span id="sidebar-course-title" class="sidebar-course-title"></span>
+        </div>
+
+        <nav id="sidebar-course-nav" class="sidebar-course-nav hidden" role="tablist" aria-label="Course tools">
+          <button class="sidebar-nav-item" data-tab="ask" role="tab" type="button">Ask</button>
+          <button class="sidebar-nav-item" data-tab="generate" role="tab" type="button">Generate</button>
+          <div class="sidebar-nav-divider"></div>
+          <button class="sidebar-nav-item sidebar-nav-secondary" data-tab="retrieve" role="tab" type="button">Retrieve</button>
+        </nav>
 
       </aside>
 
@@ -66,12 +77,6 @@
               <span id="reindex-status" class="reindex-status"></span>
             </div>
           </div>
-
-          <nav class="course-nav" role="tablist" aria-label="Course tools">
-            <button class="course-tab active" data-tab="ask" role="tab" type="button">Ask</button>
-            <button class="course-tab" data-tab="generate" role="tab" type="button">Generate</button>
-            <button class="course-tab course-tab-secondary" data-tab="retrieve" role="tab" type="button">Retrieve</button>
-          </nav>
 
           <!-- Ask tab ──────────────────────────────────────────── -->
           <div class="tab-panel active" id="tab-ask" role="tabpanel">
