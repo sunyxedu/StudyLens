@@ -77,9 +77,20 @@ test("resolveBackendUrl uses current origin for API-served app", () => {
 });
 
 test("render helpers produce compact labels", () => {
+  // No page/timestamp → only title shown (chunk position no longer displayed)
   assert.equal(
     citationLabel({ course_id: "C", resource_id: "r", title: "Lecture", position: 2 }, 0),
-    "1. Lecture · #2",
+    "1. Lecture",
+  );
+  // PDF page number
+  assert.equal(
+    citationLabel({ course_id: "C", resource_id: "r", title: "Lecture", page: 5 }, 0),
+    "1. Lecture · p.5",
+  );
+  // Video timestamp
+  assert.equal(
+    citationLabel({ course_id: "C", resource_id: "r", title: "Lecture", start_seconds: 154 }, 0),
+    "1. Lecture · 2:34",
   );
   assert.equal(scoreLabel(0.873), "87%");
   assert.equal(clippedText("abc", 10), "abc");
