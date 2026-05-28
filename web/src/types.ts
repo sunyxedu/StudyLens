@@ -15,6 +15,8 @@ export interface Citation {
   source_url?: string | null;
   position?: number | null;
   quote?: string | null;
+  page?: number | null;
+  start_seconds?: number | null;
 }
 
 export interface Answer {

@@ -393,6 +393,15 @@ textarea:focus {
   font-weight: 800;
 }
 
+.result-title-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.result-title-link:hover {
+  text-decoration: underline;
+}
+
 .result-text {
   margin: 0;
   color: #30383b;

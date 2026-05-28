@@ -52,7 +52,7 @@ function renderAnswer(markdown: string): string {
     }
   );
 }
-import { citationLabel, clippedText, resultTitle, scoreLabel } from "./render.js";
+import { citationLabel, clippedText, formatSeconds, resultTitle, scoreLabel } from "./render.js";
 import type { ChatMessage, Conversation, DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
 
 const elements = {
@@ -676,7 +676,8 @@ function createMessageEl(msg: ChatMessage): HTMLElement {
       chip.className = "chat-citation-chip";
       chip.textContent = citationLabel(c, i);
       chip.title = citationLabel(c, i);
-      if (c.source_url) { chip.href = c.source_url; chip.target = "_blank"; chip.rel = "noopener noreferrer"; }
+      const url = buildCitationUrl(c);
+      if (url) { chip.href = url; chip.target = "_blank"; chip.rel = "noopener noreferrer"; }
       cites.appendChild(chip);
     });
     wrap.appendChild(cites);
@@ -779,28 +780,69 @@ async function handleRetrieve(): Promise<void> {
 
 // ── Render helpers ────────────────────────────────────────────────────
 
+function buildCitationUrl(c: { source_url?: string | null; start_seconds?: number | null; page?: number | null }): string | null {
+  if (!c.source_url) return null;
+  if (c.start_seconds != null) {
+    const sep = c.source_url.includes("?") ? "&" : "?";
+    return `${c.source_url}${sep}start=${Math.floor(c.start_seconds)}`;
+  }
+  if (c.page != null) return `${c.source_url}#page=${c.page}`;
+  return c.source_url;
+}
+
+function buildChunkUrl(chunk: SearchResult["chunk"]): string | null {
+  const startSeconds = chunk.metadata["start_seconds"];
+  const page = chunk.metadata["page"];
+  return buildCitationUrl({
+    source_url: chunk.source_url,
+    start_seconds: typeof startSeconds === "number" ? startSeconds : null,
+    page: typeof page === "number" ? page : null,
+  });
+}
+
+function chunkLocator(chunk: SearchResult["chunk"]): string {
+  const startSeconds = chunk.metadata["start_seconds"];
+  const page = chunk.metadata["page"];
+  if (typeof startSeconds === "number") return ` · ${formatSeconds(startSeconds)}`;
+  if (typeof page === "number") return ` · p.${page}`;
+  return ` · chunk ${chunk.position}`;
+}
+
 function renderResults(results: SearchResult[]): void {
   elements.retrieveResults.replaceChildren(
     ...results.map((result) =>
       resultNode(
         resultTitle(result),
         clippedText(result.chunk.text),
-        `${result.chunk.kind} · ${scoreLabel(result.score)} · chunk ${result.chunk.position}`
+        `${result.chunk.kind} · ${scoreLabel(result.score)}${chunkLocator(result.chunk)}`,
+        buildChunkUrl(result.chunk),
       )
     )
   );
 }
 
-function resultNode(title: string, text: string, meta: string): HTMLElement {
+function resultNode(title: string, text: string, meta: string, url?: string | null): HTMLElement {
   const article = document.createElement("article");
   article.className = "result-item";
 
   const header = document.createElement("div");
   header.className = "result-meta";
 
-  const titleNode = document.createElement("span");
-  titleNode.className = "result-title";
-  titleNode.textContent = title;
+  let titleEl: HTMLElement;
+  if (url) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "result-title result-title-link";
+    a.textContent = title;
+    titleEl = a;
+  } else {
+    const span = document.createElement("span");
+    span.className = "result-title";
+    span.textContent = title;
+    titleEl = span;
+  }
 
   const metaNode = document.createElement("span");
   metaNode.textContent = meta;
@@ -809,7 +851,7 @@ function resultNode(title: string, text: string, meta: string): HTMLElement {
   body.className = "result-text";
   body.textContent = text;
 
-  header.append(titleNode, metaNode);
+  header.append(titleEl, metaNode);
   article.append(header, body);
   return article;
 }
