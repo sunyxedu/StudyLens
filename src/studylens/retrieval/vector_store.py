@@ -98,6 +98,20 @@ def _qdrant_filter(
     return models.Filter(must=conditions) if conditions else None
 
 
+def _qdrant_vector_size(vectors_config: object) -> int | None:
+    if isinstance(vectors_config, models.VectorParams):
+        return int(vectors_config.size)
+    if isinstance(vectors_config, dict):
+        unnamed_vector = vectors_config.get("") or vectors_config.get("default")
+        return (
+            int(unnamed_vector.size)
+            if isinstance(unnamed_vector, models.VectorParams)
+            else None
+        )
+    size = getattr(vectors_config, "size", None)
+    return int(size) if isinstance(size, int) else None
+
+
 @dataclass(slots=True)
 class QdrantVectorStore:
     collection_name: str
@@ -122,7 +136,19 @@ class QdrantVectorStore:
     def initialize(self) -> None:
         assert self.client is not None
         if self.client.collection_exists(self.collection_name):
-            return
+            collection = self.client.get_collection(self.collection_name)
+            existing_dimensions = _qdrant_vector_size(collection.config.params.vectors)
+            if existing_dimensions == self.dimensions:
+                return
+            warnings.warn(
+                "Recreating Qdrant collection "
+                f"{self.collection_name!r}: existing vector size "
+                f"{existing_dimensions or 'unknown'} does not match configured size "
+                f"{self.dimensions}.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self.client.delete_collection(self.collection_name)
         self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=models.VectorParams(

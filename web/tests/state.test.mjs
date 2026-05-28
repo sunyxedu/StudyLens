@@ -36,6 +36,14 @@ test("loadSettings tolerates invalid storage", () => {
   assert.deepEqual(loadSettings(storage), DEFAULT_SETTINGS);
 });
 
+test("default backend can be injected at build runtime", async () => {
+  globalThis.STUDYLENS_BACKEND_URL = "https://api.example.com";
+  const state = await import(`../dist/state.js?configured=${Date.now()}`);
+  delete globalThis.STUDYLENS_BACKEND_URL;
+
+  assert.equal(state.DEFAULT_SETTINGS.backendUrl, "https://api.example.com");
+});
+
 test("scope notes and filenames are normalized", () => {
   assert.deepEqual(parseScopeNotes("Week 1\n\n No flow "), ["Week 1", "No flow"]);
   assert.equal(sanitizeFilename("COMP70001 Cheatsheet.tex"), "comp70001-cheatsheet-tex");
@@ -49,6 +57,14 @@ test("resolveBackendUrl uses current origin for API-served app", () => {
       port: "8000"
     }),
     "http://127.0.0.1:8000",
+  );
+  assert.equal(
+    resolveBackendUrl(DEFAULT_SETTINGS, {
+      origin: "https://study-api.up.railway.app",
+      pathname: "/app",
+      port: ""
+    }),
+    "https://study-api.up.railway.app",
   );
   assert.equal(
     resolveBackendUrl({ ...DEFAULT_SETTINGS, backendUrl: "http://api.local" }, {

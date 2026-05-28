@@ -3,17 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from studylens.generation.common import (
+    CourseContextProvider,
     auto_scope_notes,
     format_scope_notes,
-    format_search_results,
     wrap_latex_document,
 )
-from studylens.retrieval.qa import LLMClient, RAGService
+from studylens.retrieval.qa import LLMClient
 
 
 @dataclass(slots=True)
 class CheatsheetGenerator:
-    rag: RAGService
+    context_provider: CourseContextProvider
     llm: LLMClient
 
     def generate(
@@ -24,14 +24,17 @@ class CheatsheetGenerator:
         scope_notes: list[str] | None = None,
         top_k: int = 40,
     ) -> str:
-        notes = scope_notes if scope_notes else auto_scope_notes(self.rag, course_id=course_id)
-        results = self.rag.retrieve(
-            "all examinable definitions theorems algorithms methods pitfalls formulas examples",
-            course_id=course_id,
-            kinds={"material", "exercise", "tutorial", "transcript", "past_exam"},
-            top_k=top_k,
+        del top_k
+        notes = (
+            scope_notes
+            if scope_notes
+            else auto_scope_notes(self.context_provider, course_id=course_id)
         )
-        context = format_search_results(results, max_chars=14000)
+        context = self.context_provider.format_course_context(
+            course_id=course_id,
+            kinds=None,
+            max_chars=180_000,
+        )
         prompt = f"""
 Create a dense two-page A4 LaTeX cheatsheet for {course_title} ({course_id}).
 
@@ -43,7 +46,7 @@ Rules:
 - Respect these EdStem/exam-scope notes:
 {format_scope_notes(notes)}
 
-Course context:
+Full local course-file context:
 {context}
 """
         body = self.llm.complete(

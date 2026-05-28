@@ -3,17 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from studylens.generation.common import (
+    CourseContextProvider,
     auto_scope_notes,
     format_scope_notes,
-    format_search_results,
     wrap_latex_document,
 )
-from studylens.retrieval.qa import LLMClient, RAGService
+from studylens.retrieval.qa import LLMClient
 
 
 @dataclass(slots=True)
 class PredictedExamGenerator:
-    rag: RAGService
+    context_provider: CourseContextProvider
     llm: LLMClient
 
     def generate(
@@ -25,14 +25,17 @@ class PredictedExamGenerator:
         question_count: int = 4,
         top_k: int = 50,
     ) -> str:
-        notes = scope_notes if scope_notes else auto_scope_notes(self.rag, course_id=course_id)
-        past_exam_results = self.rag.retrieve(
-            "past exam paper questions marking style recurring topics likely assessment structure",
-            course_id=course_id,
-            kinds={"past_exam", "exercise", "tutorial", "material"},
-            top_k=top_k,
+        del top_k
+        notes = (
+            scope_notes
+            if scope_notes
+            else auto_scope_notes(self.context_provider, course_id=course_id)
         )
-        context = format_search_results(past_exam_results, max_chars=15000)
+        context = self.context_provider.format_course_context(
+            course_id=course_id,
+            kinds=None,
+            max_chars=180_000,
+        )
         prompt = f"""
 Predict a plausible upcoming exam paper for {course_title} ({course_id}).
 
@@ -44,7 +47,7 @@ Rules:
 - Apply these scope notes:
 {format_scope_notes(notes)}
 
-Past-paper and course context:
+Full local course-file context:
 {context}
 """
         body = self.llm.complete(

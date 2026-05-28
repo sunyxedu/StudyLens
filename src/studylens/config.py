@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_embedding_dimensions: int = 1536
     openai_chat_model: str = "gpt-4.1-mini"
 
     anthropic_api_key: str | None = None
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     imperial_username: str | None = None
     imperial_password: str | None = None
     browser_storage_state: Path | None = None
+    admin_token: str | None = None
 
     # /2526/modules is the "all my enrolled modules" list. /2526/timeline is the
     # filtered "recent activity" feed and doesn't list courses without current

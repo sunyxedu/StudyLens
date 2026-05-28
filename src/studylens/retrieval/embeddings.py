@@ -63,6 +63,10 @@ class OpenAIEmbeddingClient:
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
-        response = self.client.embeddings.create(model=self.model, input=list(texts))
+        kwargs = (
+            {"dimensions": self.dimensions}
+            if self.model.startswith("text-embedding-3")
+            else {}
+        )
+        response = self.client.embeddings.create(model=self.model, input=list(texts), **kwargs)
         return [list(item.embedding) for item in response.data]
-

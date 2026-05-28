@@ -27,6 +27,7 @@ def build_rag_service(settings: Settings | None = None) -> RAGService:
         embeddings = OpenAIEmbeddingClient(
             api_key=settings.openai_api_key,
             model=settings.openai_embedding_model,
+            dimensions=settings.openai_embedding_dimensions,
         )
         llm = OpenAIChatClient(api_key=settings.openai_api_key, model=settings.openai_chat_model)
     else:
@@ -35,4 +36,3 @@ def build_rag_service(settings: Settings | None = None) -> RAGService:
 
     vector_store = build_vector_store(settings, dimensions=embeddings.dimensions)
     return RAGService(embeddings=embeddings, vector_store=vector_store, llm=llm)
-

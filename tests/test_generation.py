@@ -1,8 +1,8 @@
-from qdrant_client import QdrantClient
+from pathlib import Path
 
-from studylens.domain import DocumentChunk
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
-from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
+from studylens.generation.common import ManifestCourseContextProvider
+from studylens.ingestion.manifest import CourseManifest, ManifestItem, write_manifest
 
 
 class RecordingLLM:
@@ -17,40 +17,34 @@ class RecordingLLM:
         )
 
 
-def service_with_chunks(collection_name: str) -> tuple[RAGService, RecordingLLM]:
-    embeddings = HashEmbeddingClient(dimensions=64)
-    store = QdrantVectorStore(
-        collection_name=collection_name,
-        dimensions=64,
-        client=QdrantClient(":memory:"),
-    )
-    llm = RecordingLLM()
-    service = RAGService(embeddings=embeddings, vector_store=store, llm=llm)
-    chunks = [
-        DocumentChunk(
-            course_id="COMP70001",
-            resource_id="notes",
-            kind="material",
-            title="Lecture notes",
-            text="Dynamic programming, recurrence relations, optimal substructure.",
-            position=0,
-        ),
-        DocumentChunk(
-            course_id="COMP70001",
-            resource_id="exam-2024",
-            kind="past_exam",
-            title="2024 Paper",
-            text="Question 1 asks for a recurrence and complexity analysis.",
-            position=0,
-        ),
-    ]
-    service.index_chunks(chunks)
-    return service, llm
+class RecordingContextProvider:
+    def __init__(self, *, scope_notes: list[str] | None = None) -> None:
+        self.scope_note_values = scope_notes or []
+        self.requests: list[tuple[str, set[str] | None, int]] = []
+
+    def format_course_context(
+        self,
+        *,
+        course_id: str,
+        kinds: set[str] | None = None,
+        max_chars: int = 180_000,
+    ) -> str:
+        self.requests.append((course_id, kinds, max_chars))
+        return (
+            "[1] Lecture notes (material)\n"
+            "Dynamic programming, recurrence relations, optimal substructure.\n\n"
+            "[2] 2024 Paper (past_exam)\n"
+            "Question 1 asks for a recurrence and complexity analysis."
+        )
+
+    def scope_notes(self, *, course_id: str, max_chars: int = 12_000) -> list[str]:
+        return self.scope_note_values
 
 
 def test_cheatsheet_generator_wraps_latex_and_includes_scope_notes() -> None:
-    service, llm = service_with_chunks("cheatsheet_test")
-    generator = CheatsheetGenerator(rag=service, llm=llm)
+    llm = RecordingLLM()
+    provider = RecordingContextProvider()
+    generator = CheatsheetGenerator(context_provider=provider, llm=llm)
 
     latex = generator.generate(
         course_id="COMP70001",
@@ -62,11 +56,13 @@ def test_cheatsheet_generator_wraps_latex_and_includes_scope_notes() -> None:
     assert "\\begin{multicols*}{2}" in latex
     assert "Advanced Algorithms Cheatsheet" in latex
     assert "Network flow is not assessed" in llm.prompts[0]
+    assert provider.requests[0][1] is None
 
 
 def test_predicted_exam_generator_mentions_question_count_and_scope() -> None:
-    service, llm = service_with_chunks("exam_test")
-    generator = PredictedExamGenerator(rag=service, llm=llm)
+    llm = RecordingLLM()
+    provider = RecordingContextProvider()
+    generator = PredictedExamGenerator(context_provider=provider, llm=llm)
 
     latex = generator.generate(
         course_id="COMP70001",
@@ -78,23 +74,15 @@ def test_predicted_exam_generator_mentions_question_count_and_scope() -> None:
     assert "Predicted Paper" in latex
     assert "Produce 3 substantial questions" in llm.prompts[0]
     assert "Only weeks 1-8" in llm.prompts[0]
+    assert provider.requests[0][1] is None
 
 
-def test_cheatsheet_generator_auto_pulls_indexed_edstem_scope_notes() -> None:
-    service, llm = service_with_chunks("cheatsheet_auto_scope_test")
-    service.index_chunks(
-        [
-            DocumentChunk(
-                course_id="COMP70001",
-                resource_id="edstem-1",
-                kind="edstem_note",
-                title="Exam scope",
-                text="Network flow is not examinable this year.",
-                position=0,
-            )
-        ]
+def test_cheatsheet_generator_auto_pulls_local_edstem_scope_notes() -> None:
+    llm = RecordingLLM()
+    provider = RecordingContextProvider(
+        scope_notes=["Network flow is not examinable this year."]
     )
-    generator = CheatsheetGenerator(rag=service, llm=llm)
+    generator = CheatsheetGenerator(context_provider=provider, llm=llm)
 
     generator.generate(course_id="COMP70001", course_title="Advanced Algorithms")
 
@@ -103,20 +91,9 @@ def test_cheatsheet_generator_auto_pulls_indexed_edstem_scope_notes() -> None:
 
 
 def test_explicit_scope_notes_override_indexed_edstem_notes() -> None:
-    service, llm = service_with_chunks("cheatsheet_override_test")
-    service.index_chunks(
-        [
-            DocumentChunk(
-                course_id="COMP70001",
-                resource_id="edstem-1",
-                kind="edstem_note",
-                title="Exam scope",
-                text="Network flow is not examinable.",
-                position=0,
-            )
-        ]
-    )
-    generator = CheatsheetGenerator(rag=service, llm=llm)
+    llm = RecordingLLM()
+    provider = RecordingContextProvider(scope_notes=["Network flow is not examinable."])
+    generator = CheatsheetGenerator(context_provider=provider, llm=llm)
 
     generator.generate(
         course_id="COMP70001",
@@ -127,3 +104,54 @@ def test_explicit_scope_notes_override_indexed_edstem_notes() -> None:
     prompt = llm.prompts[-1]
     assert "Override: include greedy algorithms only" in prompt
     assert "Network flow is not examinable" not in prompt
+
+
+def test_manifest_context_provider_reads_local_course_files(tmp_path: Path) -> None:
+    course_dir = tmp_path / "COMP70001"
+    (course_dir / "material").mkdir(parents=True)
+    (course_dir / "edstem_note").mkdir()
+    (course_dir / "material" / "notes.txt").write_text(
+        "Dynamic programming and greedy algorithms.",
+        encoding="utf-8",
+    )
+    (course_dir / "edstem_note" / "scope.txt").write_text(
+        "Network flow is not examinable.",
+        encoding="utf-8",
+    )
+    write_manifest(
+        tmp_path,
+        CourseManifest(
+            course_id="COMP70001",
+            course_title="Advanced Algorithms",
+            course_url=None,
+            crawled_at="2026-01-01T00:00:00+00:00",
+            items=[
+                ManifestItem(
+                    source_url="https://example.com/notes",
+                    local_path="material/notes.txt",
+                    kind="material",
+                    title="Lecture notes",
+                    downloaded_at="2026-01-01T00:00:00+00:00",
+                    metadata={"stage": "scientia"},
+                ),
+                ManifestItem(
+                    source_url="https://example.com/scope",
+                    local_path="edstem_note/scope.txt",
+                    kind="edstem_note",
+                    title="Scope note",
+                    downloaded_at="2026-01-01T00:00:00+00:00",
+                    metadata={"stage": "edstem"},
+                ),
+            ],
+        ),
+    )
+    provider = ManifestCourseContextProvider(tmp_path)
+
+    context = provider.format_course_context(
+        course_id="COMP70001",
+        kinds={"material"},
+    )
+
+    assert "Lecture notes" in context
+    assert "Dynamic programming and greedy algorithms" in context
+    assert provider.scope_notes(course_id="COMP70001") == ["Network flow is not examinable."]

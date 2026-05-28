@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
+import secrets
 from pathlib import Path
 from typing import Protocol
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +35,7 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import Settings, get_settings
 from studylens.domain import Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
+from studylens.generation.common import ManifestCourseContextProvider
 from studylens.ingestion.auto_index import AutoIndexReport, _normalize_course_id, build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks
@@ -113,8 +116,15 @@ def create_app(
     application = FastAPI(title="StudyLens", version="0.1.0")
     application.state.settings = settings
     application.state.rag_service = service
-    application.state.cheatsheet_generator = CheatsheetGenerator(rag=service, llm=service.llm)
-    application.state.exam_generator = PredictedExamGenerator(rag=service, llm=service.llm)
+    course_context = ManifestCourseContextProvider(settings.raw_dir)
+    application.state.cheatsheet_generator = CheatsheetGenerator(
+        context_provider=course_context,
+        llm=service.llm,
+    )
+    application.state.exam_generator = PredictedExamGenerator(
+        context_provider=course_context,
+        llm=service.llm,
+    )
     application.state.auto_indexer = auto_indexer
     application.state.exams_indexer = exams_indexer
     application.state.edstem_indexer = edstem_indexer
@@ -136,6 +146,21 @@ def create_app(
     @application.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse(status="ok", vector_store=settings.vector_store)
+
+    @application.post("/admin/browser-state", include_in_schema=False)
+    def update_browser_state(
+        payload: dict, x_admin_token: str = Header(default="")
+    ) -> dict[str, str]:
+        if not settings.admin_token:
+            raise HTTPException(status_code=503, detail="admin_token not configured")
+        if not secrets.compare_digest(x_admin_token, settings.admin_token):
+            raise HTTPException(status_code=403, detail="invalid admin token")
+        target = settings.browser_storage_state or (
+            settings.data_dir / "auth" / "browser-state.json"
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        return {"status": "ok", "path": str(target)}
 
     @application.post("/chunks", response_model=IndexTextResponse)
     def index_text(payload: IndexTextRequest, request: Request) -> IndexTextResponse:

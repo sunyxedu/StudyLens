@@ -10,6 +10,7 @@ from studylens.bootstrap import build_rag_service
 from studylens.config import get_settings
 from studylens.domain import CourseSummary, Resource
 from studylens.generation import CheatsheetGenerator, PredictedExamGenerator
+from studylens.generation.common import ManifestCourseContextProvider
 from studylens.ingestion.auto_index import build_auto_indexer
 from studylens.ingestion.browser_session import BrowserSession
 from studylens.ingestion.documents import build_chunks, extract_text
@@ -154,10 +155,14 @@ def ask(
 
 @app.command("generate-cheatsheet")
 def generate_cheatsheet(course_id: str, course_title: str, output: Path) -> None:
-    """Generate a compact LaTeX cheatsheet from indexed context."""
+    """Generate a compact LaTeX cheatsheet from local course files."""
 
-    service = build_rag_service(get_settings())
-    latex = CheatsheetGenerator(rag=service, llm=service.llm).generate(
+    settings = get_settings()
+    service = build_rag_service(settings)
+    latex = CheatsheetGenerator(
+        context_provider=ManifestCourseContextProvider(settings.raw_dir),
+        llm=service.llm,
+    ).generate(
         course_id=course_id,
         course_title=course_title,
     )
@@ -167,10 +172,14 @@ def generate_cheatsheet(course_id: str, course_title: str, output: Path) -> None
 
 @app.command("generate-predicted-exam")
 def generate_predicted_exam(course_id: str, course_title: str, output: Path) -> None:
-    """Generate a predicted exam paper from indexed context."""
+    """Generate a predicted exam paper from local course files."""
 
-    service = build_rag_service(get_settings())
-    latex = PredictedExamGenerator(rag=service, llm=service.llm).generate(
+    settings = get_settings()
+    service = build_rag_service(settings)
+    latex = PredictedExamGenerator(
+        context_provider=ManifestCourseContextProvider(settings.raw_dir),
+        llm=service.llm,
+    ).generate(
         course_id=course_id,
         course_title=course_title,
     )

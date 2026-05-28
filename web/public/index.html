@@ -19,13 +19,6 @@
           </div>
         </header>
 
-        <section class="control-group">
-          <label class="field">
-            <span>Backend</span>
-            <input id="backend-url" value="http://localhost:8000" autocomplete="off" />
-          </label>
-          <button id="save-backend" class="button secondary" type="button">Save</button>
-        </section>
       </aside>
 
       <section class="workspace">
@@ -111,10 +104,6 @@
                 <button class="segment active" data-mode="cheatsheet" type="button">Cheatsheet</button>
                 <button class="segment" data-mode="exam" type="button">Predicted Paper</button>
               </div>
-              <label class="compact-field">
-                <span>Top K</span>
-                <input id="generate-top-k" type="number" min="1" max="80" value="40" />
-              </label>
               <label id="question-count-field" class="compact-field hidden">
                 <span>Questions</span>
                 <input id="question-count" type="number" min="1" max="8" value="4" />
@@ -163,6 +152,7 @@
 
       </section>
     </main>
+    <script src="config.js"></script>
     <script type="module" src="app.js"></script>
   </body>
 </html>

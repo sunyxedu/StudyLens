@@ -3,9 +3,10 @@ export interface AppSettings {
 }
 
 const STORAGE_KEY = "studylens.web.settings";
+const FALLBACK_BACKEND_URL = "https://studylens-production.up.railway.app";
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  backendUrl: "http://localhost:8000",
+  backendUrl: configuredBackendUrl(),
 };
 
 export function loadSettings(storage: Storage = localStorage): AppSettings {
@@ -33,7 +34,7 @@ export function parseScopeNotes(value: string): string[] {
 }
 
 export function resolveBackendUrl(settings: AppSettings, location: Location): string {
-  const isBundledApp = location.pathname.startsWith("/app") && location.port === "8000";
+  const isBundledApp = location.pathname.startsWith("/app");
   if (isBundledApp && settings.backendUrl === DEFAULT_SETTINGS.backendUrl) {
     return location.origin;
   }
@@ -51,4 +52,9 @@ export function sanitizeFilename(value: string): string {
 
 function stringOrDefault(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function configuredBackendUrl(): string {
+  const configured = (globalThis as { STUDYLENS_BACKEND_URL?: unknown }).STUDYLENS_BACKEND_URL;
+  return stringOrDefault(configured, FALLBACK_BACKEND_URL);
 }
