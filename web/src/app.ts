@@ -109,6 +109,11 @@ const shell = document.querySelector<HTMLElement>(".shell")!;
 let api = new StudyLensApi("http://localhost:8000");
 let generationMode: "cheatsheet" | "exam" = "cheatsheet";
 let latestLatex = "";
+
+const generateModeState: Record<"cheatsheet" | "exam", { scopeNotes: string; latex: string }> = {
+  cheatsheet: { scopeNotes: "", latex: "" },
+  exam: { scopeNotes: "", latex: "" },
+};
 let discoveredCourses: DiscoveredCourse[] = [];
 let currentCourse: DiscoveredCourse | null = null;
 const selectedCourseCodes = new Set<string>();
@@ -751,11 +756,25 @@ function handleDownloadLatex(): void {
 }
 
 function setGenerationMode(mode: "cheatsheet" | "exam"): void {
+  // Persist current mode's state before switching.
+  generateModeState[generationMode] = {
+    scopeNotes: elements.scopeNotes.value,
+    latex: latestLatex,
+  };
+
   generationMode = mode;
   elements.modeButtons.forEach((button) =>
     button.classList.toggle("active", button.dataset.mode === mode)
   );
   elements.questionCountField.classList.toggle("hidden", mode !== "exam");
+
+  // Restore the new mode's state.
+  const saved = generateModeState[mode];
+  elements.scopeNotes.value = saved.scopeNotes;
+  latestLatex = saved.latex;
+  elements.latexOutput.textContent = saved.latex;
+  elements.downloadLatex.disabled = !saved.latex;
+  setStatus(elements.generateStatus, "");
 }
 
 // ── Retrieve ──────────────────────────────────────────────────────────
