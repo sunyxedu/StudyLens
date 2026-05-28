@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Protocol
-
 import json
 import secrets
+from pathlib import Path
+from typing import Protocol
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -148,7 +147,9 @@ def create_app(
             raise HTTPException(status_code=503, detail="admin_token not configured")
         if not secrets.compare_digest(x_admin_token, settings.admin_token):
             raise HTTPException(status_code=403, detail="invalid admin token")
-        target = settings.browser_storage_state or (settings.data_dir / "auth" / "browser-state.json")
+        target = settings.browser_storage_state or (
+            settings.data_dir / "auth" / "browser-state.json"
+        )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload), encoding="utf-8")
         return {"status": "ok", "path": str(target)}
