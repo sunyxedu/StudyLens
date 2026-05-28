@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from fastapi import FastAPI, Request
+import json
+import secrets
+
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -136,6 +139,19 @@ def create_app(
     @application.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse(status="ok", vector_store=settings.vector_store)
+
+    @application.post("/admin/browser-state", include_in_schema=False)
+    def update_browser_state(
+        payload: dict, x_admin_token: str = Header(default="")
+    ) -> dict[str, str]:
+        if not settings.admin_token:
+            raise HTTPException(status_code=503, detail="admin_token not configured")
+        if not secrets.compare_digest(x_admin_token, settings.admin_token):
+            raise HTTPException(status_code=403, detail="invalid admin token")
+        target = settings.browser_storage_state or (settings.data_dir / "auth" / "browser-state.json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        return {"status": "ok", "path": str(target)}
 
     @application.post("/chunks", response_model=IndexTextResponse)
     def index_text(payload: IndexTextRequest, request: Request) -> IndexTextResponse:
