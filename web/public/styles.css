@@ -301,8 +301,10 @@ textarea:focus {
 .login-panel,
 .setup-panel {
   display: grid;
+  align-content: start;
   gap: 18px;
   width: min(100%, 560px);
+  min-height: 430px;
   margin: 0 auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -330,20 +332,8 @@ textarea:focus {
 }
 
 .login-grid .field.reserved {
-  visibility: hidden;
+  display: none;
   pointer-events: none;
-}
-
-.login-panel[data-auth-mode="login"] #login-password-field {
-  order: 2;
-}
-
-.login-panel[data-auth-mode="login"] #login-grade-field {
-  order: 3;
-}
-
-.login-panel[data-auth-mode="login"] #login-course-field {
-  order: 4;
 }
 
 .setup-body,
@@ -1458,6 +1448,10 @@ textarea:focus {
   .login-panel,
   .setup-panel {
     padding: 18px;
+  }
+
+  .login-panel {
+    min-height: 515px;
   }
 
   .login-grid {
