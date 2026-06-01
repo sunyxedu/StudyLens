@@ -304,7 +304,6 @@ textarea:focus {
   display: grid;
   align-content: start;
   gap: 18px;
-  width: min(100%, 560px);
   margin: 0 auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -313,9 +312,12 @@ textarea:focus {
   padding: 24px;
 }
 
+.login-panel {
+  width: min(100%, 440px);
+}
+
 .login-panel[data-auth-mode="register"] {
   border-color: rgba(23, 107, 93, 0.45);
-  min-height: 430px;
 }
 
 .login-panel[data-auth-mode="login"] {
@@ -329,7 +331,7 @@ textarea:focus {
 
 .login-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
 }
 
@@ -1450,10 +1452,6 @@ textarea:focus {
   .login-panel,
   .setup-panel {
     padding: 18px;
-  }
-
-  .login-panel[data-auth-mode="register"] {
-    min-height: 515px;
   }
 
   .login-grid {
