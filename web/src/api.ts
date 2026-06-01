@@ -1,11 +1,14 @@
 import type {
   Answer,
+  AuthSession,
   AskRequest,
   AutoIndexCourseRequest,
   AutoIndexReport,
+  BrowserStateStatus,
   DiscoverCoursesResponse,
   GenerateRequest,
   IndexTextRequest,
+  LoginRequest,
   PredictedExamRequest,
   RetrieveRequest,
   SearchResult,
@@ -29,6 +32,50 @@ export class StudyLensApi {
 
   async health(): Promise<{ status: string; vector_store: string }> {
     return this.request("/health");
+  }
+
+  async login(payload: LoginRequest): Promise<AuthSession> {
+    return this.request("/auth/login", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async session(): Promise<AuthSession> {
+    return this.request("/auth/session");
+  }
+
+  async logout(): Promise<{ status: string }> {
+    return this.request("/auth/logout", {
+      method: "POST",
+      headers: jsonHeaders(),
+    });
+  }
+
+  async startBrowserState(): Promise<BrowserStateStatus> {
+    return this.request("/browser-state/start", {
+      method: "POST",
+      headers: jsonHeaders(),
+    });
+  }
+
+  async advanceBrowserState(): Promise<BrowserStateStatus> {
+    return this.request("/browser-state/advance", {
+      method: "POST",
+      headers: jsonHeaders(),
+    });
+  }
+
+  async browserStateStatus(): Promise<BrowserStateStatus> {
+    return this.request("/browser-state/status");
+  }
+
+  async cancelBrowserState(): Promise<BrowserStateStatus> {
+    return this.request("/browser-state/cancel", {
+      method: "POST",
+      headers: jsonHeaders(),
+    });
   }
 
   async indexText(payload: IndexTextRequest): Promise<{ indexed_chunks: number }> {
@@ -91,7 +138,10 @@ export class StudyLensApi {
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, init);
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      ...init,
+      credentials: init?.credentials ?? "include",
+    });
     if (!response.ok) {
       throw new Error(`StudyLens API ${response.status}: ${await safeText(response)}`);
     }

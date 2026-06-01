@@ -56,6 +56,31 @@ body {
   z-index: 1;
 }
 
+.topbar-user {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.topbar-logout {
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 750;
+}
+
+.topbar-logout:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .topbar .brand-mark {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
@@ -231,8 +256,15 @@ textarea:focus {
   grid-template-columns: 1fr;
 }
 
-.shell.mode-courses .sidebar {
+.shell.mode-courses .sidebar,
+.shell.mode-login .sidebar,
+.shell.mode-setup .sidebar {
   display: none;
+}
+
+.shell.mode-login,
+.shell.mode-setup {
+  grid-template-columns: 1fr;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -259,6 +291,60 @@ textarea:focus {
   gap: 16px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 16px;
+}
+
+.auth-view.active {
+  min-height: calc(100vh - 114px);
+  align-content: center;
+}
+
+.login-panel,
+.setup-panel {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.setup-panel {
+  width: min(100%, 680px);
+}
+
+.login-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.setup-body,
+.setup-step {
+  display: grid;
+  gap: 14px;
+}
+
+.setup-step h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.setup-step p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.setup-url {
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .inline-controls,
@@ -1323,6 +1409,15 @@ textarea:focus {
   .view-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .login-panel,
+  .setup-panel {
+    padding: 18px;
+  }
+
+  .login-grid {
+    grid-template-columns: 1fr;
   }
 
   .kind-grid {

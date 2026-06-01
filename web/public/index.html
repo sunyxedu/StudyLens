@@ -14,8 +14,12 @@
         <div class="brand-mark">SL</div>
         <h1>StudyLens</h1>
       </div>
+      <div id="topbar-user" class="topbar-user hidden">
+        <span id="topbar-username"></span>
+        <button id="logout-btn" class="topbar-logout" type="button">Sign out</button>
+      </div>
     </header>
-    <main class="shell mode-courses">
+    <main class="shell mode-login">
       <aside class="sidebar">
 
         <div id="sidebar-course-context" class="sidebar-course-context hidden">
@@ -34,8 +38,62 @@
 
       <section class="workspace">
 
+        <section class="view active auth-view" id="view-login" aria-labelledby="login-title">
+          <form id="login-form" class="login-panel">
+            <div class="view-head">
+              <h2 id="login-title">Sign in</h2>
+              <span class="subtle">StudyLens</span>
+            </div>
+            <div class="login-grid">
+              <label class="field">
+                <span>Username</span>
+                <input id="login-username" name="username" autocomplete="username" required />
+              </label>
+              <label class="field">
+                <span>Grade</span>
+                <input id="login-grade" name="grade" autocomplete="organization-title" required />
+              </label>
+              <label class="field">
+                <span>Course</span>
+                <input id="login-course" name="course" autocomplete="organization" required />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="login-password" name="password" type="password" autocomplete="current-password" minlength="8" required />
+              </label>
+            </div>
+            <div class="actions">
+              <button id="login-submit" class="button primary" type="submit">Continue</button>
+              <span id="login-status" class="status"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="view auth-view" id="view-browser-state" aria-labelledby="browser-state-title">
+          <div class="setup-panel">
+            <div class="view-head">
+              <h2 id="browser-state-title">Browser Setup</h2>
+              <span id="browser-state-count" class="subtle"></span>
+            </div>
+            <div class="setup-body">
+              <div class="setup-step">
+                <span id="browser-state-step-key" class="course-code">Ready</span>
+                <h3 id="browser-state-step-title">Connect course sites</h3>
+                <p id="browser-state-instruction">Open the setup browser and sign into each site.</p>
+                <a id="browser-state-url" class="setup-url hidden" href="#" target="_blank" rel="noopener noreferrer"></a>
+              </div>
+              <div class="actions">
+                <button id="browser-state-start" class="button primary" type="button">Open Browser</button>
+                <button id="browser-state-next" class="button primary" type="button" disabled>Next</button>
+                <button id="browser-state-cancel" class="button secondary" type="button">Cancel</button>
+                <span id="browser-state-status" class="status"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ── Main page: course library ─────────────────────────── -->
-        <section class="view active" id="view-courses" aria-labelledby="courses-title">
+        <section class="view" id="view-courses" aria-labelledby="courses-title">
           <div class="view-head">
             <h2 id="courses-title">My Courses</h2>
             <span id="courses-summary" class="subtle"></span>

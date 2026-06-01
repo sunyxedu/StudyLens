@@ -53,9 +53,36 @@ function renderAnswer(markdown: string): string {
   );
 }
 import { citationLabel, clippedText, formatSeconds, resultTitle, scoreLabel } from "./render.js";
-import type { ChatMessage, Conversation, DiscoveredCourse, ResourceKind, SearchResult } from "./types.js";
+import type {
+  AuthSession,
+  BrowserStateStatus,
+  ChatMessage,
+  Conversation,
+  DiscoveredCourse,
+  ResourceKind,
+  SearchResult,
+} from "./types.js";
 
 const elements = {
+  topbarUser: byId<HTMLElement>("topbar-user"),
+  topbarUsername: byId<HTMLSpanElement>("topbar-username"),
+  logoutBtn: byId<HTMLButtonElement>("logout-btn"),
+  loginForm: byId<HTMLFormElement>("login-form"),
+  loginUsername: byId<HTMLInputElement>("login-username"),
+  loginGrade: byId<HTMLInputElement>("login-grade"),
+  loginCourse: byId<HTMLInputElement>("login-course"),
+  loginPassword: byId<HTMLInputElement>("login-password"),
+  loginSubmit: byId<HTMLButtonElement>("login-submit"),
+  loginStatus: byId<HTMLSpanElement>("login-status"),
+  browserStateStart: byId<HTMLButtonElement>("browser-state-start"),
+  browserStateNext: byId<HTMLButtonElement>("browser-state-next"),
+  browserStateCancel: byId<HTMLButtonElement>("browser-state-cancel"),
+  browserStateStatus: byId<HTMLSpanElement>("browser-state-status"),
+  browserStateCount: byId<HTMLSpanElement>("browser-state-count"),
+  browserStateStepKey: byId<HTMLSpanElement>("browser-state-step-key"),
+  browserStateStepTitle: byId<HTMLHeadingElement>("browser-state-step-title"),
+  browserStateInstruction: byId<HTMLParagraphElement>("browser-state-instruction"),
+  browserStateUrl: byId<HTMLAnchorElement>("browser-state-url"),
   // Course library (main page)
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
@@ -116,6 +143,7 @@ const generateModeState: Record<"cheatsheet" | "exam", { scopeNotes: string; lat
 };
 let discoveredCourses: DiscoveredCourse[] = [];
 let currentCourse: DiscoveredCourse | null = null;
+let authSession: AuthSession | null = null;
 const selectedCourseCodes = new Set<string>();
 let conversations: Conversation[] = [];
 let activeConversation: Conversation | null = null;
@@ -127,6 +155,14 @@ function init(): void {
   settings.backendUrl = resolveBackendUrl(settings, window.location);
   api = new StudyLensApi(settings.backendUrl);
 
+  elements.loginForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handleLogin();
+  });
+  elements.logoutBtn.addEventListener("click", () => { void handleLogout(); });
+  elements.browserStateStart.addEventListener("click", handleBrowserStateStart);
+  elements.browserStateNext.addEventListener("click", handleBrowserStateNext);
+  elements.browserStateCancel.addEventListener("click", handleBrowserStateCancel);
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.newConvBtn.addEventListener("click", handleNewConversation);
@@ -151,15 +187,185 @@ function init(): void {
   });
 
   updateCoursesActions();
+  void initializeAuth();
+}
+
+// ── Auth and setup ────────────────────────────────────────────────────
+
+async function initializeAuth(): Promise<void> {
+  try {
+    const session = await api.session();
+    handleAuthenticated(session);
+  } catch {
+    showLoginView();
+  }
+}
+
+async function handleLogin(): Promise<void> {
+  await withBusy(elements.loginSubmit, elements.loginStatus, "Signing in", async () => {
+    const session = await api.login({
+      username: elements.loginUsername.value.trim(),
+      grade: elements.loginGrade.value.trim(),
+      course: elements.loginCourse.value.trim(),
+      password: elements.loginPassword.value,
+    });
+    elements.loginPassword.value = "";
+    handleAuthenticated(session);
+  });
+}
+
+async function handleLogout(): Promise<void> {
+  try {
+    await api.logout();
+  } finally {
+    authSession = null;
+    discoveredCourses = [];
+    selectedCourseCodes.clear();
+    currentCourse = null;
+    elements.coursesList.replaceChildren();
+    elements.coursesProgressList.replaceChildren();
+    elements.retrieveResults.replaceChildren();
+    showLoginView();
+  }
+}
+
+function handleAuthenticated(session: AuthSession): void {
+  authSession = session;
+  elements.topbarUsername.textContent = `${session.user.username} · ${session.user.grade}`;
+  elements.topbarUser.classList.remove("hidden");
+  if (session.needs_browser_state) {
+    void showBrowserStateView();
+  } else {
+    showCoursesApp();
+  }
+}
+
+function showLoginView(): void {
+  shell.classList.remove("mode-courses", "mode-setup");
+  shell.classList.add("mode-login");
+  elements.topbarUser.classList.add("hidden");
+  activateTopLevelView("view-login");
+  setStatus(elements.loginStatus, "");
+  elements.loginUsername.focus();
+}
+
+async function showBrowserStateView(): Promise<void> {
+  shell.classList.remove("mode-courses", "mode-login");
+  shell.classList.add("mode-setup");
+  activateTopLevelView("view-browser-state");
+  try {
+    renderBrowserStateStatus(await api.browserStateStatus());
+  } catch (error) {
+    setStatus(
+      elements.browserStateStatus,
+      error instanceof Error ? error.message : "Setup status unavailable",
+      "error"
+    );
+  }
+}
+
+function showCoursesApp(): void {
+  shell.classList.remove("mode-login", "mode-setup");
+  shell.classList.add("mode-courses");
+  activateTopLevelView("view-courses");
+  elements.sidebarCourseContext.classList.add("hidden");
+  elements.sidebarCourseNav.classList.add("hidden");
+  currentCourse = null;
+  conversations = [];
+  activeConversation = null;
   void loadCachedCourses();
+}
+
+function activateTopLevelView(id: string): void {
+  document.querySelectorAll<HTMLElement>(".workspace > .view").forEach((view) => {
+    view.classList.toggle("active", view.id === id);
+  });
+}
+
+function handleBrowserStateStart(): void {
+  void withSetupBusy(
+    elements.browserStateStart,
+    elements.browserStateStatus,
+    "Opening",
+    () => api.startBrowserState()
+  );
+}
+
+function handleBrowserStateNext(): void {
+  void withSetupBusy(
+    elements.browserStateNext,
+    elements.browserStateStatus,
+    "Checking",
+    () => api.advanceBrowserState(),
+    (status) => {
+      if (status.ready) {
+        authSession = authSession
+          ? {
+              ...authSession,
+              browser_state_ready: true,
+              needs_browser_state: false,
+            }
+          : null;
+        showCoursesApp();
+      }
+    }
+  );
+}
+
+function handleBrowserStateCancel(): void {
+  void withSetupBusy(
+    elements.browserStateCancel,
+    elements.browserStateStatus,
+    "Closing",
+    () => api.cancelBrowserState()
+  );
+}
+
+function renderBrowserStateStatus(status: BrowserStateStatus): void {
+  elements.browserStateStart.disabled = status.running;
+  elements.browserStateNext.disabled = !status.running;
+  elements.browserStateCancel.disabled = !status.running;
+
+  if (status.step) {
+    const humanIndex = (status.step_index ?? 0) + 1;
+    elements.browserStateStepKey.textContent = status.step.key;
+    elements.browserStateStepTitle.textContent = status.step.title;
+    elements.browserStateInstruction.textContent = status.step.instruction;
+    elements.browserStateCount.textContent = `${humanIndex}/${status.total_steps}`;
+    elements.browserStateUrl.textContent = shortUrl(status.step.url);
+    elements.browserStateUrl.href = status.step.url;
+    elements.browserStateUrl.classList.remove("hidden");
+    elements.browserStateNext.textContent =
+      humanIndex === status.total_steps ? "Save cookies" : "Next site";
+  } else {
+    elements.browserStateStepKey.textContent = status.ready ? "Saved" : "Ready";
+    elements.browserStateStepTitle.textContent = status.ready
+      ? "Cookies saved"
+      : "Connect course sites";
+    elements.browserStateInstruction.textContent = status.ready
+      ? "StudyLens can now process your course materials."
+      : "Open the setup browser and sign into each site.";
+    elements.browserStateCount.textContent = "";
+    elements.browserStateUrl.classList.add("hidden");
+    elements.browserStateNext.textContent = "Next";
+  }
+
+  if (status.error) {
+    setStatus(elements.browserStateStatus, status.error, "error");
+  } else if (status.ready) {
+    setStatus(elements.browserStateStatus, "Saved");
+  } else if (status.running) {
+    setStatus(elements.browserStateStatus, "Browser is open");
+  } else {
+    setStatus(elements.browserStateStatus, "");
+  }
 }
 
 // ── Navigation ────────────────────────────────────────────────────────
 
 function showCoursesPage(): void {
   shell.classList.add("mode-courses");
-  byId("view-courses").classList.add("active");
-  byId("view-course").classList.remove("active");
+  activateTopLevelView("view-courses");
   elements.sidebarCourseContext.classList.add("hidden");
   elements.sidebarCourseNav.classList.add("hidden");
   currentCourse = null;
@@ -179,8 +385,7 @@ function enterCourse(course: DiscoveredCourse): void {
   elements.sidebarCourseContext.classList.remove("hidden");
   elements.sidebarCourseNav.classList.remove("hidden");
   shell.classList.remove("mode-courses");
-  byId("view-courses").classList.remove("active");
-  byId("view-course").classList.add("active");
+  activateTopLevelView("view-course");
   activateCourseTab("ask");
   setStatus(elements.askStatus, "");
   initChatForCourse(course.code);
@@ -922,6 +1127,29 @@ async function withBusy(
     setStatus(status, error instanceof Error ? error.message : "Request failed", "error");
   } finally {
     button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+async function withSetupBusy(
+  button: HTMLButtonElement,
+  statusNode: HTMLElement,
+  label: string,
+  action: () => Promise<BrowserStateStatus>,
+  afterRender?: (status: BrowserStateStatus) => void
+): Promise<void> {
+  const original = button.textContent || "";
+  button.disabled = true;
+  button.textContent = label;
+  setStatus(statusNode, label);
+  try {
+    const status = await action();
+    renderBrowserStateStatus(status);
+    afterRender?.(status);
+  } catch (error) {
+    button.disabled = false;
+    setStatus(statusNode, error instanceof Error ? error.message : "Request failed", "error");
+  } finally {
     button.textContent = original;
   }
 }

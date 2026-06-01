@@ -48,6 +48,44 @@ export interface IndexTextRequest {
   kind: ResourceKind;
 }
 
+export interface LoginRequest {
+  username: string;
+  grade: string;
+  course: string;
+  password: string;
+}
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  grade: string;
+  course: string;
+}
+
+export interface AuthSession {
+  user: AuthUser;
+  created: boolean;
+  browser_state_ready: boolean;
+  needs_browser_state: boolean;
+}
+
+export interface BrowserStateStep {
+  key: string;
+  title: string;
+  url: string;
+  instruction: string;
+}
+
+export interface BrowserStateStatus {
+  running: boolean;
+  completed: boolean;
+  ready: boolean;
+  total_steps: number;
+  step_index?: number | null;
+  step?: BrowserStateStep | null;
+  error?: string | null;
+}
+
 export interface AutoIndexCourseRequest {
   course_id: string;
   course_title: string;
