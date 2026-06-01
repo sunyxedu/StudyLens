@@ -278,10 +278,12 @@ function setAuthMode(mode: "register" | "login"): void {
   elements.loginSubtitle.textContent = isRegister
     ? "Create your StudyLens account"
     : "Use an existing StudyLens account";
-  elements.loginGradeField.classList.toggle("hidden", !isRegister);
-  elements.loginCourseField.classList.toggle("hidden", !isRegister);
+  elements.loginGradeField.classList.toggle("reserved", !isRegister);
+  elements.loginCourseField.classList.toggle("reserved", !isRegister);
   elements.loginGrade.required = isRegister;
   elements.loginCourse.required = isRegister;
+  elements.loginGrade.disabled = !isRegister;
+  elements.loginCourse.disabled = !isRegister;
   elements.loginPassword.autocomplete = isRegister ? "new-password" : "current-password";
   elements.loginSubmit.textContent = isRegister ? "Register" : "Login";
   setStatus(elements.loginStatus, "");

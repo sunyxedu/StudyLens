@@ -329,6 +329,23 @@ textarea:focus {
   gap: 14px;
 }
 
+.login-grid .field.reserved {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.login-panel[data-auth-mode="login"] #login-password-field {
+  order: 2;
+}
+
+.login-panel[data-auth-mode="login"] #login-grade-field {
+  order: 3;
+}
+
+.login-panel[data-auth-mode="login"] #login-course-field {
+  order: 4;
+}
+
 .setup-body,
 .setup-step {
   display: grid;
