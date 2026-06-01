@@ -3,7 +3,7 @@ export interface AppSettings {
 }
 
 const STORAGE_KEY = "studylens.web.settings";
-const FALLBACK_BACKEND_URL = "https://studylens-production.up.railway.app";
+const FALLBACK_BACKEND_URL = "http://localhost:8000";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   backendUrl: configuredBackendUrl(),

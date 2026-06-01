@@ -36,3 +36,14 @@ def test_settings_reads_comma_separated_allowed_origins_from_env(
     )
 
     assert settings.allowed_origins == ["http://localhost:5173", "chrome-extension://abc"]
+
+
+def test_blank_session_cookie_secure_uses_auto_mode(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        vector_db_path=tmp_path / "data" / "vector" / "fallback.sqlite3",
+        session_cookie_secure="",
+    )
+
+    assert settings.session_cookie_secure is None

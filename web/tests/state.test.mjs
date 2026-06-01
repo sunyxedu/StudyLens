@@ -36,6 +36,10 @@ test("loadSettings tolerates invalid storage", () => {
   assert.deepEqual(loadSettings(storage), DEFAULT_SETTINGS);
 });
 
+test("default backend points at local API", () => {
+  assert.equal(DEFAULT_SETTINGS.backendUrl, "http://localhost:8000");
+});
+
 test("default backend can be injected at build runtime", async () => {
   globalThis.STUDYLENS_BACKEND_URL = "https://api.example.com";
   const state = await import(`../dist/state.js?configured=${Date.now()}`);

@@ -75,7 +75,7 @@ npm run build
 npm run dev
 ```
 
-The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000`.
+The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000` by default.
 After `npm run build`, the API also serves the built UI from `http://localhost:8000/app`.
 For Vercel deployments, set `STUDYLENS_BACKEND_URL` to your Railway API origin, for example `https://your-api.up.railway.app`. On Railway, set `AUTH_SECRET_KEY` and include the exact Vercel origin in `ALLOWED_ORIGINS`; wildcard origins are rejected outside local mode because browser sessions use HttpOnly cookies.
 

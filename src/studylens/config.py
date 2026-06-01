@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     exams_base_url: AnyHttpUrl = "https://exams.doc.ic.ac.uk/"
 
     allowed_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:5173"]
+        default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
 
     @field_validator("allowed_origins", mode="before")
@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     def split_origins(cls, value: object) -> object:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("session_cookie_secure", mode="before")
+    @classmethod
+    def blank_cookie_secure_uses_default(cls, value: object) -> object:
+        if value == "":
+            return None
         return value
 
     @property
