@@ -244,7 +244,7 @@ async function handleLogout(): Promise<void> {
 
 function handleAuthenticated(session: AuthSession): void {
   authSession = session;
-  elements.topbarUsername.textContent = `${session.user.username} · ${session.user.grade}`;
+  elements.topbarUsername.textContent = session.user.username;
   elements.topbarUser.classList.remove("hidden");
   if (session.needs_browser_state) {
     void showBrowserStateView();
