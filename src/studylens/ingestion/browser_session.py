@@ -31,7 +31,12 @@ class BrowserSession:
     flows ask for `page()` and drive a real Page.
     """
 
-    def __init__(self, storage_state: Path, *, headless: bool = True) -> None:
+    def __init__(
+        self,
+        storage_state: Path | dict[str, Any],
+        *,
+        headless: bool = True,
+    ) -> None:
         self._storage_state = storage_state
         self._headless = headless
         self._playwright: Any = None
@@ -51,6 +56,10 @@ class BrowserSession:
             )
         return cls(settings.browser_storage_state)
 
+    @classmethod
+    def from_storage_state(cls, storage_state: dict[str, Any]) -> BrowserSession:
+        return cls(storage_state)
+
     async def __aenter__(self) -> BrowserSession:
         try:
             from playwright.async_api import async_playwright
@@ -61,7 +70,12 @@ class BrowserSession:
 
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(headless=self._headless)
-        self._context = await self._browser.new_context(storage_state=str(self._storage_state))
+        storage_state: str | dict[str, Any]
+        if isinstance(self._storage_state, Path):
+            storage_state = str(self._storage_state)
+        else:
+            storage_state = self._storage_state
+        self._context = await self._browser.new_context(storage_state=storage_state)
         return self
 
     async def __aexit__(

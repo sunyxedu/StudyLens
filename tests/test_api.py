@@ -15,9 +15,12 @@ from studylens.retrieval.qa import TemplateLLM
 def make_client(tmp_path: Path) -> TestClient:
     settings = Settings(
         data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         qdrant_collection="api_test",
         allowed_origins=["http://localhost:5173"],
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
     )
     embeddings = HashEmbeddingClient(dimensions=64)
     store = QdrantVectorStore(
@@ -29,6 +32,20 @@ def make_client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(settings=settings, rag_service=service))
 
 
+def login(client: TestClient, username: str = "alice") -> dict:
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": username,
+            "grade": "Year 3",
+            "course": "Computing",
+            "password": "correct horse battery staple",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
 def test_health_reports_vector_store(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -38,8 +55,28 @@ def test_health_reports_vector_store(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok", "vector_store": "qdrant"}
 
 
+def test_login_creates_session_and_reports_browser_state_needed(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    body = login(client)
+
+    assert body["created"] is True
+    assert body["user"]["username"] == "alice"
+    assert body["needs_browser_state"] is True
+    assert client.get("/auth/session").status_code == 200
+
+
+def test_protected_routes_require_login(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    response = client.get("/courses")
+
+    assert response.status_code == 401
+
+
 def test_index_retrieve_and_ask_flow(tmp_path: Path) -> None:
     client = make_client(tmp_path)
+    login(client)
     index_response = client.post(
         "/chunks",
         json={
@@ -95,8 +132,11 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
 
     settings = Settings(
         data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         qdrant_collection="api_auto_index_test",
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
     )
     embeddings = HashEmbeddingClient(dimensions=64)
     service = RAGService(
@@ -115,6 +155,7 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
             auto_indexer=FakeAutoIndexer(),
         )
     )
+    login(client)
 
     response = client.post(
         "/index/course",
@@ -130,6 +171,7 @@ def test_auto_index_endpoint_returns_report(tmp_path: Path) -> None:
 
 def test_ask_with_kinds_filters_retrieval(tmp_path: Path) -> None:
     client = make_client(tmp_path)
+    login(client)
     client.post(
         "/chunks",
         json={
@@ -185,8 +227,11 @@ def test_index_exams_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
 
     settings = Settings(
         data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         qdrant_collection="api_exams_test",
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
     )
     service = RAGService(
         embeddings=HashEmbeddingClient(dimensions=64),
@@ -204,6 +249,7 @@ def test_index_exams_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
             exams_indexer=FakeExamsIndexer(),
         )
     )
+    login(client)
 
     response = client.post("/index/exams", json={"course_id": "COMP70001"})
 
@@ -217,18 +263,14 @@ def test_courses_endpoint_returns_cached_courses(tmp_path: Path) -> None:
     from studylens.storage import CourseStore
 
     store = CourseStore(tmp_path / "studylens.db")
-    store.replace_all(
-        [
-            ("COMP50001", "Algorithm Design and Analysis", "https://edstem.org/c/1"),
-            ("COMP50002", "Software Engineering Design", None),
-        ]
-    )
 
     settings = Settings(
         data_dir=tmp_path / "data",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         qdrant_collection="api_courses_test",
         database_url=f"sqlite:///{tmp_path / 'unused.db'}",
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
     )
     service = RAGService(
         embeddings=HashEmbeddingClient(dimensions=64),
@@ -241,6 +283,14 @@ def test_courses_endpoint_returns_cached_courses(tmp_path: Path) -> None:
     )
     client = TestClient(
         create_app(settings=settings, rag_service=service, course_store=store)
+    )
+    body = login(client)
+    store.replace_all(
+        [
+            ("COMP50001", "Algorithm Design and Analysis", "https://edstem.org/c/1"),
+            ("COMP50002", "Software Engineering Design", None),
+        ],
+        user_id=body["user"]["id"],
     )
 
     response = client.get("/courses")
@@ -267,8 +317,11 @@ def test_index_edstem_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
 
     settings = Settings(
         data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
         qdrant_path=tmp_path / "data" / "vector" / "qdrant",
         qdrant_collection="api_edstem_test",
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
     )
     service = RAGService(
         embeddings=HashEmbeddingClient(dimensions=64),
@@ -286,6 +339,7 @@ def test_index_edstem_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
             edstem_indexer=FakeEdStemIndexer(),
         )
     )
+    login(client)
 
     response = client.post(
         "/index/edstem",
@@ -299,6 +353,7 @@ def test_index_edstem_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
 
 def test_generation_endpoints_return_latex(tmp_path: Path) -> None:
     client = make_client(tmp_path)
+    login(client)
     client.post(
         "/chunks",
         json={

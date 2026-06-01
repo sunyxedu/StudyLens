@@ -16,6 +16,27 @@ class HealthResponse(BaseModel):
     vector_store: str
 
 
+class LoginRequest(BaseModel):
+    username: str
+    grade: str
+    course: str
+    password: str
+
+
+class AuthUser(BaseModel):
+    id: int
+    username: str
+    grade: str
+    course: str
+
+
+class AuthSessionResponse(BaseModel):
+    user: AuthUser
+    created: bool = False
+    browser_state_ready: bool
+    needs_browser_state: bool
+
+
 class IndexTextRequest(BaseModel):
     course_id: str
     title: str

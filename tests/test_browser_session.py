@@ -32,3 +32,9 @@ def test_from_settings_accepts_existing_file(tmp_path: Path) -> None:
     session = BrowserSession.from_settings(settings)
 
     assert isinstance(session, BrowserSession)
+
+
+def test_from_storage_state_accepts_playwright_state_dict() -> None:
+    session = BrowserSession.from_storage_state({"cookies": [], "origins": []})
+
+    assert isinstance(session, BrowserSession)
