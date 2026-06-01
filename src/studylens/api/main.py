@@ -11,6 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from studylens.api.browser_state import (
+    BrowserStateManager,
+    BrowserStateRouter,
+    BrowserStateStatus,
+    PlaywrightBrowserStateManager,
+)
 from studylens.api.schemas import (
     AskRequest,
     AskResponse,
@@ -18,6 +24,8 @@ from studylens.api.schemas import (
     AuthUser,
     AutoIndexCourseRequest,
     AutoIndexCourseResponse,
+    BrowserStateStatusResponse,
+    BrowserStateStepResponse,
     CoursesListResponse,
     DiscoverCoursesCourse,
     DiscoverCoursesResponse,
@@ -82,6 +90,10 @@ def _auth_store(request: Request) -> AuthStore:
     return request.app.state.auth_store
 
 
+def _browser_state_manager(request: Request) -> BrowserStateManager:
+    return request.app.state.browser_state_manager
+
+
 def _current_user(request: Request) -> UserRecord:
     settings: Settings = request.app.state.settings
     token = request.cookies.get(settings.session_cookie_name)
@@ -129,6 +141,28 @@ def _auth_session_response(
     )
 
 
+def _browser_state_status_schema(
+    status: BrowserStateStatus,
+) -> BrowserStateStatusResponse:
+    step = None
+    if status.step is not None:
+        step = BrowserStateStepResponse(
+            key=status.step.key,
+            title=status.step.title,
+            url=status.step.url,
+            instruction=status.step.instruction,
+        )
+    return BrowserStateStatusResponse(
+        running=status.running,
+        completed=status.completed,
+        ready=status.ready,
+        total_steps=status.total_steps,
+        step_index=status.step_index,
+        step=step,
+        error=status.error,
+    )
+
+
 def _set_session_cookie(
     response: Response,
     *,
@@ -167,6 +201,26 @@ def _record_to_schema(record: CourseRecord) -> DiscoverCoursesCourse:
     )
 
 
+def _cors_settings(settings: Settings) -> tuple[list[str], str | None]:
+    origins = [
+        origin
+        for origin in settings.allowed_origins
+        if origin not in {"*", "chrome-extension://*"}
+    ]
+    regexes: list[str] = []
+    if "chrome-extension://*" in settings.allowed_origins:
+        regexes.append(r"chrome-extension://.*")
+    if "*" in settings.allowed_origins:
+        if settings.app_env != "local":
+            raise ConfigurationError(
+                "ALLOWED_ORIGINS='*' cannot be used with credentialed sessions"
+            )
+        regexes.append(r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?")
+    if not regexes:
+        return origins, None
+    return origins, "|".join(f"(?:{regex})" for regex in regexes)
+
+
 async def _run_auto_index(
     request: Request,
     payload: AutoIndexCourseRequest,
@@ -199,6 +253,7 @@ def create_app(
     edstem_indexer: EdStemIndexer | None = None,
     course_store: CourseStore | None = None,
     auth_store: AuthStore | None = None,
+    browser_state_manager: BrowserStateManager | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     service = rag_service or build_rag_service(settings)
@@ -221,18 +276,24 @@ def create_app(
     application.state.course_store = course_store or CourseStore.from_database_url(
         settings.database_url
     )
-    application.state.auth_store = auth_store or AuthStore.from_database_url(
+    resolved_auth_store = auth_store or AuthStore.from_database_url(
         settings.database_url,
         secret_key=_auth_secret(settings),
     )
-
-    allow_all = (
-        "*" in settings.allowed_origins or "chrome-extension://*" in settings.allowed_origins
+    application.state.auth_store = resolved_auth_store
+    application.state.browser_state_manager = (
+        browser_state_manager
+        or PlaywrightBrowserStateManager(
+            auth_store=resolved_auth_store,
+            router=BrowserStateRouter(settings),
+        )
     )
+
+    cors_origins, cors_regex = _cors_settings(settings)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=[] if allow_all else settings.allowed_origins,
-        allow_origin_regex=".*" if allow_all else None,
+        allow_origins=cors_origins,
+        allow_origin_regex=cors_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -286,6 +347,45 @@ def create_app(
         _auth_store(request).revoke_session(token)
         _clear_session_cookie(response, settings=settings)
         return {"status": "ok"}
+
+    @application.post("/browser-state/start", response_model=BrowserStateStatusResponse)
+    async def browser_state_start(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> BrowserStateStatusResponse:
+        try:
+            status = await _browser_state_manager(request).start(user)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return _browser_state_status_schema(status)
+
+    @application.post("/browser-state/advance", response_model=BrowserStateStatusResponse)
+    async def browser_state_advance(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> BrowserStateStatusResponse:
+        status = await _browser_state_manager(request).advance(user)
+        if status.error and not status.running:
+            raise HTTPException(status_code=409, detail=status.error)
+        return _browser_state_status_schema(status)
+
+    @application.get("/browser-state/status", response_model=BrowserStateStatusResponse)
+    async def browser_state_status(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> BrowserStateStatusResponse:
+        return _browser_state_status_schema(
+            await _browser_state_manager(request).status(user)
+        )
+
+    @application.post("/browser-state/cancel", response_model=BrowserStateStatusResponse)
+    async def browser_state_cancel(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> BrowserStateStatusResponse:
+        return _browser_state_status_schema(
+            await _browser_state_manager(request).cancel(user)
+        )
 
     @application.post("/admin/browser-state", include_in_schema=False)
     def update_browser_state(

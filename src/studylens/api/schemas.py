@@ -37,6 +37,23 @@ class AuthSessionResponse(BaseModel):
     needs_browser_state: bool
 
 
+class BrowserStateStepResponse(BaseModel):
+    key: str
+    title: str
+    url: str
+    instruction: str
+
+
+class BrowserStateStatusResponse(BaseModel):
+    running: bool
+    completed: bool
+    ready: bool
+    total_steps: int
+    step_index: int | None = None
+    step: BrowserStateStepResponse | None = None
+    error: str | None = None
+
+
 class IndexTextRequest(BaseModel):
     course_id: str
     title: str

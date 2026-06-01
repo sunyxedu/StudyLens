@@ -1,15 +1,19 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from qdrant_client import QdrantClient
 
+from studylens.api.browser_state import BrowserStateStatus, BrowserStateStep
 from studylens.api.main import create_app
 from studylens.config import Settings
+from studylens.errors import ConfigurationError
 from studylens.ingestion.auto_index import AutoIndexReport
 from studylens.ingestion.edstem import EdStemIndexResult
 from studylens.ingestion.exams import ExamIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
 from studylens.retrieval.qa import TemplateLLM
+from studylens.storage import AuthStore
 
 
 def make_client(tmp_path: Path) -> TestClient:
@@ -46,6 +50,75 @@ def login(client: TestClient, username: str = "alice") -> dict:
     return response.json()
 
 
+def make_service(collection_name: str = "api_test") -> RAGService:
+    return RAGService(
+        embeddings=HashEmbeddingClient(dimensions=64),
+        vector_store=QdrantVectorStore(
+            collection_name=collection_name,
+            dimensions=64,
+            client=QdrantClient(":memory:"),
+        ),
+        llm=TemplateLLM(),
+    )
+
+
+class FakeBrowserStateManager:
+    def __init__(self, store: AuthStore) -> None:
+        self.store = store
+        self.started_for: int | None = None
+        self.step = BrowserStateStep(
+            key="scientia",
+            title="Scientia",
+            url="https://scientia.test",
+            instruction="Log in.",
+        )
+
+    async def start(self, user):
+        self.started_for = user.id
+        return BrowserStateStatus(
+            running=True,
+            completed=False,
+            ready=False,
+            total_steps=1,
+            step_index=0,
+            step=self.step,
+        )
+
+    async def advance(self, user):
+        self.store.save_browser_state(
+            user.id,
+            {
+                "cookies": [
+                    {
+                        "name": "session",
+                        "value": "cookie",
+                        "domain": "scientia.test",
+                        "path": "/",
+                    }
+                ],
+                "origins": [],
+            },
+        )
+        return BrowserStateStatus(
+            running=False,
+            completed=True,
+            ready=True,
+            total_steps=1,
+        )
+
+    async def status(self, user):
+        ready = self.store.has_browser_state(user.id)
+        return BrowserStateStatus(
+            running=False,
+            completed=ready,
+            ready=ready,
+            total_steps=0,
+        )
+
+    async def cancel(self, user):
+        return await self.status(user)
+
+
 def test_health_reports_vector_store(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -72,6 +145,58 @@ def test_protected_routes_require_login(tmp_path: Path) -> None:
     response = client.get("/courses")
 
     assert response.status_code == 401
+
+
+def test_browser_state_setup_flow_saves_state_for_session_user(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        qdrant_collection="api_browser_state_test",
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
+    )
+    auth_store = AuthStore.from_database_url(
+        settings.database_url,
+        secret_key=settings.auth_secret_key or "",
+    )
+    manager = FakeBrowserStateManager(auth_store)
+    client = TestClient(
+        create_app(
+            settings=settings,
+            rag_service=make_service("api_browser_state_test"),
+            auth_store=auth_store,
+            browser_state_manager=manager,
+        )
+    )
+    session = login(client)
+
+    started = client.post("/browser-state/start")
+    advanced = client.post("/browser-state/advance")
+    refreshed_session = client.get("/auth/session")
+
+    assert started.status_code == 200
+    assert started.json()["step"]["key"] == "scientia"
+    assert manager.started_for == session["user"]["id"]
+    assert advanced.status_code == 200
+    assert advanced.json()["ready"] is True
+    assert refreshed_session.json()["browser_state_ready"] is True
+    assert refreshed_session.json()["needs_browser_state"] is False
+
+
+def test_wildcard_cors_is_rejected_for_non_local_sessions(tmp_path: Path) -> None:
+    settings = Settings(
+        app_env="production",
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        qdrant_collection="api_cors_test",
+        allowed_origins=["*"],
+        auth_secret_key="test-secret",
+    )
+
+    with pytest.raises(ConfigurationError, match="ALLOWED_ORIGINS"):
+        create_app(settings=settings, rag_service=make_service("api_cors_test"))
 
 
 def test_index_retrieve_and_ask_flow(tmp_path: Path) -> None:
