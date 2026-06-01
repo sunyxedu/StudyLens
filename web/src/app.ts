@@ -1,4 +1,4 @@
-import { StudyLensApi } from "./api.js";
+import { StudyLensApi, StudyLensApiError } from "./api.js";
 import {
   loadSettings,
   parseScopeNotes,
@@ -236,13 +236,8 @@ async function handleLogout(): Promise<void> {
   try {
     await api.logout();
   } finally {
-    authSession = null;
-    discoveredCourses = [];
-    selectedCourseCodes.clear();
-    currentCourse = null;
-    elements.coursesList.replaceChildren();
-    elements.coursesProgressList.replaceChildren();
-    elements.retrieveResults.replaceChildren();
+    resetAuthenticatedState();
+    setAuthMode("login");
     showLoginView();
   }
 }
@@ -265,6 +260,59 @@ function showLoginView(): void {
   activateTopLevelView("view-login");
   setStatus(elements.loginStatus, "");
   elements.loginUsername.focus();
+}
+
+function resetAuthenticatedState(): void {
+  authSession = null;
+  discoveredCourses = [];
+  selectedCourseCodes.clear();
+  currentCourse = null;
+  conversations = [];
+  activeConversation = null;
+  latestLatex = "";
+  generateModeState.cheatsheet = { scopeNotes: "", latex: "" };
+  generateModeState.exam = { scopeNotes: "", latex: "" };
+
+  elements.topbarUsername.textContent = "";
+  elements.sidebarCourseContext.classList.add("hidden");
+  elements.sidebarCourseNav.classList.add("hidden");
+  elements.coursesSummary.textContent = "";
+  elements.coursesList.replaceChildren();
+  elements.coursesProgressList.replaceChildren();
+  elements.coursesProgress.hidden = true;
+  elements.convList.replaceChildren();
+  Array.from(elements.chatMessages.children)
+    .filter((node) => node !== elements.chatEmpty)
+    .forEach((node) => node.remove());
+  elements.chatEmpty.classList.remove("hidden");
+  elements.scopeNotes.value = "";
+  elements.latexOutput.textContent = "";
+  elements.downloadLatex.disabled = true;
+  elements.retrieveQuery.value = "";
+  elements.retrieveResults.replaceChildren();
+  setStatus(elements.coursesStatus, "");
+  setStatus(elements.askStatus, "");
+  setStatus(elements.generateStatus, "");
+  setStatus(elements.retrieveStatus, "");
+  setStatus(elements.reindexStatus, "");
+  updateCoursesActions();
+}
+
+function handleAuthRequired(error: unknown): boolean {
+  if (!isAuthRequiredError(error)) {
+    return false;
+  }
+  resetAuthenticatedState();
+  setAuthMode("login");
+  showLoginView();
+  setStatus(elements.loginStatus, "Please log in to continue.", "error");
+  return true;
+}
+
+function isAuthRequiredError(error: unknown): boolean {
+  return error instanceof StudyLensApiError
+    && error.status === 401
+    && error.detail === "authentication required";
 }
 
 function setAuthMode(mode: "register" | "login"): void {
@@ -296,6 +344,7 @@ async function showBrowserStateView(): Promise<void> {
   try {
     renderBrowserStateStatus(await api.browserStateStatus());
   } catch (error) {
+    if (handleAuthRequired(error)) return;
     setStatus(
       elements.browserStateStatus,
       error instanceof Error ? error.message : "Setup status unavailable",
@@ -462,8 +511,8 @@ async function loadCachedCourses(): Promise<void> {
         ? `Loaded ${courses.length} courses · last refreshed ${formatTimestamp(latest)}`
         : `Loaded ${courses.length} courses`
     );
-  } catch {
-    // Backend offline at startup — leave panel empty.
+  } catch (error) {
+    handleAuthRequired(error);
   }
 }
 
@@ -597,7 +646,8 @@ async function confirmIndexedCourse(code: string): Promise<DiscoveredCourse | nu
         updateCoursesActions();
         return indexedCourse;
       }
-    } catch {
+    } catch (error) {
+      if (handleAuthRequired(error)) return null;
       // Keep the original indexing error if the status check also fails.
     }
   }
@@ -651,6 +701,10 @@ async function handleIndexSelected(): Promise<void> {
           discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: new Date().toISOString() };
         }
       } catch (error) {
+        if (handleAuthRequired(error)) {
+          queue.length = 0;
+          return;
+        }
         setProgressStatus(row, "running", "Checking status…");
         const indexedCourse = await confirmIndexedCourse(course.code);
         if (indexedCourse?.indexed_at) {
@@ -751,6 +805,7 @@ async function handleReindex(): Promise<void> {
       `Processed ${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks · ${formatTimestamp(ts)}`;
     elements.reindexStatus.style.color = "var(--muted)";
   } catch (error) {
+    if (handleAuthRequired(error)) return;
     elements.reindexStatus.textContent = "Checking status…";
     const indexedCourse = await confirmIndexedCourse(course.code);
     if (indexedCourse?.indexed_at) {
@@ -849,6 +904,7 @@ async function handleSendMessage(): Promise<void> {
     scrollChatToBottom();
   } catch (error) {
     thinkingEl.remove();
+    if (handleAuthRequired(error)) return;
     setStatus(elements.askStatus, error instanceof Error ? error.message : "Request failed", "error");
   } finally {
     elements.askSubmit.disabled = false;
@@ -1164,6 +1220,7 @@ async function withBusy(
   try {
     await action();
   } catch (error) {
+    if (handleAuthRequired(error)) return;
     setStatus(status, error instanceof Error ? error.message : "Request failed", "error");
   } finally {
     button.disabled = false;
@@ -1188,6 +1245,7 @@ async function withSetupBusy(
     afterRender?.(status);
   } catch (error) {
     button.disabled = false;
+    if (handleAuthRequired(error)) return;
     setStatus(statusNode, error instanceof Error ? error.message : "Request failed", "error");
   } finally {
     button.textContent = original;

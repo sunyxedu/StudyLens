@@ -17,6 +17,21 @@ import type {
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+export class StudyLensApiError extends Error {
+  readonly status: number;
+  readonly body: string;
+  readonly detail: string | null;
+
+  constructor(status: number, body: string) {
+    const detail = parseErrorDetail(body);
+    super(`StudyLens API ${status}: ${detail ?? body}`);
+    this.name = "StudyLensApiError";
+    this.status = status;
+    this.body = body;
+    this.detail = detail;
+  }
+}
+
 export function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
   return (trimmed || "http://localhost:8000").replace(/\/+$/, "");
@@ -160,7 +175,7 @@ export class StudyLensApi {
       throw error;
     }
     if (!response.ok) {
-      throw new Error(`StudyLens API ${response.status}: ${await safeText(response)}`);
+      throw new StudyLensApiError(response.status, await safeText(response));
     }
     return (await response.json()) as T;
   }
@@ -175,5 +190,14 @@ async function safeText(response: Response): Promise<string> {
     return await response.text();
   } catch {
     return response.statusText;
+  }
+}
+
+function parseErrorDetail(body: string): string | null {
+  try {
+    const data = JSON.parse(body) as { detail?: unknown };
+    return typeof data.detail === "string" ? data.detail : null;
+  } catch {
+    return null;
   }
 }

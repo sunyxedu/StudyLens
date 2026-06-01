@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { StudyLensApi, normalizeBaseUrl } from "../dist/api.js";
+import { StudyLensApi, StudyLensApiError, normalizeBaseUrl } from "../dist/api.js";
 
 test("normalizeBaseUrl cleans user input", () => {
   assert.equal(normalizeBaseUrl(" http://localhost:8000/// "), "http://localhost:8000");
@@ -128,5 +128,22 @@ test("StudyLensApi surfaces backend errors", async () => {
   await assert.rejects(
     () => api.health(),
     /StudyLens API 400: bad request/
+  );
+});
+
+test("StudyLensApi exposes structured error details", async () => {
+  const api = new StudyLensApi("http://localhost:8000", async () => {
+    return new Response(JSON.stringify({ detail: "authentication required" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  await assert.rejects(
+    () => api.session(),
+    (error) => error instanceof StudyLensApiError
+      && error.status === 401
+      && error.detail === "authentication required"
+      && error.message === "StudyLens API 401: authentication required"
   );
 });
