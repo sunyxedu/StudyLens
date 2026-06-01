@@ -57,26 +57,55 @@ test("resolveBackendUrl uses current origin for API-served app", () => {
   assert.equal(
     resolveBackendUrl(DEFAULT_SETTINGS, {
       origin: "http://127.0.0.1:8000",
+      hostname: "127.0.0.1",
       pathname: "/app",
-      port: "8000"
+      port: "8000",
+      protocol: "http:"
     }),
     "http://127.0.0.1:8000",
   );
   assert.equal(
     resolveBackendUrl(DEFAULT_SETTINGS, {
       origin: "https://study-api.up.railway.app",
+      hostname: "study-api.up.railway.app",
       pathname: "/app",
-      port: ""
+      port: "",
+      protocol: "https:"
     }),
     "https://study-api.up.railway.app",
   );
   assert.equal(
     resolveBackendUrl({ ...DEFAULT_SETTINGS, backendUrl: "http://api.local" }, {
       origin: "http://127.0.0.1:8000",
+      hostname: "127.0.0.1",
       pathname: "/app",
-      port: "8000"
+      port: "8000",
+      protocol: "http:"
     }),
     "http://api.local",
+  );
+});
+
+test("resolveBackendUrl matches loopback host for local dev", () => {
+  assert.equal(
+    resolveBackendUrl(DEFAULT_SETTINGS, {
+      origin: "http://127.0.0.1:5173",
+      hostname: "127.0.0.1",
+      pathname: "/",
+      port: "5173",
+      protocol: "http:"
+    }),
+    "http://127.0.0.1:8000",
+  );
+  assert.equal(
+    resolveBackendUrl({ backendUrl: "http://127.0.0.1:8000" }, {
+      origin: "http://localhost:5173",
+      hostname: "localhost",
+      pathname: "/",
+      port: "5173",
+      protocol: "http:"
+    }),
+    "http://localhost:8000",
   );
 });
 

@@ -38,6 +38,9 @@ export function resolveBackendUrl(settings: AppSettings, location: Location): st
   if (isBundledApp && settings.backendUrl === DEFAULT_SETTINGS.backendUrl) {
     return location.origin;
   }
+  if (isLocalDevFrontend(location) && isLocalDevBackend(settings.backendUrl)) {
+    return `${location.protocol}//${hostForUrl(location.hostname)}:8000`;
+  }
   return settings.backendUrl;
 }
 
@@ -57,4 +60,25 @@ function stringOrDefault(value: unknown, fallback: string): string {
 function configuredBackendUrl(): string {
   const configured = (globalThis as { STUDYLENS_BACKEND_URL?: unknown }).STUDYLENS_BACKEND_URL;
   return stringOrDefault(configured, FALLBACK_BACKEND_URL);
+}
+
+function isLocalDevFrontend(location: Location): boolean {
+  return isLoopbackHost(location.hostname) && location.port === "5173";
+}
+
+function isLocalDevBackend(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && url.port === "8000" && isLoopbackHost(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function hostForUrl(hostname: string): string {
+  return hostname.includes(":") && !hostname.startsWith("[") ? `[${hostname}]` : hostname;
 }
