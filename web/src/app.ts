@@ -119,7 +119,7 @@ const elements = {
   askSubmit: byId<HTMLButtonElement>("ask-submit"),
   askStatus: byId<HTMLSpanElement>("ask-status"),
   // Generate tab
-  modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment")),
+  modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment[data-mode]")),
   scopeNotes: byId<HTMLTextAreaElement>("scope-notes"),
   questionCountField: byId<HTMLElement>("question-count-field"),
   questionCount: byId<HTMLInputElement>("question-count"),
@@ -270,6 +270,7 @@ function showLoginView(): void {
 function setAuthMode(mode: "register" | "login"): void {
   authMode = mode;
   const isRegister = mode === "register";
+  elements.loginForm.dataset.authMode = mode;
   elements.authModeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.authMode === mode);
   });

@@ -311,6 +311,14 @@ textarea:focus {
   padding: 24px;
 }
 
+.login-panel[data-auth-mode="register"] {
+  border-color: rgba(23, 107, 93, 0.45);
+}
+
+.login-panel[data-auth-mode="login"] {
+  border-color: rgba(183, 98, 42, 0.42);
+}
+
 .setup-panel {
   width: min(100%, 680px);
 }
@@ -546,6 +554,25 @@ textarea:focus {
 .segment.active {
   background: #efe7da;
   color: var(--warm);
+}
+
+.auth-mode-switch {
+  width: 100%;
+}
+
+.auth-mode-switch .segment {
+  border: 0;
+}
+
+.auth-mode-switch .segment.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(23, 107, 93, 0.22);
+}
+
+.login-panel[data-auth-mode="login"] .auth-mode-switch .segment.active {
+  background: var(--warm);
+  box-shadow: 0 2px 8px rgba(183, 98, 42, 0.2);
 }
 
 .latex-output {
