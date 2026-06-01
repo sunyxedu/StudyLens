@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -45,3 +46,45 @@ def test_course_store_from_database_url_creates_parent_directory(tmp_path: Path)
     store = CourseStore.from_database_url(f"sqlite:///{db_path}")
     assert store.path == db_path
     assert db_path.parent.exists()
+
+
+def test_course_store_scopes_courses_by_user_id(tmp_path: Path) -> None:
+    store = CourseStore(tmp_path / "studylens.db")
+
+    store.replace_all([("COMP50001", "Algorithms", None)], user_id=1)
+    store.replace_all([("COMP60001", "AI", None)], user_id=2)
+
+    assert [r.code for r in store.list_all(user_id=1)] == ["COMP50001"]
+    assert [r.code for r in store.list_all(user_id=2)] == ["COMP60001"]
+    assert store.list_all() == []
+
+    store.mark_indexed("COMP50001", user_id=1)
+    assert store.list_all(user_id=1)[0].indexed_at
+    assert store.list_all(user_id=2)[0].indexed_at is None
+
+
+def test_course_store_migrates_legacy_global_table(tmp_path: Path) -> None:
+    db_path = tmp_path / "studylens.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE courses (
+                code TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                edstem_url TEXT,
+                updated_at TEXT NOT NULL,
+                indexed_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO courses (code, title, edstem_url, updated_at, indexed_at)
+            VALUES ('COMP50001', 'Algorithms', NULL, '2026-01-01T00:00:00+00:00', NULL)
+            """
+        )
+
+    store = CourseStore(db_path)
+
+    assert [r.code for r in store.list_all()] == ["COMP50001"]
+    assert store.list_all(user_id=1) == []

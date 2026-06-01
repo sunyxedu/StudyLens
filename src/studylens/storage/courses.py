@@ -67,24 +67,64 @@ class CourseStore:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS courses (
-                    code TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    edstem_url TEXT,
-                    updated_at TEXT NOT NULL,
-                    indexed_at TEXT
-                )
-                """
-            )
-            with contextlib.suppress(sqlite3.OperationalError):
-                connection.execute("ALTER TABLE courses ADD COLUMN indexed_at TEXT")
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(courses)").fetchall()
+            }
+            if columns and "user_id" not in columns:
+                self._migrate_global_courses(connection, columns)
+            self._create_courses_table(connection)
 
-    def list_all(self) -> list[CourseRecord]:
+    def _create_courses_table(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS courses (
+                user_id INTEGER NOT NULL DEFAULT 0,
+                code TEXT NOT NULL,
+                title TEXT NOT NULL,
+                edstem_url TEXT,
+                updated_at TEXT NOT NULL,
+                indexed_at TEXT,
+                PRIMARY KEY (user_id, code)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_courses_user ON courses(user_id)"
+        )
+
+    def _migrate_global_courses(
+        self,
+        connection: sqlite3.Connection,
+        columns: set[str],
+    ) -> None:
+        connection.execute("ALTER TABLE courses RENAME TO courses_legacy")
+        self._create_courses_table(connection)
+        indexed_expr = "indexed_at" if "indexed_at" in columns else "NULL"
+        connection.execute(
+            f"""
+            INSERT INTO courses (user_id, code, title, edstem_url, updated_at, indexed_at)
+            SELECT 0, code, title, edstem_url, updated_at, {indexed_expr}
+            FROM courses_legacy
+            """
+        )
+        connection.execute("DROP TABLE courses_legacy")
+        with contextlib.suppress(sqlite3.OperationalError):
+            connection.execute("DROP INDEX IF EXISTS idx_courses_user")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_courses_user ON courses(user_id)"
+        )
+
+    def list_all(self, *, user_id: int = 0) -> list[CourseRecord]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT code, title, edstem_url, updated_at, indexed_at FROM courses ORDER BY code"
+                """
+                SELECT code, title, edstem_url, updated_at, indexed_at
+                FROM courses
+                WHERE user_id = ?
+                ORDER BY code
+                """,
+                (user_id,),
             ).fetchall()
         return [
             CourseRecord(
@@ -97,7 +137,12 @@ class CourseStore:
             for row in rows
         ]
 
-    def replace_all(self, courses: Iterable[tuple[str, str, str | None]]) -> list[CourseRecord]:
+    def replace_all(
+        self,
+        courses: Iterable[tuple[str, str, str | None]],
+        *,
+        user_id: int = 0,
+    ) -> list[CourseRecord]:
         """Wipe and repopulate the table.
 
         EdStem dashboard is the source of truth — courses the student is no
@@ -111,16 +156,21 @@ class CourseStore:
             existing_indexed = {
                 row["code"]: row["indexed_at"]
                 for row in connection.execute(
-                    "SELECT code, indexed_at FROM courses"
+                    "SELECT code, indexed_at FROM courses WHERE user_id = ?",
+                    (user_id,),
                 ).fetchall()
             }
-            connection.execute("DELETE FROM courses")
+            connection.execute("DELETE FROM courses WHERE user_id = ?", (user_id,))
             if course_list:
                 connection.executemany(
-                    "INSERT INTO courses (code, title, edstem_url, updated_at, indexed_at) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    """
+                    INSERT INTO courses (
+                        user_id, code, title, edstem_url, updated_at, indexed_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
                     [
-                        (code, title, url, timestamp, existing_indexed.get(code))
+                        (user_id, code, title, url, timestamp, existing_indexed.get(code))
                         for code, title, url in course_list
                     ],
                 )
@@ -135,10 +185,10 @@ class CourseStore:
             for code, title, url in course_list
         ]
 
-    def mark_indexed(self, code: str) -> None:
+    def mark_indexed(self, code: str, *, user_id: int = 0) -> None:
         """Record the current UTC time as the last indexed timestamp for a course."""
         with self._connect() as connection, connection:
             connection.execute(
-                "UPDATE courses SET indexed_at = ? WHERE code = ?",
-                (_now(), code),
+                "UPDATE courses SET indexed_at = ? WHERE user_id = ? AND code = ?",
+                (_now(), user_id, code),
             )
