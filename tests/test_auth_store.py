@@ -43,6 +43,33 @@ def test_auth_store_hashes_passwords_and_authenticates(tmp_path) -> None:
     assert second.user.grade == "Year 4"
 
 
+def test_auth_store_register_and_login_are_separate(tmp_path) -> None:
+    store = AuthStore(tmp_path / "studylens.db", secret_key="test-secret")
+
+    with pytest.raises(AuthStoreError, match="invalid username or password"):
+        store.authenticate_user(username="alice", password="correct horse battery staple")
+
+    registered = store.register_user(
+        username="Alice",
+        grade="Year 3",
+        course="Computing",
+        password="correct horse battery staple",
+    )
+    logged_in = store.authenticate_user(
+        username="alice",
+        password="correct horse battery staple",
+    )
+
+    assert logged_in == registered
+    with pytest.raises(AuthStoreError, match="already registered"):
+        store.register_user(
+            username="ALICE",
+            grade="Year 3",
+            course="Computing",
+            password="correct horse battery staple",
+        )
+
+
 def test_auth_store_rejects_wrong_password(tmp_path) -> None:
     store = AuthStore(tmp_path / "studylens.db", secret_key="test-secret")
     store.authenticate_or_create(

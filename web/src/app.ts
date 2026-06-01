@@ -68,8 +68,13 @@ const elements = {
   topbarUsername: byId<HTMLSpanElement>("topbar-username"),
   logoutBtn: byId<HTMLButtonElement>("logout-btn"),
   loginForm: byId<HTMLFormElement>("login-form"),
+  loginTitle: byId<HTMLHeadingElement>("login-title"),
+  loginSubtitle: byId<HTMLSpanElement>("login-subtitle"),
+  authModeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".auth-mode")),
   loginUsername: byId<HTMLInputElement>("login-username"),
+  loginGradeField: byId<HTMLElement>("login-grade-field"),
   loginGrade: byId<HTMLInputElement>("login-grade"),
+  loginCourseField: byId<HTMLElement>("login-course-field"),
   loginCourse: byId<HTMLInputElement>("login-course"),
   loginPassword: byId<HTMLInputElement>("login-password"),
   loginSubmit: byId<HTMLButtonElement>("login-submit"),
@@ -144,6 +149,7 @@ const generateModeState: Record<"cheatsheet" | "exam", { scopeNotes: string; lat
 let discoveredCourses: DiscoveredCourse[] = [];
 let currentCourse: DiscoveredCourse | null = null;
 let authSession: AuthSession | null = null;
+let authMode: "register" | "login" = "register";
 const selectedCourseCodes = new Set<string>();
 let conversations: Conversation[] = [];
 let activeConversation: Conversation | null = null;
@@ -160,6 +166,11 @@ function init(): void {
     void handleLogin();
   });
   elements.logoutBtn.addEventListener("click", () => { void handleLogout(); });
+  elements.authModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setAuthMode(button.dataset.authMode === "login" ? "login" : "register");
+    });
+  });
   elements.browserStateStart.addEventListener("click", handleBrowserStateStart);
   elements.browserStateNext.addEventListener("click", handleBrowserStateNext);
   elements.browserStateCancel.addEventListener("click", handleBrowserStateCancel);
@@ -187,6 +198,7 @@ function init(): void {
   });
 
   updateCoursesActions();
+  setAuthMode("register");
   void initializeAuth();
 }
 
@@ -202,13 +214,19 @@ async function initializeAuth(): Promise<void> {
 }
 
 async function handleLogin(): Promise<void> {
-  await withBusy(elements.loginSubmit, elements.loginStatus, "Signing in", async () => {
-    const session = await api.login({
+  const label = authMode === "register" ? "Registering" : "Signing in";
+  await withBusy(elements.loginSubmit, elements.loginStatus, label, async () => {
+    const credentials = {
       username: elements.loginUsername.value.trim(),
-      grade: elements.loginGrade.value.trim(),
-      course: elements.loginCourse.value.trim(),
       password: elements.loginPassword.value,
-    });
+    };
+    const session = authMode === "register"
+      ? await api.register({
+          ...credentials,
+          grade: elements.loginGrade.value.trim(),
+          course: elements.loginCourse.value.trim(),
+        })
+      : await api.login(credentials);
     elements.loginPassword.value = "";
     handleAuthenticated(session);
   });
@@ -247,6 +265,25 @@ function showLoginView(): void {
   activateTopLevelView("view-login");
   setStatus(elements.loginStatus, "");
   elements.loginUsername.focus();
+}
+
+function setAuthMode(mode: "register" | "login"): void {
+  authMode = mode;
+  const isRegister = mode === "register";
+  elements.authModeButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.authMode === mode);
+  });
+  elements.loginTitle.textContent = isRegister ? "Register" : "Login";
+  elements.loginSubtitle.textContent = isRegister
+    ? "Create your StudyLens account"
+    : "Use an existing StudyLens account";
+  elements.loginGradeField.classList.toggle("hidden", !isRegister);
+  elements.loginCourseField.classList.toggle("hidden", !isRegister);
+  elements.loginGrade.required = isRegister;
+  elements.loginCourse.required = isRegister;
+  elements.loginPassword.autocomplete = isRegister ? "new-password" : "current-password";
+  elements.loginSubmit.textContent = isRegister ? "Register" : "Login";
+  setStatus(elements.loginStatus, "");
 }
 
 async function showBrowserStateView(): Promise<void> {

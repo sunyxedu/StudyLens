@@ -10,6 +10,7 @@ import type {
   IndexTextRequest,
   LoginRequest,
   PredictedExamRequest,
+  RegisterRequest,
   RetrieveRequest,
   SearchResult,
 } from "./types.js";
@@ -32,6 +33,14 @@ export class StudyLensApi {
 
   async health(): Promise<{ status: string; vector_store: string }> {
     return this.request("/health");
+  }
+
+  async register(payload: RegisterRequest): Promise<AuthSession> {
+    return this.request("/auth/register", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
+    });
   }
 
   async login(payload: LoginRequest): Promise<AuthSession> {
@@ -138,10 +147,18 @@ export class StudyLensApi {
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      ...init,
-      credentials: init?.credentials ?? "include",
-    });
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+        ...init,
+        credentials: init?.credentials ?? "include",
+      });
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error(`Cannot reach StudyLens API at ${this.baseUrl}`);
+      }
+      throw error;
+    }
     if (!response.ok) {
       throw new Error(`StudyLens API ${response.status}: ${await safeText(response)}`);
     }

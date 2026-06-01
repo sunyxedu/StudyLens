@@ -40,6 +40,7 @@ from studylens.api.schemas import (
     IndexTextResponse,
     LoginRequest,
     PredictedExamRequest,
+    RegisterRequest,
     RetrieveRequest,
     RetrieveResponse,
 )
@@ -207,6 +208,9 @@ def _cors_settings(settings: Settings) -> tuple[list[str], str | None]:
         for origin in settings.allowed_origins
         if origin not in {"*", "chrome-extension://*"}
     ]
+    if settings.app_env == "local":
+        origins.extend(["http://localhost:5173", "http://127.0.0.1:5173"])
+        origins = list(dict.fromkeys(origins))
     regexes: list[str] = []
     if "chrome-extension://*" in settings.allowed_origins:
         regexes.append(r"chrome-extension://.*")
@@ -303,6 +307,46 @@ def create_app(
     def health() -> HealthResponse:
         return HealthResponse(status="ok", vector_store=settings.vector_store)
 
+    def create_auth_session(
+        *,
+        user: UserRecord,
+        store: AuthStore,
+        response: Response,
+        created: bool,
+    ) -> AuthSessionResponse:
+        ttl = timedelta(days=settings.session_ttl_days)
+        session = store.create_session(user.id, ttl=ttl)
+        _set_session_cookie(
+            response,
+            settings=settings,
+            token=session.token,
+            max_age=max(0, int(ttl.total_seconds())),
+        )
+        return _auth_session_response(store=store, user=user, created=created)
+
+    @application.post("/auth/register", response_model=AuthSessionResponse)
+    def register(
+        payload: RegisterRequest,
+        request: Request,
+        response: Response,
+    ) -> AuthSessionResponse:
+        store = _auth_store(request)
+        try:
+            user = store.register_user(
+                username=payload.username,
+                grade=payload.grade,
+                course=payload.course,
+                password=payload.password,
+            )
+        except AuthStoreError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return create_auth_session(
+            user=user,
+            store=store,
+            response=response,
+            created=True,
+        )
+
     @application.post("/auth/login", response_model=AuthSessionResponse)
     def login(
         payload: LoginRequest,
@@ -311,27 +355,17 @@ def create_app(
     ) -> AuthSessionResponse:
         store = _auth_store(request)
         try:
-            result = store.authenticate_or_create(
+            user = store.authenticate_user(
                 username=payload.username,
-                grade=payload.grade,
-                course=payload.course,
                 password=payload.password,
             )
         except AuthStoreError as exc:
-            status_code = 401 if "invalid username or password" in str(exc) else 400
-            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
-        ttl = timedelta(days=settings.session_ttl_days)
-        session = store.create_session(result.user.id, ttl=ttl)
-        _set_session_cookie(
-            response,
-            settings=settings,
-            token=session.token,
-            max_age=max(0, int(ttl.total_seconds())),
-        )
-        return _auth_session_response(
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return create_auth_session(
+            user=user,
             store=store,
-            user=result.user,
-            created=result.created,
+            response=response,
+            created=False,
         )
 
     @application.get("/auth/session", response_model=AuthSessionResponse)

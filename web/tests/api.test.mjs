@@ -15,9 +15,15 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     const path = String(input).replace("http://localhost:8000", "");
     const bodies = {
       "/chunks": { indexed_chunks: 2 },
-      "/auth/login": {
+      "/auth/register": {
         user: { id: 1, username: "alice", grade: "Year 3", course: "Computing" },
         created: true,
+        browser_state_ready: false,
+        needs_browser_state: true
+      },
+      "/auth/login": {
+        user: { id: 1, username: "alice", grade: "Year 3", course: "Computing" },
+        created: false,
         browser_state_ready: false,
         needs_browser_state: true
       },
@@ -52,12 +58,16 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
   };
   const api = new StudyLensApi("http://localhost:8000", fetchImpl);
 
-  assert.equal((await api.login({
+  assert.equal((await api.register({
     username: "alice",
     grade: "Year 3",
     course: "Computing",
     password: "correct horse battery staple",
   })).needs_browser_state, true);
+  assert.equal((await api.login({
+    username: "alice",
+    password: "correct horse battery staple",
+  })).created, false);
   assert.equal((await api.session()).browser_state_ready, true);
   assert.equal((await api.logout()).status, "ok");
   assert.equal((await api.startBrowserState()).running, true);
@@ -101,12 +111,13 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     question_count: 4,
   })).latex, /documentclass/);
 
-  assert.equal(calls.length, 13);
+  assert.equal(calls.length, 14);
   assert.equal(JSON.parse(calls[0].init.body).username, "alice");
+  assert.equal(JSON.parse(calls[1].init.body).password, "correct horse battery staple");
   assert.equal(calls.every((call) => call.init.credentials === "include"), true);
-  assert.equal(JSON.parse(calls[7].init.body).title, "Notes");
-  assert.equal(JSON.parse(calls[8].init.body).course_title, "Advanced Algorithms");
-  assert.equal(JSON.parse(calls[9].init.body).include_exercises, true);
+  assert.equal(JSON.parse(calls[8].init.body).title, "Notes");
+  assert.equal(JSON.parse(calls[9].init.body).course_title, "Advanced Algorithms");
+  assert.equal(JSON.parse(calls[10].init.body).include_exercises, true);
 });
 
 test("StudyLensApi surfaces backend errors", async () => {

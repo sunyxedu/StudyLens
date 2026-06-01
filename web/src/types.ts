@@ -48,10 +48,15 @@ export interface IndexTextRequest {
   kind: ResourceKind;
 }
 
-export interface LoginRequest {
+export interface RegisterRequest {
   username: string;
   grade: string;
   course: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  username: string;
   password: string;
 }
 

@@ -16,10 +16,15 @@ class HealthResponse(BaseModel):
     vector_store: str
 
 
-class LoginRequest(BaseModel):
+class RegisterRequest(BaseModel):
     username: str
     grade: str
     course: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
     password: str
 
 

@@ -41,19 +41,23 @@
         <section class="view active auth-view" id="view-login" aria-labelledby="login-title">
           <form id="login-form" class="login-panel">
             <div class="view-head">
-              <h2 id="login-title">Sign in</h2>
-              <span class="subtle">First time creates your account</span>
+              <h2 id="login-title">Register</h2>
+              <span id="login-subtitle" class="subtle">Create your StudyLens account</span>
+            </div>
+            <div class="segmented auth-mode-switch" role="tablist" aria-label="Authentication mode">
+              <button class="segment auth-mode active" data-auth-mode="register" type="button">Register</button>
+              <button class="segment auth-mode" data-auth-mode="login" type="button">Login</button>
             </div>
             <div class="login-grid">
               <label class="field">
                 <span>Username</span>
                 <input id="login-username" name="username" autocomplete="username" required />
               </label>
-              <label class="field">
+              <label id="login-grade-field" class="field">
                 <span>Grade</span>
                 <input id="login-grade" name="grade" autocomplete="organization-title" required />
               </label>
-              <label class="field">
+              <label id="login-course-field" class="field">
                 <span>Course</span>
                 <input id="login-course" name="course" autocomplete="organization" required />
               </label>
@@ -63,7 +67,7 @@
               </label>
             </div>
             <div class="actions">
-              <button id="login-submit" class="button primary" type="submit">Continue</button>
+              <button id="login-submit" class="button primary" type="submit">Register</button>
               <span id="login-status" class="status"></span>
             </div>
           </form>

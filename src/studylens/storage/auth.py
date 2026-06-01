@@ -287,6 +287,64 @@ class AuthStore:
                 ).fetchone()
             return LoginResult(user=_user_from_row(row), created=False)
 
+    def register_user(
+        self,
+        *,
+        username: str,
+        grade: str,
+        course: str,
+        password: str,
+    ) -> UserRecord:
+        username_norm = _normalize_username(username)
+        display_username = username.strip()
+        clean_grade = _clean_profile_field(grade, "grade")
+        clean_course = _clean_profile_field(course, "course")
+        _validate_password(password)
+        timestamp = _now()
+
+        with self._connect() as connection, connection:
+            existing = connection.execute(
+                "SELECT 1 FROM users WHERE username_norm = ?",
+                (username_norm,),
+            ).fetchone()
+            if existing is not None:
+                raise AuthStoreError("username is already registered")
+            cursor = connection.execute(
+                """
+                INSERT INTO users (
+                    username, username_norm, password_hash, grade, course,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    display_username,
+                    username_norm,
+                    hash_password(password),
+                    clean_grade,
+                    clean_course,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM users WHERE id = ?",
+                (int(cursor.lastrowid),),
+            ).fetchone()
+        return _user_from_row(row)
+
+    def authenticate_user(self, *, username: str, password: str) -> UserRecord:
+        username_norm = _normalize_username(username)
+        _validate_password(password)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM users WHERE username_norm = ?",
+                (username_norm,),
+            ).fetchone()
+        if row is None or not verify_password(password, str(row["password_hash"])):
+            raise AuthStoreError("invalid username or password")
+        return _user_from_row(row)
+
     def create_session(
         self,
         user_id: int,
