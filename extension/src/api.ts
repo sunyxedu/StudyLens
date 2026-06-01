@@ -20,7 +20,9 @@ export class StudyLensClient {
   }
 
   async health(): Promise<boolean> {
-    const response = await this.fetchImpl(`${this.baseUrl}/health`);
+    const response = await this.fetchImpl(`${this.baseUrl}/health`, {
+      credentials: "include",
+    });
     return response.ok;
   }
 
@@ -28,6 +30,7 @@ export class StudyLensClient {
     const response = await this.fetchImpl(`${this.baseUrl}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({
         top_k: 5,
         include_exercises: false,

@@ -28,6 +28,7 @@ test("StudyLensClient.ask posts expected payload", async () => {
 
   assert.equal(answer.answer, "Memoization stores solved subproblems.");
   assert.equal(calls[0].input, "http://localhost:8000/ask");
+  assert.equal(calls[0].init.credentials, "include");
   assert.equal(JSON.parse(calls[0].init.body).course_id, "COMP70001");
   assert.equal(JSON.parse(calls[0].init.body).include_exercises, false);
 });
@@ -69,4 +70,3 @@ test("StudyLensClient.ask raises useful API errors", async () => {
     /StudyLens API error 500: broken/
   );
 });
-
