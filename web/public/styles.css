@@ -295,7 +295,8 @@ textarea:focus {
 
 .auth-view.active {
   min-height: calc(100vh - 114px);
-  align-content: center;
+  align-content: start;
+  padding-top: clamp(96px, 17vh, 158px);
 }
 
 .login-panel,
@@ -304,7 +305,6 @@ textarea:focus {
   align-content: start;
   gap: 18px;
   width: min(100%, 560px);
-  min-height: 430px;
   margin: 0 auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -315,6 +315,7 @@ textarea:focus {
 
 .login-panel[data-auth-mode="register"] {
   border-color: rgba(23, 107, 93, 0.45);
+  min-height: 430px;
 }
 
 .login-panel[data-auth-mode="login"] {
@@ -323,6 +324,7 @@ textarea:focus {
 
 .setup-panel {
   width: min(100%, 680px);
+  min-height: 430px;
 }
 
 .login-grid {
@@ -1450,7 +1452,7 @@ textarea:focus {
     padding: 18px;
   }
 
-  .login-panel {
+  .login-panel[data-auth-mode="register"] {
     min-height: 515px;
   }
 
