@@ -874,6 +874,16 @@ textarea:focus {
 
 .ccard-enter:hover .ccard-enter-arrow { transform: translateX(2px); }
 
+/* Selection: glowing accent edge */
+.ccard--selected {
+  border-color: var(--ccard-accent, var(--green));
+  box-shadow: 0 0 0 2px var(--ccard-accent, var(--green)),
+              0 14px 34px -14px color-mix(in srgb, var(--ccard-accent, var(--green)) 62%, transparent);
+  background: color-mix(in srgb, var(--ccard-accent, var(--green)) 7%, var(--paper));
+}
+
+.ccard--selected .ccard-bar { width: 9px; }
+
 /* Status badges */
 .ccard-badge {
   display: inline-flex;

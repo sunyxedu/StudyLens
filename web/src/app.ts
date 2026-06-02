@@ -690,7 +690,11 @@ function handleSelectAllCourses(): void {
   if (!allSelected) {
     for (const course of discoveredCourses) selectedCourseCodes.add(course.code);
   }
-  renderCourseList();
+  // Update card visual state without full re-render
+  elements.coursesList.querySelectorAll<HTMLElement>(".ccard").forEach((card) => {
+    const code = card.dataset.code ?? "";
+    card.classList.toggle("ccard--selected", selectedCourseCodes.has(code));
+  });
   updateCoursesActions();
 }
 
