@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # Directory of the built web frontend to serve at /app. When unset we fall
     # back to the in-repo web/dist (works for editable/dev runs). Docker images
-    # install the package non-editable, so they set STUDYLENS_WEB_DIST instead.
+    # install the package non-editable, so they set WEB_DIST_DIR instead.
     web_dist_dir: Path | None = None
 
     # /2526/modules is the "all my enrolled modules" list. /2526/timeline is the

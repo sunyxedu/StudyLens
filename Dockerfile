@@ -36,7 +36,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/home/studylens
 # Package is installed non-editable, so point the static mount at the build.
-ENV STUDYLENS_WEB_DIST=/app/web/dist
+ENV WEB_DIST_DIR=/app/web/dist
 
 EXPOSE 8000
 
