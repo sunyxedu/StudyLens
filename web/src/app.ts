@@ -151,8 +151,38 @@ let currentCourse: DiscoveredCourse | null = null;
 let authSession: AuthSession | null = null;
 let authMode: "register" | "login" = "register";
 const selectedCourseCodes = new Set<string>();
+
+// ── Course card accent palette ────────────────────────────────────────
+const CARD_ACCENTS = [
+  "#2e5d4d", "#34706a", "#6f7f55", "#4c6e41", "#867a3b",
+  "#b07d35", "#b1633a", "#9c5235", "#8a5560", "#7a6076",
+  "#566884", "#5d7384",
+];
+
+function courseAccent(code: string): string {
+  let h = 0;
+  for (let i = 0; i < code.length; i++) h = (Math.imul(31, h) + code.charCodeAt(i)) | 0;
+  return CARD_ACCENTS[Math.abs(h) % CARD_ACCENTS.length];
+}
 let conversations: Conversation[] = [];
 let activeConversation: Conversation | null = null;
+
+// Nudge counter: threshold is uniform random with mean 10, hard cap 15
+let nudgeCounter = 0;
+let nudgeThreshold = nextNudgeThreshold();
+let currentNudgeEl: HTMLElement | null = null;
+
+function nextNudgeThreshold(): number {
+  return Math.floor(Math.random() * 11) + 5; // [5, 15], mean ~10
+}
+
+const THUMBS_UP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z"/><path d="M7 11l4-7a2.2 2.2 0 0 1 2 2v3h5.4a2 2 0 0 1 2 2.3l-1.1 6A2 2 0 0 1 17.3 20H7"/></svg>`;
+const THUMBS_DOWN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1z"/><path d="M17 13l-4 7a2.2 2.2 0 0 1-2-2v-3H5.6a2 2 0 0 1-2-2.3l1.1-6A2 2 0 0 1 6.7 4H17"/></svg>`;
+
+const COPY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
+const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+const RETRY_SVG = `<svg class="retry-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg>`;
+const EDIT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
 
 init();
 
@@ -177,6 +207,7 @@ function init(): void {
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.newConvBtn.addEventListener("click", handleNewConversation);
+  elements.chatMessages.addEventListener("click", handleChatAction);
   elements.askSubmit.addEventListener("click", () => { void handleSendMessage(); });
   elements.askQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendMessage(); }
@@ -201,6 +232,7 @@ function init(): void {
   setAuthMode("register");
   void initializeAuth();
 }
+
 
 // ── Auth and setup ────────────────────────────────────────────────────
 
@@ -476,6 +508,7 @@ function enterCourse(course: DiscoveredCourse): void {
   shell.classList.remove("mode-courses");
   activateTopLevelView("view-course");
   activateCourseTab("ask");
+  showToast(`Opening ${course.code} — ${stripCodePrefix(course.title)}`);
   setStatus(elements.askStatus, "");
   initChatForCourse(course.code);
   elements.retrieveResults.replaceChildren();
@@ -517,7 +550,7 @@ async function loadCachedCourses(): Promise<void> {
 }
 
 async function handleDiscoverCourses(): Promise<void> {
-  await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering", async () => {
+  await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering…", async () => {
     const response = await api.discoverCourses();
     discoveredCourses = response.courses;
     selectedCourseCodes.clear();
@@ -527,76 +560,125 @@ async function handleDiscoverCourses(): Promise<void> {
     if (response.error) {
       setStatus(elements.coursesStatus, response.error, "error");
     } else {
-      setStatus(elements.coursesStatus, "");
+      setStatus(elements.coursesStatus, `Loaded ${response.courses.length} courses · just now`);
+      showToast(`Loaded ${response.courses.length} courses from EdStem`);
     }
     updateCoursesSummary(response.dropped_titles.length);
     updateCoursesActions();
   });
 }
 
+function showToast(msg: string, durationMs = 2600): void {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.classList.add("toast-out");
+    el.addEventListener("animationend", () => el.remove(), { once: true });
+  }, durationMs);
+}
+
 function renderCourseList(): void {
-  elements.coursesList.replaceChildren(
-    ...discoveredCourses.map((course) => createCourseCard(course))
-  );
+  const cards = discoveredCourses.map((course) => createCourseCard(course));
+  elements.coursesList.replaceChildren(...cards);
+  // Staggered entrance (~45ms per card)
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  cards.forEach((card, i) => {
+    if (reduced) {
+      card.classList.add("ccard--visible");
+    } else {
+      setTimeout(() => card.classList.add("ccard--visible"), i * 45);
+    }
+  });
 }
 
 function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
+  const accent = courseAccent(course.code);
+  const selected = selectedCourseCodes.has(course.code);
+
   const li = document.createElement("li");
-  li.className = "course-card";
-  if (selectedCourseCodes.has(course.code)) li.classList.add("selected");
+  li.className = `ccard${selected ? " ccard--selected" : ""}`;
+  li.style.setProperty("--ccard-accent", accent);
+  li.dataset.code = course.code;
 
-  const label = document.createElement("label");
-  label.htmlFor = `course-${course.code}`;
-
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.id = `course-${course.code}`;
-  checkbox.value = course.code;
-  checkbox.checked = selectedCourseCodes.has(course.code);
-  checkbox.addEventListener("change", () => {
-    if (checkbox.checked) {
-      selectedCourseCodes.add(course.code);
-    } else {
+  // Click card = toggle selection (Enter button stops propagation)
+  li.addEventListener("click", () => {
+    const isSelected = selectedCourseCodes.has(course.code);
+    if (isSelected) {
       selectedCourseCodes.delete(course.code);
+      li.classList.remove("ccard--selected");
+    } else {
+      selectedCourseCodes.add(course.code);
+      li.classList.add("ccard--selected");
     }
-    li.classList.toggle("selected", checkbox.checked);
     updateCoursesActions();
   });
 
-  const code = document.createElement("span");
-  code.className = "course-code";
-  code.textContent = course.code;
+  // Left accent bar
+  const bar = document.createElement("div");
+  bar.className = "ccard-bar";
 
-  const info = document.createElement("span");
-  info.className = "course-info";
+  // Body
+  const body = document.createElement("div");
+  body.className = "ccard-body";
 
-  const title = document.createElement("span");
-  title.className = "course-title";
-  title.textContent = stripCodePrefix(course.title);
-  title.title = course.title;
+  // Head row
+  const head = document.createElement("div");
+  head.className = "ccard-head";
+
+  const codePill = document.createElement("span");
+  codePill.className = "ccard-code";
+  codePill.textContent = course.code;
+
+  const badge = document.createElement("span");
+  badge.dataset.role = "badge";
+  if (course.indexed_at) {
+    badge.className = "ccard-badge ccard-badge--ready";
+    badge.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 6l3 3 5-5"/></svg>Ready`;
+  } else {
+    badge.className = "ccard-badge ccard-badge--pending";
+    badge.innerHTML = `<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5" cy="5" r="4"/></svg>Pending`;
+  }
+
+  head.append(codePill, badge);
+
+  // Title
+  const titleEl = document.createElement("div");
+  titleEl.className = "ccard-title";
+  titleEl.textContent = stripCodePrefix(course.title);
+  titleEl.title = course.title;
+
+  // Foot row
+  const foot = document.createElement("div");
+  foot.className = "ccard-foot";
 
   const meta = document.createElement("span");
-  meta.className = "course-url";
+  meta.className = "ccard-meta";
+  meta.dataset.role = "meta";
+
   if (course.indexed_at) {
-    meta.textContent = `Processed ${formatTimestamp(course.indexed_at)}`;
+    meta.innerHTML = `<span class="ccard-meta-check">✓</span> Processed · ${formatTimestamp(course.indexed_at)}`;
   } else if (course.edstem_url) {
     meta.textContent = shortUrl(course.edstem_url);
     meta.title = course.edstem_url;
   }
 
-  info.append(title, meta);
-  label.append(checkbox, code, info);
-  li.append(label);
+  foot.append(meta);
 
   if (course.indexed_at) {
     const enterBtn = document.createElement("button");
     enterBtn.type = "button";
-    enterBtn.className = "enter-course-btn";
-    enterBtn.textContent = "Enter →";
-    enterBtn.addEventListener("click", () => enterCourse(course));
-    li.append(enterBtn);
+    enterBtn.className = "ccard-enter";
+    enterBtn.innerHTML = `Enter <span class="ccard-enter-arrow">→</span>`;
+    enterBtn.addEventListener("click", (e) => { e.stopPropagation(); enterCourse(course); });
+    foot.append(enterBtn);
   }
 
+  body.append(head, titleEl, foot);
+  li.append(bar, body);
   return li;
 }
 
@@ -627,7 +709,11 @@ function handleSelectAllCourses(): void {
   if (!allSelected) {
     for (const course of discoveredCourses) selectedCourseCodes.add(course.code);
   }
-  renderCourseList();
+  // Update card visual state without full re-render
+  elements.coursesList.querySelectorAll<HTMLElement>(".ccard").forEach((card) => {
+    const code = card.dataset.code ?? "";
+    card.classList.toggle("ccard--selected", selectedCourseCodes.has(code));
+  });
   updateCoursesActions();
 }
 
@@ -668,10 +754,9 @@ async function handleIndexSelected(): Promise<void> {
   elements.coursesIndex.disabled = true;
   elements.coursesDiscover.disabled = true;
   elements.coursesSelectAll.disabled = true;
-  elements.coursesProgress.hidden = false;
-  elements.coursesProgressList.replaceChildren(
-    ...targets.map((c) => createProgressRow(c.code, c.title, "queued"))
-  );
+
+  // Show processing state on each target card
+  targets.forEach((c) => setCardProcessing(c.code, "processing"));
 
   const queue = [...targets];
   let completed = 0;
@@ -680,41 +765,23 @@ async function handleIndexSelected(): Promise<void> {
     while (true) {
       const course = queue.shift();
       if (!course) return;
-      const row = elements.coursesProgressList.querySelector<HTMLElement>(
-        `[data-code="${course.code}"]`
-      );
-      if (!row) continue;
-      setProgressStatus(row, "running", "Processing…");
       try {
         const report = await api.autoIndexCourse({
           course_id: course.code,
           course_title: course.title,
         });
-        setProgressStatus(
-          row,
-          "done",
-          `${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks`
-        );
-        // Update local indexed_at so the Enter button appears without a reload.
+        const ts = new Date().toISOString();
         const idx = discoveredCourses.findIndex((c) => c.code === course.code);
-        if (idx >= 0) {
-          discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: new Date().toISOString() };
-        }
+        if (idx >= 0) discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: ts };
+        setCardProcessing(course.code, "done", ts);
       } catch (error) {
-        if (handleAuthRequired(error)) {
-          queue.length = 0;
-          return;
-        }
-        setProgressStatus(row, "running", "Checking status…");
+        if (handleAuthRequired(error)) { queue.length = 0; return; }
+        setCardProcessing(course.code, "checking");
         const indexedCourse = await confirmIndexedCourse(course.code);
         if (indexedCourse?.indexed_at) {
-          setProgressStatus(
-            row,
-            "done",
-            `Processed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`
-          );
+          setCardProcessing(course.code, "done", indexedCourse.indexed_at);
         } else {
-          setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
+          setCardProcessing(course.code, "failed");
         }
       }
       completed += 1;
@@ -722,19 +789,50 @@ async function handleIndexSelected(): Promise<void> {
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(INDEX_CONCURRENCY, targets.length) },
-    () => worker()
-  );
+  const workers = Array.from({ length: Math.min(INDEX_CONCURRENCY, targets.length) }, () => worker());
   try {
     await Promise.all(workers);
     setStatus(elements.coursesStatus, `Done · ${completed}/${targets.length}`);
-    // Re-render so newly indexed courses get their Enter button.
+    showToast(`Processed ${completed} course${completed !== 1 ? "s" : ""}`);
+    selectedCourseCodes.clear();
     renderCourseList();
   } finally {
     elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
     elements.coursesDiscover.disabled = false;
     elements.coursesSelectAll.disabled = false;
+  }
+}
+
+function setCardProcessing(code: string, state: "processing" | "checking" | "done" | "failed", ts?: string): void {
+  const card = elements.coursesList.querySelector<HTMLElement>(`[data-code="${code}"]`);
+  if (!card) return;
+
+  const meta = card.querySelector<HTMLElement>("[data-role='meta']");
+  const badge = card.querySelector<HTMLElement>("[data-role='badge']");
+  const foot = card.querySelector<HTMLElement>(".ccard-foot");
+
+  if (state === "processing" || state === "checking") {
+    if (meta) meta.innerHTML = `<svg class="spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg> Processing…`;
+    if (badge) { badge.className = "ccard-badge ccard-badge--pending"; badge.textContent = "Processing"; }
+  } else if (state === "done" && ts) {
+    if (meta) meta.innerHTML = `<span class="ccard-meta-check">✓</span> Processed · ${formatTimestamp(ts)}`;
+    if (badge) { badge.className = "ccard-badge ccard-badge--ready"; badge.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 6l3 3 5-5"/></svg>Ready`; }
+    // Add Enter button if not present
+    if (foot && !foot.querySelector(".ccard-enter")) {
+      const course = discoveredCourses.find((c) => c.code === code);
+      if (course) {
+        const enterBtn = document.createElement("button");
+        enterBtn.type = "button";
+        enterBtn.className = "ccard-enter";
+        enterBtn.innerHTML = `Enter <span class="ccard-enter-arrow">→</span>`;
+        enterBtn.addEventListener("click", (e) => { e.stopPropagation(); enterCourse(course); });
+        foot.append(enterBtn);
+      }
+    }
+    card.classList.remove("ccard--selected");
+  } else if (state === "failed") {
+    if (meta) meta.innerHTML = `<span style="color:var(--danger)">✗ Failed</span>`;
+    if (badge) { badge.className = "ccard-badge ccard-badge--pending"; badge.textContent = "Failed"; }
   }
 }
 
@@ -837,6 +935,9 @@ function selectConversation(id: string): void {
   const conv = conversations.find((c) => c.id === id);
   if (!conv) return;
   activeConversation = conv;
+  nudgeCounter = 0;
+  nudgeThreshold = nextNudgeThreshold();
+  currentNudgeEl = null;
   renderConversationList();
   renderMessages(conv);
 }
@@ -867,12 +968,17 @@ async function handleSendMessage(): Promise<void> {
   if (!currentCourse || !activeConversation) return;
   const question = elements.askQuestion.value.trim();
   if (!question) return;
+  elements.askQuestion.value = "";
+  autoResizeTextarea(elements.askQuestion);
+  void sendQuestion(question);
+}
+
+async function sendQuestion(question: string): Promise<void> {
+  if (!currentCourse || !activeConversation) return;
+  autoDismissCurrentNudge();
 
   // Build context from existing history before adding the new message.
   const contextQuestion = buildQuestion(activeConversation, question);
-
-  elements.askQuestion.value = "";
-  autoResizeTextarea(elements.askQuestion);
 
   const userMsg = addMessage(activeConversation, { role: "user", content: question, citations: [] });
   saveConversations(currentCourse.code, conversations);
@@ -885,6 +991,8 @@ async function handleSendMessage(): Promise<void> {
 
   elements.askSubmit.disabled = true;
   setStatus(elements.askStatus, "");
+
+
 
   try {
     const answer = await api.ask({
@@ -960,11 +1068,66 @@ function renderMessages(conv: Conversation): void {
 function appendMessageBubble(msg: ChatMessage): void {
   elements.chatEmpty.classList.add("hidden");
   elements.chatMessages.appendChild(createMessageEl(msg));
+  if (msg.role === "assistant") maybeInsertNudge();
+}
+
+function maybeInsertNudge(): void {
+  nudgeCounter++;
+  if (nudgeCounter < nudgeThreshold) return;
+  nudgeCounter = 0;
+  nudgeThreshold = nextNudgeThreshold();
+  const nudge = createNudgeEl();
+  elements.chatMessages.appendChild(nudge);
+  scrollNudgeIntoView(nudge);
+}
+
+function createNudgeEl(): HTMLElement {
+  const nudge = document.createElement("div");
+  nudge.className = "chat-feedback-nudge";
+  nudge.setAttribute("role", "group");
+  nudge.setAttribute("aria-label", "Answer satisfaction feedback");
+  nudge.dataset.voted = "false";
+  nudge.innerHTML = `
+    <span class="chat-feedback-prompt">How are the answers working for you?</span>
+    <div class="chat-feedback-actions">
+      <button class="chat-feedback-btn good" type="button" data-vote="up">
+        ${THUMBS_UP_SVG}Helpful
+      </button>
+      <button class="chat-feedback-btn bad" type="button" data-vote="down">
+        ${THUMBS_DOWN_SVG}Not helpful
+      </button>
+    </div>
+  `;
+  nudge.querySelectorAll<HTMLButtonElement>(".chat-feedback-btn").forEach((btn) => {
+    btn.addEventListener("click", () => handleNudgeVote(nudge, btn.dataset.vote ?? ""));
+  });
+  currentNudgeEl = nudge;
+  return nudge;
+}
+
+function handleNudgeVote(nudge: HTMLElement, vote: string): void {
+  nudge.dataset.voted = "true";
+  if (currentNudgeEl === nudge) currentNudgeEl = null;
+  nudge.innerHTML = `<span class="chat-feedback-thanks">${CHECK_SVG}Thanks for the feedback!</span>`;
+  console.info("[StudyLens] feedback vote:", vote);
+  setTimeout(() => dismissNudge(nudge), 2000);
+}
+
+function dismissNudge(nudge: HTMLElement): void {
+  nudge.classList.add("is-dismissed");
+}
+
+function autoDismissCurrentNudge(): void {
+  if (currentNudgeEl && currentNudgeEl.dataset.voted === "false") {
+    dismissNudge(currentNudgeEl);
+    currentNudgeEl = null;
+  }
 }
 
 function createMessageEl(msg: ChatMessage): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = `chat-msg chat-msg-${msg.role}`;
+  wrap.dataset.msgId = msg.id;
 
   const bubble = document.createElement("div");
   bubble.className = "chat-bubble";
@@ -989,7 +1152,120 @@ function createMessageEl(msg: ChatMessage): HTMLElement {
     });
     wrap.appendChild(cites);
   }
+
+  if (msg.role === "assistant") {
+    const bar = document.createElement("div");
+    bar.className = "chat-msg-actions";
+    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Copy answer" title="Copy" data-action="copy">${COPY_SVG}</button><button class="chat-action-btn" type="button" aria-label="Regenerate answer" title="Retry" data-action="retry">${RETRY_SVG}</button>`;
+    wrap.appendChild(bar);
+  }
+
+  if (msg.role === "user") {
+    const bar = document.createElement("div");
+    bar.className = "chat-msg-actions chat-msg-actions--user";
+    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Edit message" title="Edit" data-action="edit">${EDIT_SVG}</button><button class="chat-action-btn" type="button" aria-label="Copy message" title="Copy" data-action="copy">${COPY_SVG}</button>`;
+    wrap.appendChild(bar);
+  }
+
   return wrap;
+}
+
+function handleChatAction(e: MouseEvent): void {
+  const btn = (e.target as Element).closest<HTMLButtonElement>("[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const msgEl = btn.closest<HTMLElement>(".chat-msg");
+  if (!msgEl) return;
+
+  if (action === "copy") {
+    const msgId = msgEl.dataset.msgId;
+    const text = activeConversation?.messages.find((m) => m.id === msgId)?.content
+      ?? msgEl.querySelector<HTMLElement>(".chat-bubble")?.innerText
+      ?? "";
+    void navigator.clipboard.writeText(text).then(() => {
+      btn.innerHTML = CHECK_SVG;
+      btn.classList.add("is-copied");
+      setTimeout(() => {
+        btn.innerHTML = COPY_SVG;
+        btn.classList.remove("is-copied");
+      }, 1200);
+    }).catch(() => { /* clipboard unavailable */ });
+  }
+
+  if (action === "edit") {
+    const bubble = msgEl.querySelector<HTMLElement>(".chat-bubble");
+    const bar = msgEl.querySelector<HTMLElement>(".chat-msg-actions");
+    if (!bubble || !bar) return;
+    const original = bubble.textContent ?? "";
+    bubble.classList.add("is-editing");
+    bubble.contentEditable = "true";
+    bubble.focus();
+    // Move caret to end
+    const range = document.createRange();
+    range.selectNodeContents(bubble);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+
+    bar.classList.add("hidden");
+
+    const editActions = document.createElement("div");
+    editActions.className = "chat-edit-actions";
+    editActions.innerHTML = `<button class="chat-edit-btn cancel" type="button">Cancel</button><button class="chat-edit-btn save" type="button">Save &amp; resend</button>`;
+    msgEl.appendChild(editActions);
+
+    editActions.querySelector(".cancel")!.addEventListener("click", () => {
+      bubble.textContent = original;
+      bubble.classList.remove("is-editing");
+      bubble.contentEditable = "false";
+      bar.classList.remove("hidden");
+      editActions.remove();
+    });
+
+    editActions.querySelector(".save")!.addEventListener("click", () => {
+      const edited = bubble.textContent?.trim() ?? "";
+      if (!edited) return;
+      bubble.classList.remove("is-editing");
+      bubble.contentEditable = "false";
+      bar.classList.remove("hidden");
+      editActions.remove();
+
+      if (!activeConversation || !currentCourse) return;
+      const msgId = msgEl.dataset.msgId;
+      const idx = activeConversation.messages.findIndex((m) => m.id === msgId);
+      if (idx < 0) return;
+      // Remove the user message and everything after it; sendQuestion re-adds it
+      activeConversation.messages.splice(idx);
+      saveConversations(currentCourse.code, conversations);
+      renderMessages(activeConversation);
+      void sendQuestion(edited);
+    });
+    return;
+  }
+
+  if (action === "retry") {
+    if (!activeConversation || !currentCourse) return;
+    const msgId = msgEl.dataset.msgId;
+    const idx = activeConversation.messages.findIndex((m) => m.id === msgId);
+    if (idx < 1) return;
+    const preceding = activeConversation.messages[idx - 1];
+    if (preceding.role !== "user") return;
+
+    // Spin the icon for one rotation
+    const ico = btn.querySelector<SVGElement>(".retry-ico");
+    if (ico) {
+      ico.classList.remove("is-spinning");
+      void (ico as unknown as HTMLElement).offsetWidth; // force reflow to restart animation
+      ico.classList.add("is-spinning");
+    }
+
+    // Truncate conversation to just before this assistant message, then re-send
+    activeConversation.messages.splice(idx - 1);
+    saveConversations(currentCourse.code, conversations);
+    renderMessages(activeConversation);
+    void sendQuestion(preceding.content);
+  }
 }
 
 function createThinkingEl(): HTMLElement {
@@ -1000,7 +1276,22 @@ function createThinkingEl(): HTMLElement {
 }
 
 function scrollChatToBottom(): void {
-  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+  requestAnimationFrame(() => {
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+  });
+}
+
+function scrollNudgeIntoView(nudge: HTMLElement): void {
+  // Two rAFs: first lets the browser paint the nudge, second measures accurate rects.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const cRect = elements.chatMessages.getBoundingClientRect();
+      const nRect = nudge.getBoundingClientRect();
+      if (nRect.bottom > cRect.bottom) {
+        elements.chatMessages.scrollTop += nRect.bottom - cRect.bottom + 16;
+      }
+    });
+  });
 }
 
 function autoResizeTextarea(ta: HTMLTextAreaElement): void {

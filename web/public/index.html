@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StudyLens</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="katex.min.css" />
     <link rel="stylesheet" href="hljs.min.css" />
@@ -11,7 +13,7 @@
   <body>
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark">SL</div>
+        <img src="/logo.png" alt="StudyLens" class="brand-logo" />
         <h1>StudyLens</h1>
       </div>
       <div id="topbar-user" class="topbar-user hidden">
@@ -28,10 +30,10 @@
         </div>
 
         <nav id="sidebar-course-nav" class="sidebar-course-nav hidden" role="tablist" aria-label="Course tools">
-          <button class="sidebar-nav-item" data-tab="ask" role="tab" type="button">Ask</button>
-          <button class="sidebar-nav-item" data-tab="generate" role="tab" type="button">Generate</button>
+          <button class="sidebar-nav-item" data-tab="ask" role="tab" type="button"><span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 6.6l.85 2.55 2.55.85-2.55.85-.85 2.55-.85-2.55L8.6 10l2.55-.85z"/></svg></span>Ask</button>
+          <button class="sidebar-nav-item" data-tab="generate" role="tab" type="button"><span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7.5 9.5H12.5"/><path d="M7.5 12.5H12.5"/><path d="M7.5 15.5H10.5"/><path d="M18.7 3.4l.55 1.6 1.6.55-1.6.55-.55 1.6-.55-1.6-1.6-.55 1.6-.55z"/></svg></span>Generate</button>
           <div class="sidebar-nav-divider"></div>
-          <button class="sidebar-nav-item sidebar-nav-secondary" data-tab="retrieve" role="tab" type="button">Retrieve</button>
+          <button class="sidebar-nav-item sidebar-nav-secondary" data-tab="retrieve" role="tab" type="button"><span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6.4"/><path d="M14.7 14.7L20.5 20.5"/><path d="M7.3 8.8H12.7"/><path d="M7.3 11.4H10.8"/></svg></span>Retrieve</button>
         </nav>
 
       </aside>
@@ -98,31 +100,41 @@
 
         <!-- ── Main page: course library ─────────────────────────── -->
         <section class="view" id="view-courses" aria-labelledby="courses-title">
-          <div class="view-head">
-            <h2 id="courses-title">My Courses</h2>
-            <span id="courses-summary" class="subtle"></span>
+
+          <!-- Body -->
+          <div class="courses-body">
+
+            <!-- Page head -->
+            <div class="courses-head">
+              <h1 class="courses-title" id="courses-title">My Courses</h1>
+              <span class="courses-count" id="courses-summary"></span>
+            </div>
+
+            <!-- Toolbar (slice 2) -->
+            <div class="courses-toolbar" id="courses-toolbar">
+              <p class="courses-lede">
+                <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
+                Select the ones you want, then <strong>Process selected</strong> runs Scientia,
+                Panopto, past exams, and EdStem for each. Once processed, click
+                <strong>Enter →</strong> to open a course.
+              </p>
+              <div class="courses-actions">
+                <button id="courses-discover" class="button primary" type="button">Discover</button>
+                <button id="courses-index" class="button primary" type="button" disabled>Process selected</button>
+                <button id="courses-select-all" class="button secondary" type="button" hidden>Select all</button>
+                <span id="courses-status" class="status courses-status-mono"></span>
+              </div>
+            </div>
+
+            <!-- Grid -->
+            <ul id="courses-list" class="courses-grid" role="list"></ul>
+
+            <!-- Progress (hidden, kept for JS compat) -->
+            <section id="courses-progress" class="course-progress" hidden>
+              <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
+            </section>
+
           </div>
-          <p class="course-intro">
-            <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
-            Tick the ones you want, then <strong>Process selected</strong> runs Scientia,
-            Panopto, past exams, and EdStem for each. Once processed, click
-            <strong>Enter →</strong> to open a course.
-          </p>
-          <div class="actions">
-            <button id="courses-discover" class="button primary" type="button">Discover</button>
-            <button id="courses-index" class="button primary" type="button" disabled>
-              Process selected
-            </button>
-            <button id="courses-select-all" class="button secondary" type="button" hidden>
-              Select all
-            </button>
-            <span id="courses-status" class="status"></span>
-          </div>
-          <ul id="courses-list" class="course-list" role="list"></ul>
-          <section id="courses-progress" class="course-progress" hidden>
-            <h3 class="course-progress-title">Processing progress</h3>
-            <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
-          </section>
         </section>
 
         <!-- ── Course sub-page ───────────────────────────────────── -->
@@ -237,6 +249,7 @@
 
       </section>
     </main>
+
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
   </body>
