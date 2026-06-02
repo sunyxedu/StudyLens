@@ -1368,13 +1368,13 @@ textarea:focus {
   border-radius: 12px;
   font-size: 13px;
   color: var(--muted);
-  overflow: hidden;
-  max-height: 160px;
+  max-height: 400px;
   transition: opacity 300ms ease, max-height 300ms ease,
               margin 300ms ease, padding 300ms ease, transform 300ms ease;
 }
-.chat-feedback-prompt { line-height: 1.5; }
-.chat-feedback-actions { display: flex; gap: 8px; }
+.chat-feedback-nudge { align-items: center; }
+.chat-feedback-prompt { line-height: 1.5; text-align: center; }
+.chat-feedback-actions { display: flex; gap: 8px; justify-content: center; }
 
 .chat-feedback-btn {
   display: inline-flex;
@@ -1411,6 +1411,7 @@ textarea:focus {
 }
 
 .chat-feedback-nudge.is-dismissed {
+  overflow: hidden;
   opacity: 0;
   max-height: 0;
   margin: 0 auto;

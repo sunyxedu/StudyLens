@@ -912,6 +912,7 @@ async function sendQuestion(question: string): Promise<void> {
   elements.askSubmit.disabled = true;
   setStatus(elements.askStatus, "");
 
+
   try {
     const answer = await api.ask({
       question: contextQuestion,
@@ -994,7 +995,9 @@ function maybeInsertNudge(): void {
   if (nudgeCounter < nudgeThreshold) return;
   nudgeCounter = 0;
   nudgeThreshold = nextNudgeThreshold();
-  elements.chatMessages.appendChild(createNudgeEl());
+  const nudge = createNudgeEl();
+  elements.chatMessages.appendChild(nudge);
+  scrollNudgeIntoView(nudge);
 }
 
 function createNudgeEl(): HTMLElement {
@@ -1192,7 +1195,22 @@ function createThinkingEl(): HTMLElement {
 }
 
 function scrollChatToBottom(): void {
-  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+  requestAnimationFrame(() => {
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+  });
+}
+
+function scrollNudgeIntoView(nudge: HTMLElement): void {
+  // Two rAFs: first lets the browser paint the nudge, second measures accurate rects.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const cRect = elements.chatMessages.getBoundingClientRect();
+      const nRect = nudge.getBoundingClientRect();
+      if (nRect.bottom > cRect.bottom) {
+        elements.chatMessages.scrollTop += nRect.bottom - cRect.bottom + 16;
+      }
+    });
+  });
 }
 
 function autoResizeTextarea(ta: HTMLTextAreaElement): void {
