@@ -12,7 +12,8 @@ build
 docs
 tests
 extension
-web
+web/node_modules
+web/dist
 .env
 .env.local
 *.md

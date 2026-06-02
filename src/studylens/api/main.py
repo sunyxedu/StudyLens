@@ -4,7 +4,7 @@ import json
 import secrets
 from datetime import timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -118,6 +118,13 @@ def _secure_cookie(settings: Settings) -> bool:
     return settings.app_env != "local"
 
 
+def _samesite_cookie(settings: Settings) -> Literal["lax", "none", "strict"]:
+    # The app and API are served same-origin (the bundled /app), so Lax works
+    # and also guards CSRF. A cross-site split deploy can override to "none"
+    # (which additionally requires Secure) via SESSION_COOKIE_SAMESITE.
+    return settings.session_cookie_samesite or "lax"
+
+
 def _auth_user_schema(user: UserRecord) -> AuthUser:
     return AuthUser(
         id=user.id,
@@ -177,7 +184,7 @@ def _set_session_cookie(
         max_age=max_age,
         httponly=True,
         secure=_secure_cookie(settings),
-        samesite="lax",
+        samesite=_samesite_cookie(settings),
         path="/",
     )
 
@@ -187,7 +194,7 @@ def _clear_session_cookie(response: Response, *, settings: Settings) -> None:
         key=settings.session_cookie_name,
         httponly=True,
         secure=_secure_cookie(settings),
-        samesite="lax",
+        samesite=_samesite_cookie(settings),
         path="/",
     )
 
@@ -602,13 +609,13 @@ def create_app(
         )
         return GeneratedLatexResponse(latex=latex)
 
-    web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
+    web_dist = settings.web_dist_dir or Path(__file__).resolve().parents[3] / "web" / "dist"
     if web_dist.exists():
         application.mount("/app", StaticFiles(directory=web_dist, html=True), name="app")
 
         @application.get("/", include_in_schema=False)
         def app_index() -> RedirectResponse:
-            return RedirectResponse(url="/app")
+            return RedirectResponse(url="/app/")
 
     return application
 

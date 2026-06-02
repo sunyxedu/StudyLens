@@ -45,7 +45,13 @@ class Settings(BaseSettings):
     auth_secret_key: str | None = None
     session_cookie_name: str = "studylens_session"
     session_cookie_secure: bool | None = None
+    session_cookie_samesite: Literal["lax", "none", "strict"] | None = None
     session_ttl_days: int = 14
+
+    # Directory of the built web frontend to serve at /app. When unset we fall
+    # back to the in-repo web/dist (works for editable/dev runs). Docker images
+    # install the package non-editable, so they set STUDYLENS_WEB_DIST instead.
+    web_dist_dir: Path | None = None
 
     # /2526/modules is the "all my enrolled modules" list. /2526/timeline is the
     # filtered "recent activity" feed and doesn't list courses without current
@@ -73,6 +79,15 @@ class Settings(BaseSettings):
     def blank_cookie_secure_uses_default(cls, value: object) -> object:
         if value == "":
             return None
+        return value
+
+    @field_validator("session_cookie_samesite", mode="before")
+    @classmethod
+    def blank_cookie_samesite_uses_default(cls, value: object) -> object:
+        if value == "":
+            return None
+        if isinstance(value, str):
+            return value.lower()
         return value
 
     @property

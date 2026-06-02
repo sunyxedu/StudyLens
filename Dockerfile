@@ -19,6 +19,11 @@ RUN uv sync --locked --no-dev --all-extras --no-editable
 
 RUN uv run playwright install --with-deps chromium
 
+# Build the web frontend into the image so the API serves it same-origin at
+# /app. No STUDYLENS_BACKEND_URL is set, so the bundled app uses its own origin.
+COPY web ./web
+RUN cd web && npm ci && npm run build && rm -rf node_modules
+
 RUN useradd --create-home --uid 1000 studylens \
  && mkdir -p /app/data /home/studylens/.cache \
  && cp -r /root/.cache/ms-playwright /home/studylens/.cache/ms-playwright \
@@ -30,6 +35,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/home/studylens
+# Package is installed non-editable, so point the static mount at the build.
+ENV STUDYLENS_WEB_DIST=/app/web/dist
 
 EXPOSE 8000
 
