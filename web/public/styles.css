@@ -1357,24 +1357,24 @@ textarea:focus {
 
 .chat-feedback-nudge {
   width: 100%;
-  max-width: 400px;
-  margin: 6px auto;
-  padding: 13px 16px;
+  max-width: 480px;
+  margin: 8px auto;
+  padding: 14px 18px;
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 12px;
   background: var(--surface-alt);
   border: 1px dashed var(--border);
   border-radius: 12px;
   font-size: 13px;
   color: var(--muted);
   overflow: hidden;
-  max-height: 120px;
+  max-height: 160px;
   transition: opacity 300ms ease, max-height 300ms ease,
               margin 300ms ease, padding 300ms ease, transform 300ms ease;
 }
-.chat-feedback-prompt { flex: 1; line-height: 1.45; }
-.chat-feedback-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.chat-feedback-prompt { line-height: 1.5; }
+.chat-feedback-actions { display: flex; gap: 8px; }
 
 .chat-feedback-btn {
   display: inline-flex;
