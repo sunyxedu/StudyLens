@@ -586,9 +586,17 @@ function showToast(msg: string, durationMs = 2600): void {
 }
 
 function renderCourseList(): void {
-  elements.coursesList.replaceChildren(
-    ...discoveredCourses.map((course) => createCourseCard(course))
-  );
+  const cards = discoveredCourses.map((course) => createCourseCard(course));
+  elements.coursesList.replaceChildren(...cards);
+  // Staggered entrance (~45ms per card)
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  cards.forEach((card, i) => {
+    if (reduced) {
+      card.classList.add("ccard--visible");
+    } else {
+      setTimeout(() => card.classList.add("ccard--visible"), i * 45);
+    }
+  });
 }
 
 function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
