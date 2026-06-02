@@ -633,85 +633,6 @@ textarea:focus {
   margin: 0;
 }
 
-/* Banner */
-.courses-banner {
-  position: relative;
-  width: calc(100% + var(--home-workspace-pad) * 2);
-  margin-left: calc(-1 * var(--home-workspace-pad));
-  margin-top: calc(-1 * var(--home-workspace-pad));
-  height: clamp(170px, 24vh, 240px);
-  background: url("/topbar-bg.jpeg") center/cover no-repeat;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.courses-banner::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, rgba(18,32,26,.55) 0%, rgba(18,32,26,.30) 60%, rgba(18,32,26,.55) 100%);
-}
-
-.courses-banner-inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 20px 28px;
-  height: 100%;
-}
-
-.courses-banner-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.courses-banner-logo {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: 6px;
-}
-
-.courses-banner-wordmark {
-  font-family: "Hanken Grotesk", Inter, sans-serif;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: .16em;
-  color: #fff;
-  text-transform: uppercase;
-}
-
-.courses-banner-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.courses-banner-username {
-  font-family: "Hanken Grotesk", Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,.9);
-}
-
-.courses-banner-signout {
-  height: 28px;
-  padding: 0 11px;
-  border: 1px solid rgba(255,255,255,.38);
-  border-radius: 8px;
-  background: rgba(255,255,255,.12);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 110ms;
-}
-
-.courses-banner-signout:hover { background: rgba(255,255,255,.22); }
-
 /* Page head */
 .courses-body {
   padding: 28px var(--home-workspace-pad);
@@ -719,7 +640,7 @@ textarea:focus {
   flex-direction: column;
   gap: 20px;
   background: var(--bg);
-  min-height: calc(100vh - 58px - clamp(170px, 24vh, 240px));
+  min-height: calc(100vh - 58px);
 }
 
 .courses-head {
