@@ -1151,10 +1151,8 @@ function handleChatAction(e: MouseEvent): void {
       const msgId = msgEl.dataset.msgId;
       const idx = activeConversation.messages.findIndex((m) => m.id === msgId);
       if (idx < 0) return;
-      // Update the message content and truncate everything after it
-      activeConversation.messages[idx].content = edited;
-      activeConversation.messages.splice(idx + 1);
-      bubble.textContent = edited;
+      // Remove the user message and everything after it; sendQuestion re-adds it
+      activeConversation.messages.splice(idx);
       saveConversations(currentCourse.code, conversations);
       renderMessages(activeConversation);
       void sendQuestion(edited);
