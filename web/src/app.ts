@@ -993,6 +993,7 @@ async function sendQuestion(question: string): Promise<void> {
   setStatus(elements.askStatus, "");
 
 
+
   try {
     const answer = await api.ask({
       question: contextQuestion,
