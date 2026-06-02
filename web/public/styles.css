@@ -690,12 +690,15 @@ textarea:focus {
 }
 
 /* Hover lift */
+.ccard {
+  transition: transform .2s cubic-bezier(.22,.7,.3,1), box-shadow .2s ease, border-color 140ms ease, background 140ms ease;
+}
+
 @media (hover: hover) {
   .ccard:hover {
     box-shadow: var(--shadow-2);
     z-index: 3;
     transform: translateY(-6px) scale(1.04);
-    transition: transform .2s cubic-bezier(.22,.7,.3,1), box-shadow .2s ease, border-color 140ms ease, background 140ms ease;
     border-color: color-mix(in srgb, var(--ccard-accent, var(--green)) 35%, var(--line));
   }
 
@@ -706,7 +709,6 @@ textarea:focus {
   }
 
   /* Title micro-lift */
-  .ccard-title { transition: transform 200ms ease; }
   .ccard:hover .ccard-title { transform: translateY(-2px); }
 
   .ccard--selected:hover {
@@ -778,6 +780,7 @@ textarea:focus {
   font-weight: 800;
   color: var(--ink);
   line-height: 1.35;
+  transition: transform 200ms ease;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
