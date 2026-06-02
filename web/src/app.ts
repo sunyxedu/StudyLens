@@ -614,7 +614,17 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   codePill.className = "ccard-code";
   codePill.textContent = course.code;
 
-  head.append(codePill);
+  const badge = document.createElement("span");
+  badge.dataset.role = "badge";
+  if (course.indexed_at) {
+    badge.className = "ccard-badge ccard-badge--ready";
+    badge.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 6l3 3 5-5"/></svg>Ready`;
+  } else {
+    badge.className = "ccard-badge ccard-badge--pending";
+    badge.innerHTML = `<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5" cy="5" r="4"/></svg>Pending`;
+  }
+
+  head.append(codePill, badge);
 
   // Title
   const titleEl = document.createElement("div");
