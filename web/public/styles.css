@@ -1301,6 +1301,13 @@ textarea:focus {
 .chat-action-btn.is-copied { color: var(--accent); opacity: 1; }
 
 .chat-action-btn .retry-ico.is-spinning { animation: cl-retry .5s ease; }
+
+/* user action bar: right-aligned */
+.chat-msg-actions--user {
+  justify-content: flex-end;
+  margin-left: 0;
+  margin-right: -4px;
+}
 @keyframes cl-retry {
   from { transform: rotate(0deg); }
   to   { transform: rotate(-360deg); }

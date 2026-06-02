@@ -1007,6 +1007,13 @@ function createMessageEl(msg: ChatMessage): HTMLElement {
     wrap.appendChild(bar);
   }
 
+  if (msg.role === "user") {
+    const bar = document.createElement("div");
+    bar.className = "chat-msg-actions chat-msg-actions--user";
+    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Copy message" title="Copy" data-action="copy">${COPY_SVG}</button>`;
+    wrap.appendChild(bar);
+  }
+
   return wrap;
 }
 
