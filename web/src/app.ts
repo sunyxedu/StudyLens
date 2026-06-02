@@ -88,6 +88,9 @@ const elements = {
   browserStateStepTitle: byId<HTMLHeadingElement>("browser-state-step-title"),
   browserStateInstruction: byId<HTMLParagraphElement>("browser-state-instruction"),
   browserStateUrl: byId<HTMLAnchorElement>("browser-state-url"),
+  // Banner
+  coursesBannerUsername: byId<HTMLSpanElement>("courses-banner-username"),
+  coursesBannerSignout: byId<HTMLButtonElement>("courses-banner-signout"),
   // Course library (main page)
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
@@ -183,6 +186,7 @@ function init(): void {
     void handleLogin();
   });
   elements.logoutBtn.addEventListener("click", () => { void handleLogout(); });
+  elements.coursesBannerSignout.addEventListener("click", () => { void handleLogout(); });
   elements.authModeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       setAuthMode(button.dataset.authMode === "login" ? "login" : "register");
@@ -264,6 +268,7 @@ function handleAuthenticated(session: AuthSession): void {
   authSession = session;
   elements.topbarUsername.textContent = session.user.username;
   elements.topbarUser.classList.remove("hidden");
+  elements.coursesBannerUsername.textContent = session.user.username;
   if (session.needs_browser_state) {
     void showBrowserStateView();
   } else {

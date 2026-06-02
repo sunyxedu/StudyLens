@@ -100,31 +100,55 @@
 
         <!-- ── Main page: course library ─────────────────────────── -->
         <section class="view" id="view-courses" aria-labelledby="courses-title">
-          <div class="view-head">
-            <h2 id="courses-title">My Courses</h2>
-            <span id="courses-summary" class="subtle"></span>
+
+          <!-- Banner -->
+          <div class="courses-banner" id="courses-banner">
+            <div class="courses-banner-inner">
+              <div class="courses-banner-brand">
+                <img src="/logo.png" alt="" class="courses-banner-logo" />
+                <span class="courses-banner-wordmark">StudyLens</span>
+              </div>
+              <div class="courses-banner-user">
+                <span class="courses-banner-username" id="courses-banner-username"></span>
+                <button id="courses-banner-signout" class="courses-banner-signout" type="button">Sign out</button>
+              </div>
+            </div>
           </div>
-          <p class="course-intro">
-            <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
-            Tick the ones you want, then <strong>Process selected</strong> runs Scientia,
-            Panopto, past exams, and EdStem for each. Once processed, click
-            <strong>Enter →</strong> to open a course.
-          </p>
-          <div class="actions">
-            <button id="courses-discover" class="button primary" type="button">Discover</button>
-            <button id="courses-index" class="button primary" type="button" disabled>
-              Process selected
-            </button>
-            <button id="courses-select-all" class="button secondary" type="button" hidden>
-              Select all
-            </button>
-            <span id="courses-status" class="status"></span>
+
+          <!-- Body -->
+          <div class="courses-body">
+
+            <!-- Page head -->
+            <div class="courses-head">
+              <h1 class="courses-title" id="courses-title">My Courses</h1>
+              <span class="courses-count" id="courses-summary"></span>
+            </div>
+
+            <!-- Toolbar (slice 2) -->
+            <div class="courses-toolbar" id="courses-toolbar">
+              <p class="courses-lede">
+                <strong>Discover</strong> pulls this term's enrolled courses from EdStem.
+                Select the ones you want, then <strong>Process selected</strong> runs Scientia,
+                Panopto, past exams, and EdStem for each. Once processed, click
+                <strong>Enter →</strong> to open a course.
+              </p>
+              <div class="courses-actions">
+                <button id="courses-discover" class="button primary" type="button">Discover</button>
+                <button id="courses-index" class="button primary" type="button" disabled>Process selected</button>
+                <button id="courses-select-all" class="button secondary" type="button" hidden>Select all</button>
+                <span id="courses-status" class="status courses-status-mono"></span>
+              </div>
+            </div>
+
+            <!-- Grid -->
+            <ul id="courses-list" class="courses-grid" role="list"></ul>
+
+            <!-- Progress (hidden, kept for JS compat) -->
+            <section id="courses-progress" class="course-progress" hidden>
+              <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
+            </section>
+
           </div>
-          <ul id="courses-list" class="course-list" role="list"></ul>
-          <section id="courses-progress" class="course-progress" hidden>
-            <h3 class="course-progress-title">Processing progress</h3>
-            <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
-          </section>
         </section>
 
         <!-- ── Course sub-page ───────────────────────────────────── -->

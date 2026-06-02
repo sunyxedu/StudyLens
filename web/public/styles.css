@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -13,6 +15,20 @@
   --warm: #b7622a;
   --danger: #b6433b;
   --shadow: 0 18px 55px rgba(36, 42, 42, 0.12);
+
+  /* ── Home page design tokens ────────────────────────────── */
+  --bg: #f6f3ec;
+  --paper: #ffffff;
+  --green: #2e5d4d;
+  --green-deep: #264c3f;
+  --green-soft: #e7ede9;
+  --muted-2: #8a938e;
+  --line: #e7e2d8;
+  --line-soft: #efebe2;
+  --shadow-1: 0 1px 2px rgba(38,55,46,.05), 0 10px 26px -16px rgba(38,55,46,.20);
+  --shadow-2: 0 2px 6px rgba(38,55,46,.06), 0 26px 54px -22px rgba(38,55,46,.34);
+  --home-cols: 3;
+  --home-workspace-pad: 28px;
 }
 
 * {
@@ -605,9 +621,133 @@ textarea:focus {
   display: none !important;
 }
 
-/* Courses view ---------------------------------------------------------- */
+/* ── Home page ─────────────────────────────────────────────────────── */
 
+/* 1. Override the generic view padding so the banner can bleed full-width */
 #view-courses.active {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Banner */
+.courses-banner {
+  position: relative;
+  width: calc(100% + var(--home-workspace-pad) * 2);
+  margin-left: calc(-1 * var(--home-workspace-pad));
+  margin-top: calc(-1 * var(--home-workspace-pad));
+  height: clamp(170px, 24vh, 240px);
+  background: url("/topbar-bg.jpeg") center/cover no-repeat;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.courses-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(18,32,26,.55) 0%, rgba(18,32,26,.30) 60%, rgba(18,32,26,.55) 100%);
+}
+
+.courses-banner-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 28px;
+  height: 100%;
+}
+
+.courses-banner-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.courses-banner-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.courses-banner-wordmark {
+  font-family: "Hanken Grotesk", Inter, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.courses-banner-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.courses-banner-username {
+  font-family: "Hanken Grotesk", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
+}
+
+.courses-banner-signout {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 8px;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 110ms;
+}
+
+.courses-banner-signout:hover { background: rgba(255,255,255,.22); }
+
+/* Page head */
+.courses-body {
+  padding: 28px var(--home-workspace-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: var(--bg);
+  min-height: calc(100vh - 58px - clamp(170px, 24vh, 240px));
+}
+
+.courses-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.courses-title {
+  font-family: "Hanken Grotesk", Inter, sans-serif;
+  font-size: clamp(28px, 3vw, 40px);
+  font-weight: 800;
+  letter-spacing: -.022em;
+  color: var(--ink);
+  margin: 0;
+}
+
+.courses-count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+/* ── OLD courses view (keep for now, overridden below) ── */
+
+#view-courses-OLD.active {
   max-width: 800px;
 }
 
