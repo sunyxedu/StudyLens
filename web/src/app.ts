@@ -895,6 +895,7 @@ async function handleSendMessage(): Promise<void> {
 
 async function sendQuestion(question: string): Promise<void> {
   if (!currentCourse || !activeConversation) return;
+  autoDismissCurrentNudge();
 
   // Build context from existing history before adding the new message.
   const contextQuestion = buildQuestion(activeConversation, question);
@@ -1023,9 +1024,20 @@ function createNudgeEl(): HTMLElement {
 function handleNudgeVote(nudge: HTMLElement, vote: string): void {
   nudge.dataset.voted = "true";
   if (currentNudgeEl === nudge) currentNudgeEl = null;
-  // Replace actions with thanks
   nudge.innerHTML = `<span class="chat-feedback-thanks">${CHECK_SVG}Thanks for the feedback!</span>`;
-  console.info("[StudyLens] feedback vote:", vote); // can be wired to an API later
+  console.info("[StudyLens] feedback vote:", vote);
+  setTimeout(() => dismissNudge(nudge), 2000);
+}
+
+function dismissNudge(nudge: HTMLElement): void {
+  nudge.classList.add("is-dismissed");
+}
+
+function autoDismissCurrentNudge(): void {
+  if (currentNudgeEl && currentNudgeEl.dataset.voted === "false") {
+    dismissNudge(currentNudgeEl);
+    currentNudgeEl = null;
+  }
 }
 
 function createMessageEl(msg: ChatMessage): HTMLElement {
