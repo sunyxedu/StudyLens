@@ -884,6 +884,10 @@ textarea:focus {
 
 .ccard--selected .ccard-bar { width: 9px; }
 
+/* Processing spinner on card meta */
+@keyframes spin { to { transform: rotate(360deg); } }
+.ccard-meta .spin { animation: spin .9s linear infinite; }
+
 /* Status badges */
 .ccard-badge {
   display: inline-flex;

@@ -735,10 +735,9 @@ async function handleIndexSelected(): Promise<void> {
   elements.coursesIndex.disabled = true;
   elements.coursesDiscover.disabled = true;
   elements.coursesSelectAll.disabled = true;
-  elements.coursesProgress.hidden = false;
-  elements.coursesProgressList.replaceChildren(
-    ...targets.map((c) => createProgressRow(c.code, c.title, "queued"))
-  );
+
+  // Show processing state on each target card
+  targets.forEach((c) => setCardProcessing(c.code, "processing"));
 
   const queue = [...targets];
   let completed = 0;
@@ -747,41 +746,23 @@ async function handleIndexSelected(): Promise<void> {
     while (true) {
       const course = queue.shift();
       if (!course) return;
-      const row = elements.coursesProgressList.querySelector<HTMLElement>(
-        `[data-code="${course.code}"]`
-      );
-      if (!row) continue;
-      setProgressStatus(row, "running", "Processing…");
       try {
         const report = await api.autoIndexCourse({
           course_id: course.code,
           course_title: course.title,
         });
-        setProgressStatus(
-          row,
-          "done",
-          `${report.indexed_resources}/${report.discovered_resources} resources · ${report.indexed_chunks} chunks`
-        );
-        // Update local indexed_at so the Enter button appears without a reload.
+        const ts = new Date().toISOString();
         const idx = discoveredCourses.findIndex((c) => c.code === course.code);
-        if (idx >= 0) {
-          discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: new Date().toISOString() };
-        }
+        if (idx >= 0) discoveredCourses[idx] = { ...discoveredCourses[idx], indexed_at: ts };
+        setCardProcessing(course.code, "done", ts);
       } catch (error) {
-        if (handleAuthRequired(error)) {
-          queue.length = 0;
-          return;
-        }
-        setProgressStatus(row, "running", "Checking status…");
+        if (handleAuthRequired(error)) { queue.length = 0; return; }
+        setCardProcessing(course.code, "checking");
         const indexedCourse = await confirmIndexedCourse(course.code);
         if (indexedCourse?.indexed_at) {
-          setProgressStatus(
-            row,
-            "done",
-            `Processed ${formatTimestamp(indexedCourse.indexed_at)} · response lost`
-          );
+          setCardProcessing(course.code, "done", indexedCourse.indexed_at);
         } else {
-          setProgressStatus(row, "failed", error instanceof Error ? error.message : "failed");
+          setCardProcessing(course.code, "failed");
         }
       }
       completed += 1;
@@ -789,19 +770,49 @@ async function handleIndexSelected(): Promise<void> {
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(INDEX_CONCURRENCY, targets.length) },
-    () => worker()
-  );
+  const workers = Array.from({ length: Math.min(INDEX_CONCURRENCY, targets.length) }, () => worker());
   try {
     await Promise.all(workers);
     setStatus(elements.coursesStatus, `Done · ${completed}/${targets.length}`);
-    // Re-render so newly indexed courses get their Enter button.
+    selectedCourseCodes.clear();
     renderCourseList();
   } finally {
     elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
     elements.coursesDiscover.disabled = false;
     elements.coursesSelectAll.disabled = false;
+  }
+}
+
+function setCardProcessing(code: string, state: "processing" | "checking" | "done" | "failed", ts?: string): void {
+  const card = elements.coursesList.querySelector<HTMLElement>(`[data-code="${code}"]`);
+  if (!card) return;
+
+  const meta = card.querySelector<HTMLElement>("[data-role='meta']");
+  const badge = card.querySelector<HTMLElement>("[data-role='badge']");
+  const foot = card.querySelector<HTMLElement>(".ccard-foot");
+
+  if (state === "processing" || state === "checking") {
+    if (meta) meta.innerHTML = `<svg class="spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg> Processing…`;
+    if (badge) { badge.className = "ccard-badge ccard-badge--pending"; badge.textContent = "Processing"; }
+  } else if (state === "done" && ts) {
+    if (meta) meta.innerHTML = `<span class="ccard-meta-check">✓</span> Processed · ${formatTimestamp(ts)}`;
+    if (badge) { badge.className = "ccard-badge ccard-badge--ready"; badge.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 6l3 3 5-5"/></svg>Ready`; }
+    // Add Enter button if not present
+    if (foot && !foot.querySelector(".ccard-enter")) {
+      const course = discoveredCourses.find((c) => c.code === code);
+      if (course) {
+        const enterBtn = document.createElement("button");
+        enterBtn.type = "button";
+        enterBtn.className = "ccard-enter";
+        enterBtn.innerHTML = `Enter <span class="ccard-enter-arrow">→</span>`;
+        enterBtn.addEventListener("click", (e) => { e.stopPropagation(); enterCourse(course); });
+        foot.append(enterBtn);
+      }
+    }
+    card.classList.remove("ccard--selected");
+  } else if (state === "failed") {
+    if (meta) meta.innerHTML = `<span style="color:var(--danger)">✗ Failed</span>`;
+    if (badge) { badge.className = "ccard-badge ccard-badge--pending"; badge.textContent = "Failed"; }
   }
 }
 
