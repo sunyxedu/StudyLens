@@ -154,6 +154,9 @@ const selectedCourseCodes = new Set<string>();
 let conversations: Conversation[] = [];
 let activeConversation: Conversation | null = null;
 
+const COPY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
+const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+
 init();
 
 function init(): void {
@@ -177,6 +180,7 @@ function init(): void {
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.newConvBtn.addEventListener("click", handleNewConversation);
+  elements.chatMessages.addEventListener("click", handleChatAction);
   elements.askSubmit.addEventListener("click", () => { void handleSendMessage(); });
   elements.askQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendMessage(); }
@@ -965,6 +969,7 @@ function appendMessageBubble(msg: ChatMessage): void {
 function createMessageEl(msg: ChatMessage): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = `chat-msg chat-msg-${msg.role}`;
+  wrap.dataset.msgId = msg.id;
 
   const bubble = document.createElement("div");
   bubble.className = "chat-bubble";
@@ -989,7 +994,38 @@ function createMessageEl(msg: ChatMessage): HTMLElement {
     });
     wrap.appendChild(cites);
   }
+
+  if (msg.role === "assistant") {
+    const bar = document.createElement("div");
+    bar.className = "chat-msg-actions";
+    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Copy answer" title="Copy" data-action="copy">${COPY_SVG}</button>`;
+    wrap.appendChild(bar);
+  }
+
   return wrap;
+}
+
+function handleChatAction(e: MouseEvent): void {
+  const btn = (e.target as Element).closest<HTMLButtonElement>("[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const msgEl = btn.closest<HTMLElement>(".chat-msg");
+  if (!msgEl) return;
+
+  if (action === "copy") {
+    const msgId = msgEl.dataset.msgId;
+    const text = activeConversation?.messages.find((m) => m.id === msgId)?.content
+      ?? msgEl.querySelector<HTMLElement>(".chat-bubble")?.innerText
+      ?? "";
+    void navigator.clipboard.writeText(text).then(() => {
+      btn.innerHTML = CHECK_SVG;
+      btn.classList.add("is-copied");
+      setTimeout(() => {
+        btn.innerHTML = COPY_SVG;
+        btn.classList.remove("is-copied");
+      }, 1200);
+    }).catch(() => { /* clipboard unavailable */ });
+  }
 }
 
 function createThinkingEl(): HTMLElement {

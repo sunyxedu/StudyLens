@@ -1267,6 +1267,41 @@ textarea:focus {
   30% { opacity: 1; transform: scale(1); }
 }
 
+/* ── Chat message action bars ─────────────────────────────────────────── */
+
+.chat-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  margin-left: -4px;
+}
+
+.chat-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: .7;
+  transition: background 110ms ease, color 110ms ease, opacity 110ms ease;
+}
+
+.chat-action-btn svg { width: 15px; height: 15px; display: block; }
+
+.chat-action-btn:hover { background: var(--surface-alt); color: var(--ink); opacity: 1; }
+.chat-action-btn:active { background: #edefe9; }
+.chat-action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chat-action-btn.is-copied { color: var(--accent); opacity: 1; }
+
+/* ----------------------------------------------------------------------- */
+
 /* Input area */
 .chat-input-area {
   display: flex;
