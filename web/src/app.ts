@@ -157,6 +157,7 @@ let activeConversation: Conversation | null = null;
 const COPY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
 const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
 const RETRY_SVG = `<svg class="retry-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg>`;
+const EDIT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
 
 init();
 
@@ -1010,7 +1011,7 @@ function createMessageEl(msg: ChatMessage): HTMLElement {
   if (msg.role === "user") {
     const bar = document.createElement("div");
     bar.className = "chat-msg-actions chat-msg-actions--user";
-    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Copy message" title="Copy" data-action="copy">${COPY_SVG}</button>`;
+    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Edit message" title="Edit" data-action="edit">${EDIT_SVG}</button><button class="chat-action-btn" type="button" aria-label="Copy message" title="Copy" data-action="copy">${COPY_SVG}</button>`;
     wrap.appendChild(bar);
   }
 
@@ -1037,6 +1038,60 @@ function handleChatAction(e: MouseEvent): void {
         btn.classList.remove("is-copied");
       }, 1200);
     }).catch(() => { /* clipboard unavailable */ });
+  }
+
+  if (action === "edit") {
+    const bubble = msgEl.querySelector<HTMLElement>(".chat-bubble");
+    const bar = msgEl.querySelector<HTMLElement>(".chat-msg-actions");
+    if (!bubble || !bar) return;
+    const original = bubble.textContent ?? "";
+    bubble.classList.add("is-editing");
+    bubble.contentEditable = "true";
+    bubble.focus();
+    // Move caret to end
+    const range = document.createRange();
+    range.selectNodeContents(bubble);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+
+    bar.classList.add("hidden");
+
+    const editActions = document.createElement("div");
+    editActions.className = "chat-edit-actions";
+    editActions.innerHTML = `<button class="chat-edit-btn cancel" type="button">Cancel</button><button class="chat-edit-btn save" type="button">Save &amp; resend</button>`;
+    msgEl.appendChild(editActions);
+
+    editActions.querySelector(".cancel")!.addEventListener("click", () => {
+      bubble.textContent = original;
+      bubble.classList.remove("is-editing");
+      bubble.contentEditable = "false";
+      bar.classList.remove("hidden");
+      editActions.remove();
+    });
+
+    editActions.querySelector(".save")!.addEventListener("click", () => {
+      const edited = bubble.textContent?.trim() ?? "";
+      if (!edited) return;
+      bubble.classList.remove("is-editing");
+      bubble.contentEditable = "false";
+      bar.classList.remove("hidden");
+      editActions.remove();
+
+      if (!activeConversation || !currentCourse) return;
+      const msgId = msgEl.dataset.msgId;
+      const idx = activeConversation.messages.findIndex((m) => m.id === msgId);
+      if (idx < 0) return;
+      // Update the message content and truncate everything after it
+      activeConversation.messages[idx].content = edited;
+      activeConversation.messages.splice(idx + 1);
+      bubble.textContent = edited;
+      saveConversations(currentCourse.code, conversations);
+      renderMessages(activeConversation);
+      void sendQuestion(edited);
+    });
+    return;
   }
 
   if (action === "retry") {

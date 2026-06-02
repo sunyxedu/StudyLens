@@ -1308,6 +1308,44 @@ textarea:focus {
   margin-left: 0;
   margin-right: -4px;
 }
+
+/* edit mode */
+.chat-bubble.is-editing {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(23,107,93,.12);
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+  justify-content: flex-end;
+}
+.chat-edit-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font: 600 12.5px/1 Inter, ui-sans-serif;
+  cursor: pointer;
+  transition: background 110ms ease, border-color 110ms ease, color 110ms ease;
+}
+.chat-edit-btn.save {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.chat-edit-btn.save:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.chat-edit-btn.cancel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+.chat-edit-btn.cancel:hover { color: var(--ink); background: var(--surface-alt); }
 @keyframes cl-retry {
   from { transform: rotate(0deg); }
   to   { transform: rotate(-360deg); }
