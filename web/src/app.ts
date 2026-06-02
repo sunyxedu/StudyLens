@@ -512,6 +512,7 @@ function enterCourse(course: DiscoveredCourse): void {
   shell.classList.remove("mode-courses");
   activateTopLevelView("view-course");
   activateCourseTab("ask");
+  showToast(`Opening ${course.code} — ${stripCodePrefix(course.title)}`);
   setStatus(elements.askStatus, "");
   initChatForCourse(course.code);
   elements.retrieveResults.replaceChildren();
@@ -553,7 +554,7 @@ async function loadCachedCourses(): Promise<void> {
 }
 
 async function handleDiscoverCourses(): Promise<void> {
-  await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering", async () => {
+  await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering…", async () => {
     const response = await api.discoverCourses();
     discoveredCourses = response.courses;
     selectedCourseCodes.clear();
@@ -563,11 +564,25 @@ async function handleDiscoverCourses(): Promise<void> {
     if (response.error) {
       setStatus(elements.coursesStatus, response.error, "error");
     } else {
-      setStatus(elements.coursesStatus, "");
+      setStatus(elements.coursesStatus, `Loaded ${response.courses.length} courses · just now`);
+      showToast(`Loaded ${response.courses.length} courses from EdStem`);
     }
     updateCoursesSummary(response.dropped_titles.length);
     updateCoursesActions();
   });
+}
+
+function showToast(msg: string, durationMs = 2600): void {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.classList.add("toast-out");
+    el.addEventListener("animationend", () => el.remove(), { once: true });
+  }, durationMs);
 }
 
 function renderCourseList(): void {
@@ -774,6 +789,7 @@ async function handleIndexSelected(): Promise<void> {
   try {
     await Promise.all(workers);
     setStatus(elements.coursesStatus, `Done · ${completed}/${targets.length}`);
+    showToast(`Processed ${completed} course${completed !== 1 ? "s" : ""}`);
     selectedCourseCodes.clear();
     renderCourseList();
   } finally {

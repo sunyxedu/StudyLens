@@ -884,6 +884,42 @@ textarea:focus {
 
 .ccard--selected .ccard-bar { width: 9px; }
 
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  background: var(--green-deep);
+  color: #fff;
+  border-radius: 30px;
+  font-family: "Hanken Grotesk", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(38,55,46,.32);
+  white-space: nowrap;
+  animation: toast-in .22s cubic-bezier(.3,.8,.4,1) both;
+  pointer-events: none;
+}
+
+.toast.toast-out {
+  animation: toast-out .22s ease both;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toast-out {
+  to { opacity: 0; transform: translateX(-50%) translateY(8px); }
+}
+
 /* Processing spinner on card meta */
 @keyframes spin { to { transform: rotate(360deg); } }
 .ccard-meta .spin { animation: spin .9s linear infinite; }
