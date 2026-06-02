@@ -689,14 +689,54 @@ textarea:focus {
   transition: border-color 140ms ease, box-shadow 200ms ease, background 140ms ease;
 }
 
-/* Hover lift */
+/* Shimmer sweep — slides across on hover */
+.ccard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255,255,255,0.18) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+  transform: translateX(-100%) skewX(-12deg);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Hover lift + shimmer trigger */
 @media (hover: hover) {
+  .ccard {
+    /* JS writes transform directly; CSS handles non-transform hover props */
+    transition: box-shadow .22s ease, border-color 140ms ease, background 140ms ease;
+    will-change: transform;
+  }
+
   .ccard:hover {
     box-shadow: var(--shadow-2);
     z-index: 3;
-    transform: translateY(-6px) scale(1.045);
-    transition: transform .2s cubic-bezier(.22,.7,.3,1), box-shadow .2s ease, border-color 140ms ease, background 140ms ease;
+    border-color: color-mix(in srgb, var(--ccard-accent, var(--green)) 35%, var(--line));
   }
+
+  /* Shimmer fires on hover */
+  .ccard:hover::after {
+    transform: translateX(200%) skewX(-12deg);
+    transition: transform 0.6s ease;
+  }
+
+  /* Accent bar widens and blooms */
+  .ccard:hover .ccard-bar {
+    width: 8px;
+    box-shadow: 3px 0 18px color-mix(in srgb, var(--ccard-accent, var(--green)) 55%, transparent);
+  }
+
+  /* Title micro-lift */
+  .ccard-title { transition: transform 200ms ease; }
+  .ccard:hover .ccard-title { transform: translateY(-2px); }
+
   .ccard--selected:hover {
     box-shadow: 0 0 0 2px var(--ccard-accent, var(--green)),
                 var(--shadow-2);
