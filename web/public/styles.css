@@ -689,44 +689,14 @@ textarea:focus {
   transition: border-color 140ms ease, box-shadow 200ms ease, background 140ms ease;
 }
 
-/* Shimmer sweep — slides across on hover */
-.ccard::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  /* subtle gloss streak: dark-edge → bright highlight → dark-edge, visible on white */
-  background: linear-gradient(
-    115deg,
-    rgba(0,0,0,0.03) 0%,
-    transparent      36%,
-    rgba(255,255,255,0.55) 50%,
-    transparent      64%,
-    rgba(0,0,0,0.03) 100%
-  );
-  transform: translateX(-120%) skewX(-12deg);
-  pointer-events: none;
-  border-radius: inherit;
-  z-index: 1;
-}
-
-/* Hover lift + shimmer trigger */
+/* Hover lift */
 @media (hover: hover) {
-  .ccard {
-    /* JS writes transform directly; CSS handles non-transform hover props */
-    transition: box-shadow .22s ease, border-color 140ms ease, background 140ms ease;
-    will-change: transform;
-  }
-
   .ccard:hover {
     box-shadow: var(--shadow-2);
     z-index: 3;
+    transform: translateY(-6px) scale(1.04);
+    transition: transform .2s cubic-bezier(.22,.7,.3,1), box-shadow .2s ease, border-color 140ms ease, background 140ms ease;
     border-color: color-mix(in srgb, var(--ccard-accent, var(--green)) 35%, var(--line));
-  }
-
-  /* Shimmer fires on hover */
-  .ccard:hover::after {
-    transform: translateX(200%) skewX(-12deg);
-    transition: transform 0.6s ease;
   }
 
   /* Accent bar widens and blooms */

@@ -604,21 +604,6 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   li.style.setProperty("--ccard-accent", accent);
   li.dataset.code = course.code;
 
-  // 3D tilt on hover
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    li.addEventListener("mousemove", (e: MouseEvent) => {
-      const r = li.getBoundingClientRect();
-      const dx = (e.clientX - r.left - r.width  / 2) / (r.width  / 2); // −1 … 1
-      const dy = (e.clientY - r.top  - r.height / 2) / (r.height / 2);
-      li.style.transition = "box-shadow .22s ease, border-color 140ms ease, background 140ms ease";
-      li.style.transform  = `perspective(720px) rotateX(${-dy * 5}deg) rotateY(${dx * 6}deg) translateY(-6px) scale(1.04)`;
-    });
-    li.addEventListener("mouseleave", () => {
-      li.style.transition = "transform .24s cubic-bezier(.22,.7,.3,1), box-shadow .22s ease, border-color 140ms ease, background 140ms ease";
-      li.style.transform  = "";
-    });
-  }
-
   // Click card = toggle selection (Enter button stops propagation)
   li.addEventListener("click", () => {
     const isSelected = selectedCourseCodes.has(course.code);
