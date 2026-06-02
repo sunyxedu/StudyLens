@@ -694,17 +694,19 @@ textarea:focus {
   content: "";
   position: absolute;
   inset: 0;
+  /* subtle gloss streak: dark-edge → bright highlight → dark-edge, visible on white */
   background: linear-gradient(
     115deg,
-    transparent 0%,
-    transparent 38%,
-    rgba(255,255,255,0.18) 50%,
-    transparent 62%,
-    transparent 100%
+    rgba(0,0,0,0.03) 0%,
+    transparent      36%,
+    rgba(255,255,255,0.55) 50%,
+    transparent      64%,
+    rgba(0,0,0,0.03) 100%
   );
-  transform: translateX(-100%) skewX(-12deg);
+  transform: translateX(-120%) skewX(-12deg);
   pointer-events: none;
   border-radius: inherit;
+  z-index: 1;
 }
 
 /* Hover lift + shimmer trigger */
@@ -743,24 +745,22 @@ textarea:focus {
   }
 }
 
-/* Entrance animation */
+/* Entrance animation — opacity only, no transform, so JS tilt is never overridden */
 @keyframes card-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .ccard { opacity: 0; }
 .ccard.ccard--visible {
-  animation: card-in .28s ease both;
+  animation: card-in .28s ease forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ccard, .ccard.ccard--visible {
     animation: none;
     opacity: 1;
-    transform: none;
   }
-  .ccard:hover { transform: none; }
 }
 
 /* Left accent bar */
