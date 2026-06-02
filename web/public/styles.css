@@ -1546,6 +1546,7 @@ textarea:focus {
   position: relative;
   display: flex;
   align-items: center;
+  gap: 13px;
   width: 100%;
   height: 38px;
   padding: 0 10px 0 16px;
@@ -1557,6 +1558,12 @@ textarea:focus {
   font-weight: 700;
   text-align: left;
   transition: background 100ms ease, color 100ms ease;
+}
+
+.sidebar-nav-item .ico {
+  display: flex;
+  flex: 0 0 auto;
+  color: inherit;
 }
 
 .sidebar-nav-item:hover:not(.active) {
