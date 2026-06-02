@@ -154,6 +154,19 @@ let currentCourse: DiscoveredCourse | null = null;
 let authSession: AuthSession | null = null;
 let authMode: "register" | "login" = "register";
 const selectedCourseCodes = new Set<string>();
+
+// ── Course card accent palette ────────────────────────────────────────
+const CARD_ACCENTS = [
+  "#2e5d4d", "#34706a", "#6f7f55", "#4c6e41", "#867a3b",
+  "#b07d35", "#b1633a", "#9c5235", "#8a5560", "#7a6076",
+  "#566884", "#5d7384",
+];
+
+function courseAccent(code: string): string {
+  let h = 0;
+  for (let i = 0; i < code.length; i++) h = (Math.imul(31, h) + code.charCodeAt(i)) | 0;
+  return CARD_ACCENTS[Math.abs(h) % CARD_ACCENTS.length];
+}
 let conversations: Conversation[] = [];
 let activeConversation: Conversation | null = null;
 
@@ -564,62 +577,79 @@ function renderCourseList(): void {
 }
 
 function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
+  const accent = courseAccent(course.code);
+  const selected = selectedCourseCodes.has(course.code);
+
   const li = document.createElement("li");
-  li.className = "course-card";
-  if (selectedCourseCodes.has(course.code)) li.classList.add("selected");
+  li.className = `ccard${selected ? " ccard--selected" : ""}`;
+  li.style.setProperty("--ccard-accent", accent);
+  li.dataset.code = course.code;
 
-  const label = document.createElement("label");
-  label.htmlFor = `course-${course.code}`;
-
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.id = `course-${course.code}`;
-  checkbox.value = course.code;
-  checkbox.checked = selectedCourseCodes.has(course.code);
-  checkbox.addEventListener("change", () => {
-    if (checkbox.checked) {
-      selectedCourseCodes.add(course.code);
-    } else {
+  // Click card = toggle selection (Enter button stops propagation)
+  li.addEventListener("click", () => {
+    const isSelected = selectedCourseCodes.has(course.code);
+    if (isSelected) {
       selectedCourseCodes.delete(course.code);
+      li.classList.remove("ccard--selected");
+    } else {
+      selectedCourseCodes.add(course.code);
+      li.classList.add("ccard--selected");
     }
-    li.classList.toggle("selected", checkbox.checked);
     updateCoursesActions();
   });
 
-  const code = document.createElement("span");
-  code.className = "course-code";
-  code.textContent = course.code;
+  // Left accent bar
+  const bar = document.createElement("div");
+  bar.className = "ccard-bar";
 
-  const info = document.createElement("span");
-  info.className = "course-info";
+  // Body
+  const body = document.createElement("div");
+  body.className = "ccard-body";
 
-  const title = document.createElement("span");
-  title.className = "course-title";
-  title.textContent = stripCodePrefix(course.title);
-  title.title = course.title;
+  // Head row
+  const head = document.createElement("div");
+  head.className = "ccard-head";
+
+  const codePill = document.createElement("span");
+  codePill.className = "ccard-code";
+  codePill.textContent = course.code;
+
+  head.append(codePill);
+
+  // Title
+  const titleEl = document.createElement("div");
+  titleEl.className = "ccard-title";
+  titleEl.textContent = stripCodePrefix(course.title);
+  titleEl.title = course.title;
+
+  // Foot row
+  const foot = document.createElement("div");
+  foot.className = "ccard-foot";
 
   const meta = document.createElement("span");
-  meta.className = "course-url";
+  meta.className = "ccard-meta";
+  meta.dataset.role = "meta";
+
   if (course.indexed_at) {
-    meta.textContent = `Processed ${formatTimestamp(course.indexed_at)}`;
+    meta.innerHTML = `<span class="ccard-meta-check">✓</span> Processed · ${formatTimestamp(course.indexed_at)}`;
   } else if (course.edstem_url) {
     meta.textContent = shortUrl(course.edstem_url);
     meta.title = course.edstem_url;
   }
 
-  info.append(title, meta);
-  label.append(checkbox, code, info);
-  li.append(label);
+  foot.append(meta);
 
   if (course.indexed_at) {
     const enterBtn = document.createElement("button");
     enterBtn.type = "button";
-    enterBtn.className = "enter-course-btn";
-    enterBtn.textContent = "Enter →";
-    enterBtn.addEventListener("click", () => enterCourse(course));
-    li.append(enterBtn);
+    enterBtn.className = "ccard-enter";
+    enterBtn.innerHTML = `Enter <span class="ccard-enter-arrow">→</span>`;
+    enterBtn.addEventListener("click", (e) => { e.stopPropagation(); enterCourse(course); });
+    foot.append(enterBtn);
   }
 
+  body.append(head, titleEl, foot);
+  li.append(bar, body);
   return li;
 }
 
