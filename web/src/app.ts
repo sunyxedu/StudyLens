@@ -156,6 +156,7 @@ let activeConversation: Conversation | null = null;
 
 const COPY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
 const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+const RETRY_SVG = `<svg class="retry-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg>`;
 
 init();
 
@@ -871,12 +872,16 @@ async function handleSendMessage(): Promise<void> {
   if (!currentCourse || !activeConversation) return;
   const question = elements.askQuestion.value.trim();
   if (!question) return;
+  elements.askQuestion.value = "";
+  autoResizeTextarea(elements.askQuestion);
+  void sendQuestion(question);
+}
+
+async function sendQuestion(question: string): Promise<void> {
+  if (!currentCourse || !activeConversation) return;
 
   // Build context from existing history before adding the new message.
   const contextQuestion = buildQuestion(activeConversation, question);
-
-  elements.askQuestion.value = "";
-  autoResizeTextarea(elements.askQuestion);
 
   const userMsg = addMessage(activeConversation, { role: "user", content: question, citations: [] });
   saveConversations(currentCourse.code, conversations);
@@ -998,7 +1003,7 @@ function createMessageEl(msg: ChatMessage): HTMLElement {
   if (msg.role === "assistant") {
     const bar = document.createElement("div");
     bar.className = "chat-msg-actions";
-    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Copy answer" title="Copy" data-action="copy">${COPY_SVG}</button>`;
+    bar.innerHTML = `<button class="chat-action-btn" type="button" aria-label="Copy answer" title="Copy" data-action="copy">${COPY_SVG}</button><button class="chat-action-btn" type="button" aria-label="Regenerate answer" title="Retry" data-action="retry">${RETRY_SVG}</button>`;
     wrap.appendChild(bar);
   }
 
@@ -1025,6 +1030,29 @@ function handleChatAction(e: MouseEvent): void {
         btn.classList.remove("is-copied");
       }, 1200);
     }).catch(() => { /* clipboard unavailable */ });
+  }
+
+  if (action === "retry") {
+    if (!activeConversation || !currentCourse) return;
+    const msgId = msgEl.dataset.msgId;
+    const idx = activeConversation.messages.findIndex((m) => m.id === msgId);
+    if (idx < 1) return;
+    const preceding = activeConversation.messages[idx - 1];
+    if (preceding.role !== "user") return;
+
+    // Spin the icon for one rotation
+    const ico = btn.querySelector<SVGElement>(".retry-ico");
+    if (ico) {
+      ico.classList.remove("is-spinning");
+      void (ico as unknown as HTMLElement).offsetWidth; // force reflow to restart animation
+      ico.classList.add("is-spinning");
+    }
+
+    // Truncate conversation to just before this assistant message, then re-send
+    activeConversation.messages.splice(idx - 1);
+    saveConversations(currentCourse.code, conversations);
+    renderMessages(activeConversation);
+    void sendQuestion(preceding.content);
   }
 }
 

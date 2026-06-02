@@ -1300,6 +1300,12 @@ textarea:focus {
 .chat-action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chat-action-btn.is-copied { color: var(--accent); opacity: 1; }
 
+.chat-action-btn .retry-ico.is-spinning { animation: cl-retry .5s ease; }
+@keyframes cl-retry {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
 /* ----------------------------------------------------------------------- */
 
 /* Input area */
