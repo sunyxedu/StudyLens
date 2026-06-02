@@ -263,6 +263,26 @@
 
       </section>
     </main>
+    <!-- Home page tweak panel -->
+    <button class="tweak-toggle" id="tweak-toggle" title="Grid tweaks" aria-label="Grid tweaks">⚙</button>
+    <div class="tweak-panel" id="tweak-panel" role="dialog" aria-label="Grid tweaks">
+      <div class="tweak-row">
+        <span class="tweak-label">Accent</span>
+        <select id="tweak-accent"><option value="earthy">Earthy (multi)</option><option value="green">Brand green</option><option value="mono">Mono</option></select>
+      </div>
+      <div class="tweak-row">
+        <span class="tweak-label">Banner</span>
+        <select id="tweak-banner"><option value="on">On</option><option value="off">Off</option></select>
+      </div>
+      <div class="tweak-row">
+        <span class="tweak-label">Columns</span>
+        <input type="range" id="tweak-cols" min="2" max="4" value="3" />
+      </div>
+      <div class="tweak-row">
+        <span class="tweak-label">Density</span>
+        <select id="tweak-density"><option value="comfy">Comfy</option><option value="compact">Compact</option></select>
+      </div>
+    </div>
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
   </body>

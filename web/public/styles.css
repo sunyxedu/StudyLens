@@ -2093,6 +2093,77 @@ textarea:focus {
   }
 }
 
+/* ── Home page tweaks ─────────────────────────────────────────────── */
+
+/* accent=mono: neutral grey bar */
+:root[data-accent="mono"] .ccard { --ccard-accent: #6c736e; }
+
+/* accent=green: all cards use brand green */
+:root[data-accent="green"] .ccard { --ccard-accent: var(--green); }
+
+/* banner=off: hide banner, show slim bar */
+:root[data-banner="off"] .courses-banner { display: none; }
+
+/* density=compact */
+:root[data-density="compact"] .ccard-body { padding: 10px 12px 10px; gap: 5px; }
+:root[data-density="compact"] .courses-grid { gap: 12px; }
+:root[data-density="compact"] .ccard-title { font-size: 13px; }
+
+/* Tweak panel */
+.tweak-panel {
+  position: fixed;
+  bottom: 80px;
+  right: 18px;
+  z-index: 200;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2);
+  padding: 14px 16px;
+  min-width: 180px;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tweak-panel.open { display: flex; }
+
+.tweak-row { display: flex; flex-direction: column; gap: 4px; }
+.tweak-label { font-weight: 500; color: var(--ink); }
+
+.tweak-row select, .tweak-row input[type="range"] {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--ink);
+  outline: none;
+}
+
+.tweak-toggle {
+  position: fixed;
+  bottom: 80px;
+  right: 18px;
+  z-index: 201;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 /* ── Home page responsive ─────────────────────────────────────────── */
 
 @media (max-width: 1080px) {

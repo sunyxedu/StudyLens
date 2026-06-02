@@ -234,7 +234,36 @@ function init(): void {
 
   updateCoursesActions();
   setAuthMode("register");
+  initTweakPanel();
   void initializeAuth();
+}
+
+function initTweakPanel(): void {
+  const toggle = document.getElementById("tweak-toggle");
+  const panel = document.getElementById("tweak-panel");
+  if (!toggle || !panel) return;
+
+  toggle.addEventListener("click", () => panel.classList.toggle("open"));
+
+  const sel = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+  const root = document.documentElement;
+
+  sel<HTMLSelectElement>("tweak-accent")?.addEventListener("change", (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    root.dataset.accent = v === "earthy" ? "" : v;
+  });
+
+  sel<HTMLSelectElement>("tweak-banner")?.addEventListener("change", (e) => {
+    root.dataset.banner = (e.target as HTMLSelectElement).value;
+  });
+
+  sel<HTMLInputElement>("tweak-cols")?.addEventListener("input", (e) => {
+    root.style.setProperty("--home-cols", (e.target as HTMLInputElement).value);
+  });
+
+  sel<HTMLSelectElement>("tweak-density")?.addEventListener("change", (e) => {
+    root.dataset.density = (e.target as HTMLSelectElement).value;
+  });
 }
 
 // ── Auth and setup ────────────────────────────────────────────────────
