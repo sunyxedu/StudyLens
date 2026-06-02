@@ -1353,6 +1353,79 @@ textarea:focus {
 
 /* ----------------------------------------------------------------------- */
 
+/* ── Satisfaction feedback nudge ─────────────────────────────────────── */
+
+.chat-feedback-nudge {
+  width: 100%;
+  max-width: 400px;
+  margin: 6px auto;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface-alt);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  max-height: 120px;
+  transition: opacity 300ms ease, max-height 300ms ease,
+              margin 300ms ease, padding 300ms ease, transform 300ms ease;
+}
+.chat-feedback-prompt { flex: 1; line-height: 1.45; }
+.chat-feedback-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+.chat-feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  font: 500 12.5px/1 Inter, ui-sans-serif;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 110ms ease, border-color 110ms ease, color 110ms ease;
+}
+.chat-feedback-btn svg { width: 14px; height: 14px; }
+.chat-feedback-btn.good:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(23,107,93,.07);
+}
+.chat-feedback-btn.bad:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(182,67,59,.07);
+}
+
+.chat-feedback-thanks {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chat-feedback-nudge.is-dismissed {
+  opacity: 0;
+  max-height: 0;
+  margin: 0 auto;
+  padding-top: 0;
+  padding-bottom: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-feedback-nudge,
+  .chat-feedback-nudge.is-dismissed { transform: none; transition: opacity 300ms ease, max-height 300ms ease, margin 300ms ease, padding 300ms ease; }
+}
+
+/* ----------------------------------------------------------------------- */
+
 /* Input area */
 .chat-input-area {
   display: flex;

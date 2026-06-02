@@ -154,6 +154,18 @@ const selectedCourseCodes = new Set<string>();
 let conversations: Conversation[] = [];
 let activeConversation: Conversation | null = null;
 
+// Nudge counter: threshold is uniform random with mean 10, hard cap 15
+let nudgeCounter = 0;
+let nudgeThreshold = nextNudgeThreshold();
+let currentNudgeEl: HTMLElement | null = null;
+
+function nextNudgeThreshold(): number {
+  return Math.floor(Math.random() * 11) + 5; // [5, 15], mean ~10
+}
+
+const THUMBS_UP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z"/><path d="M7 11l4-7a2.2 2.2 0 0 1 2 2v3h5.4a2 2 0 0 1 2 2.3l-1.1 6A2 2 0 0 1 17.3 20H7"/></svg>`;
+const THUMBS_DOWN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1z"/><path d="M17 13l-4 7a2.2 2.2 0 0 1-2-2v-3H5.6a2 2 0 0 1-2-2.3l1.1-6A2 2 0 0 1 6.7 4H17"/></svg>`;
+
 const COPY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
 const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
 const RETRY_SVG = `<svg class="retry-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg>`;
@@ -843,6 +855,9 @@ function selectConversation(id: string): void {
   const conv = conversations.find((c) => c.id === id);
   if (!conv) return;
   activeConversation = conv;
+  nudgeCounter = 0;
+  nudgeThreshold = nextNudgeThreshold();
+  currentNudgeEl = null;
   renderConversationList();
   renderMessages(conv);
 }
@@ -970,6 +985,47 @@ function renderMessages(conv: Conversation): void {
 function appendMessageBubble(msg: ChatMessage): void {
   elements.chatEmpty.classList.add("hidden");
   elements.chatMessages.appendChild(createMessageEl(msg));
+  if (msg.role === "assistant") maybeInsertNudge();
+}
+
+function maybeInsertNudge(): void {
+  nudgeCounter++;
+  if (nudgeCounter < nudgeThreshold) return;
+  nudgeCounter = 0;
+  nudgeThreshold = nextNudgeThreshold();
+  elements.chatMessages.appendChild(createNudgeEl());
+}
+
+function createNudgeEl(): HTMLElement {
+  const nudge = document.createElement("div");
+  nudge.className = "chat-feedback-nudge";
+  nudge.setAttribute("role", "group");
+  nudge.setAttribute("aria-label", "Answer satisfaction feedback");
+  nudge.dataset.voted = "false";
+  nudge.innerHTML = `
+    <span class="chat-feedback-prompt">How are the answers working for you?</span>
+    <div class="chat-feedback-actions">
+      <button class="chat-feedback-btn good" type="button" data-vote="up">
+        ${THUMBS_UP_SVG}Helpful
+      </button>
+      <button class="chat-feedback-btn bad" type="button" data-vote="down">
+        ${THUMBS_DOWN_SVG}Not helpful
+      </button>
+    </div>
+  `;
+  nudge.querySelectorAll<HTMLButtonElement>(".chat-feedback-btn").forEach((btn) => {
+    btn.addEventListener("click", () => handleNudgeVote(nudge, btn.dataset.vote ?? ""));
+  });
+  currentNudgeEl = nudge;
+  return nudge;
+}
+
+function handleNudgeVote(nudge: HTMLElement, vote: string): void {
+  nudge.dataset.voted = "true";
+  if (currentNudgeEl === nudge) currentNudgeEl = null;
+  // Replace actions with thanks
+  nudge.innerHTML = `<span class="chat-feedback-thanks">${CHECK_SVG}Thanks for the feedback!</span>`;
+  console.info("[StudyLens] feedback vote:", vote); // can be wired to an API later
 }
 
 function createMessageEl(msg: ChatMessage): HTMLElement {
