@@ -49,5 +49,42 @@ def main() -> None:
     asyncio.run(save_browser_state(args.output))
 
 
+def push_user_browser_state() -> None:
+    """Capture course logins locally, then upload them to your hosted account.
+
+    Reads the StudyLens URL/credentials from env (STUDYLENS_BACKEND_URL,
+    STUDYLENS_USERNAME, STUDYLENS_PASSWORD) or prompts for them, opens a real
+    browser to log into each course site, then POSTs the captured state to
+    /browser-state/upload authenticated as your user.
+    """
+    import getpass
+    import json
+    import os
+
+    import httpx
+
+    backend = os.environ.get("STUDYLENS_BACKEND_URL") or input(
+        "StudyLens URL (e.g. https://studylens-production.up.railway.app): "
+    ).strip()
+    username = os.environ.get("STUDYLENS_USERNAME") or input("StudyLens username: ").strip()
+    password = os.environ.get("STUDYLENS_PASSWORD") or getpass.getpass("StudyLens password: ")
+    if not backend or not username or not password:
+        raise SystemExit("StudyLens URL, username, and password are all required.")
+
+    output = Path("data/auth/browser-state.json")
+    asyncio.run(save_browser_state(output))
+    state = json.loads(output.read_text(encoding="utf-8"))
+
+    with httpx.Client(base_url=backend.rstrip("/"), timeout=30) as client:
+        login = client.post("/auth/login", json={"username": username, "password": password})
+        if login.status_code != 200:
+            raise SystemExit(f"Login failed ({login.status_code}): {login.text}")
+        # The session cookie set by /auth/login is carried by the client jar.
+        upload = client.post("/browser-state/upload", json=state)
+        if upload.status_code != 200:
+            raise SystemExit(f"Upload failed ({upload.status_code}): {upload.text}")
+        print(f"Uploaded browser state to {backend}: {upload.json()}")
+
+
 if __name__ == "__main__":
     main()

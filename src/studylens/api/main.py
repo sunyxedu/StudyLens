@@ -16,6 +16,7 @@ from studylens.api.browser_state import (
     BrowserStateRouter,
     BrowserStateStatus,
     PlaywrightBrowserStateManager,
+    _has_auth_material,
 )
 from studylens.api.schemas import (
     AskRequest,
@@ -394,11 +395,35 @@ def create_app(
         request: Request,
         user: UserRecord = Depends(_current_user),
     ) -> BrowserStateStatusResponse:
+        if settings.app_env != "local":
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Server-side browser setup runs only in local mode. On a "
+                    "hosted deployment, capture your course logins locally and "
+                    "upload them with scripts/push_user_browser_state.py."
+                ),
+            )
         try:
             status = await _browser_state_manager(request).start(user)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return _browser_state_status_schema(status)
+
+    @application.post("/browser-state/upload", response_model=AuthSessionResponse)
+    def browser_state_upload(
+        payload: dict,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> AuthSessionResponse:
+        if not _has_auth_material(payload):
+            raise HTTPException(
+                status_code=400,
+                detail="uploaded state has no cookies; finish logging in before exporting",
+            )
+        store = _auth_store(request)
+        store.save_browser_state(user.id, payload)
+        return _auth_session_response(store=store, user=user)
 
     @application.post("/browser-state/advance", response_model=BrowserStateStatusResponse)
     async def browser_state_advance(
