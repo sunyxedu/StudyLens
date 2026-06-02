@@ -77,11 +77,32 @@ npm run dev
 
 The web UI runs at `http://127.0.0.1:5173` and calls the backend at `http://localhost:8000` by default.
 After `npm run build`, the API also serves the built UI from `http://localhost:8000/app`.
-For Vercel deployments, set `STUDYLENS_BACKEND_URL` to your Railway API origin, for example `https://your-api.up.railway.app`. On Railway, set `AUTH_SECRET_KEY` and include the exact Vercel origin in `ALLOWED_ORIGINS`; wildcard origins are rejected outside local mode because browser sessions use HttpOnly cookies.
 
-The UI starts with Register and Login tabs. Register asks for username, grade, course, and password; Login asks for username and password only. After registration, it opens a browser setup flow for Scientia, Panopto, and EdStem; sign into each site in the opened browser window, then StudyLens saves the resulting cookies for that user. Once setup is complete, use `Process selected` to sync a course automatically. It downloads and indexes supported Scientia materials, exercises, and tutorials, then indexes Panopto video captions/transcripts. Captions are kept with timestamps and linked back to the video URL. `studylens index-text` remains available as a fallback for local notes or transcripts.
+The UI starts with Register and Login tabs. Register asks for username, grade, course, and password; Login asks for username and password only. After registration, it opens a browser setup flow for Scientia, Panopto, and EdStem; sign into each site in the opened browser window, then StudyLens saves the resulting cookies for that user. **This server-side browser flow runs only in local mode** — on a hosted deployment the server has no display, so capture your logins locally instead (see [Connect course logins on a hosted deploy](#connect-course-logins-on-a-hosted-deploy)). Once setup is complete, use `Process selected` to sync a course automatically. It downloads and indexes supported Scientia materials, exercises, and tutorials, then indexes Panopto video captions/transcripts. Captions are kept with timestamps and linked back to the video URL. `studylens index-text` remains available as a fallback for local notes or transcripts.
 
 Scientia, Panopto, and EdStem all sit behind Imperial SSO. In the web UI, auto-indexing uses the encrypted per-user browser state saved in the database. In the CLI, auto-indexing still requires `BROWSER_STORAGE_STATE` to point at an authenticated Playwright storage state file. All three ingestion paths share a single browser context built from that state, so you only authenticate once per session.
+
+## Deploy (Railway)
+
+StudyLens deploys as a **single service**: the `Dockerfile` builds the web app into the image and the API serves it same-origin at `/app`. Because the UI and API share one origin, session cookies stay first-party (`SameSite=Lax`) and work across all browsers — there is no separate frontend host and no cross-site/third-party-cookie problem. `railway.json` pins the Dockerfile builder.
+
+- **Build**: Railway uses the repo `Dockerfile` automatically (don't switch it to Nixpacks).
+- **Persistent volume**: mount one at `/app/data`. SQLite accounts, the encrypted per-user browser state, and the embedded vector store all live there; without a volume they are wiped on every redeploy.
+- **Required env vars**: `APP_ENV=production`, `AUTH_SECRET_KEY` (a fixed random string — it signs sessions, so changing it logs everyone out), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
+- **Do not set** `STUDYLENS_BACKEND_URL` — the bundled UI uses its own origin. `WEB_DIST_DIR` is already set in the image.
+- The app is served at `https://<your-service>.up.railway.app/app` (the root path redirects there).
+
+### Connect course logins on a hosted deploy
+
+The interactive "Open Browser" setup can't run on a headless host. Instead, sign into the course sites in a real browser **on your own machine** and upload the captured state to your account:
+
+```bash
+STUDYLENS_BACKEND_URL=https://<your-service>.up.railway.app \
+STUDYLENS_USERNAME=<your-studylens-username> \
+uv run --extra browser python scripts/push_user_browser_state.py
+```
+
+It opens a local browser for each site (press Enter in the terminal after each login), then logs into your StudyLens account and POSTs the storage state to `/browser-state/upload`, where it is encrypted and stored against your user. Reopen `/app` afterward and the course flows will use it. (The older `scripts/refresh_browser_state.py` pushes a single shared file via `/admin/browser-state` + `STUDYLENS_ADMIN_TOKEN` and is only used by the CLI; web users should use `push_user_browser_state.py`.)
 
 ## Extension
 
