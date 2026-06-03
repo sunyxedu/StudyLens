@@ -92,6 +92,7 @@
               <div class="actions">
                 <button id="browser-state-start" class="button primary" type="button">Open Browser</button>
                 <button id="browser-state-next" class="button primary" type="button" disabled>Next</button>
+                <button id="browser-state-skip" class="button secondary" type="button">Continue</button>
                 <button id="browser-state-cancel" class="button secondary" type="button">Cancel</button>
                 <span id="browser-state-status" class="status"></span>
               </div>
@@ -123,6 +124,7 @@
                 <button id="courses-discover" class="button primary" type="button">Discover</button>
                 <button id="courses-index" class="button primary" type="button" disabled>Process selected</button>
                 <button id="courses-select-all" class="button secondary" type="button" hidden>Select all</button>
+                <button id="forum-open" class="button secondary" type="button">Forum</button>
                 <span id="courses-status" class="status courses-status-mono"></span>
               </div>
             </div>
@@ -135,6 +137,122 @@
               <ul id="courses-progress-list" class="course-progress-list" role="list"></ul>
             </section>
 
+          </div>
+        </section>
+
+        <!-- ── Forum ───────────────────────────────────────────── -->
+        <section class="view" id="view-forum" aria-labelledby="forum-title">
+          <div class="forum-page">
+            <div class="forum-header">
+              <button id="forum-back" class="back-btn" type="button">← Courses</button>
+              <div class="forum-title-group">
+                <h1 id="forum-title" class="forum-title">Forum</h1>
+                <span id="forum-role" class="subtle"></span>
+              </div>
+              <div class="forum-header-actions">
+                <button id="forum-refresh" class="button secondary" type="button">Refresh</button>
+                <span id="forum-status" class="status courses-status-mono"></span>
+              </div>
+            </div>
+
+            <div class="forum-layout">
+              <aside class="forum-rail">
+                <form id="forum-category-form" class="forum-form hidden">
+                  <div class="forum-form-head">
+                    <span class="forum-form-title">New Subject</span>
+                    <span class="forum-chip admin">Admin</span>
+                  </div>
+                  <label class="field">
+                    <span>Name</span>
+                    <input id="forum-category-name" maxlength="80" />
+                  </label>
+                  <label class="field">
+                    <span>Description</span>
+                    <textarea id="forum-category-description" rows="3" maxlength="300"></textarea>
+                  </label>
+                  <label class="compact-field forum-color-field">
+                    <span>Color</span>
+                    <input id="forum-category-color" type="color" value="#566884" />
+                  </label>
+                  <button id="forum-category-submit" class="button primary" type="submit">Create</button>
+                </form>
+
+                <form id="forum-board-form" class="forum-form">
+                  <div class="forum-form-head">
+                    <span class="forum-form-title">New Sub-board</span>
+                  </div>
+                  <label class="field">
+                    <span>Subject</span>
+                    <select id="forum-board-category"></select>
+                  </label>
+                  <label class="field">
+                    <span>Name</span>
+                    <input id="forum-board-name" maxlength="90" />
+                  </label>
+                  <label class="field">
+                    <span>Description</span>
+                    <textarea id="forum-board-description" rows="3" maxlength="360"></textarea>
+                  </label>
+                  <button id="forum-board-submit" class="button primary" type="submit">Create</button>
+                </form>
+
+                <nav id="forum-nav" class="forum-nav" aria-label="Forum boards"></nav>
+              </aside>
+
+              <section class="forum-content">
+                <section id="forum-home" class="forum-panel"></section>
+
+                <section id="forum-board-view" class="forum-panel hidden">
+                  <div class="forum-board-head">
+                    <div>
+                      <span id="forum-board-meta" class="forum-kicker"></span>
+                      <h2 id="forum-board-title"></h2>
+                    </div>
+                  </div>
+
+                  <form id="forum-thread-form" class="forum-composer">
+                    <div class="forum-composer-grid">
+                      <label class="field">
+                        <span>Title</span>
+                        <input id="forum-thread-title" maxlength="140" />
+                      </label>
+                      <label class="field forum-course-field">
+                        <span>Course Code</span>
+                        <input id="forum-thread-course" maxlength="32" placeholder="Optional" />
+                      </label>
+                    </div>
+                    <label class="field large">
+                      <span>Post</span>
+                      <textarea id="forum-thread-body" rows="4" maxlength="8000" placeholder="Question, working, notes…"></textarea>
+                    </label>
+                    <div class="actions">
+                      <button id="forum-thread-submit" class="button primary" type="submit">Post</button>
+                    </div>
+                  </form>
+
+                  <section id="forum-board-threads" class="forum-thread-list"></section>
+                </section>
+
+                <section id="forum-thread-view" class="forum-panel hidden">
+                  <button id="forum-thread-back" class="back-btn forum-thread-back" type="button">← Board</button>
+                  <article class="forum-thread-article">
+                    <span id="forum-thread-meta" class="forum-kicker"></span>
+                    <h2 id="forum-thread-title-view"></h2>
+                    <div id="forum-thread-body-view" class="forum-thread-body"></div>
+                  </article>
+                  <section id="forum-replies" class="forum-replies"></section>
+                  <form id="forum-reply-form" class="forum-composer forum-reply-composer">
+                    <label class="field large">
+                      <span>Reply</span>
+                      <textarea id="forum-reply-body" rows="3" maxlength="8000" placeholder="Add your reply…"></textarea>
+                    </label>
+                    <div class="actions">
+                      <button id="forum-reply-submit" class="button primary" type="submit">Reply</button>
+                    </div>
+                  </form>
+                </section>
+              </section>
+            </div>
           </div>
         </section>
 

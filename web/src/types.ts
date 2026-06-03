@@ -65,6 +65,7 @@ export interface AuthUser {
   username: string;
   grade: string;
   course: string;
+  is_admin?: boolean;
 }
 
 export interface AuthSession {
@@ -173,4 +174,100 @@ export interface Conversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ForumCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  color: string;
+  created_by_username?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForumBoard {
+  id: number;
+  category_id: number;
+  category_name: string;
+  name: string;
+  slug: string;
+  description: string;
+  created_by_username?: string | null;
+  thread_count: number;
+  reply_count: number;
+  latest_activity_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForumCategoryWithBoards extends ForumCategory {
+  boards: ForumBoard[];
+}
+
+export interface ForumThreadSummary {
+  id: number;
+  board_id: number;
+  board_name: string;
+  category_id: number;
+  category_name: string;
+  title: string;
+  body_preview: string;
+  course_id?: string | null;
+  author_username: string;
+  author_role: "student" | "admin" | "bot" | string;
+  reply_count: number;
+  dylen_replied: boolean;
+  created_at: string;
+  updated_at: string;
+  latest_activity_at: string;
+}
+
+export interface ForumReply {
+  id: number;
+  thread_id: number;
+  author_username: string;
+  author_role: "student" | "admin" | "bot" | string;
+  body: string;
+  citations: Citation[];
+  created_at: string;
+}
+
+export interface ForumThread extends ForumThreadSummary {
+  body: string;
+  replies: ForumReply[];
+}
+
+export interface ForumIndexResponse {
+  categories: ForumCategoryWithBoards[];
+  can_create_categories: boolean;
+}
+
+export interface ForumBoardThreadsResponse {
+  board: ForumBoard;
+  threads: ForumThreadSummary[];
+}
+
+export interface ForumCategoryCreateRequest {
+  name: string;
+  description: string;
+  color?: string | null;
+}
+
+export interface ForumBoardCreateRequest {
+  category_id: number;
+  name: string;
+  description: string;
+}
+
+export interface ForumThreadCreateRequest {
+  board_id: number;
+  title: string;
+  body: string;
+  course_id?: string | null;
+}
+
+export interface ForumReplyCreateRequest {
+  body: string;
 }

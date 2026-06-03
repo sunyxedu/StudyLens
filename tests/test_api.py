@@ -482,6 +482,82 @@ def test_courses_endpoint_returns_cached_courses(tmp_path: Path) -> None:
     assert body["courses"][0]["updated_at"]
 
 
+def test_forum_student_board_thread_and_dylen_reply(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    register(client, username="alice")
+
+    index = client.get("/forum")
+    assert index.status_code == 200
+    categories = index.json()["categories"]
+    math = next(category for category in categories if category["name"] == "Mathematics")
+
+    forbidden = client.post(
+        "/forum/categories",
+        json={
+            "name": "Biology",
+            "description": "Life sciences discussion.",
+            "color": "#34706a",
+        },
+    )
+    assert forbidden.status_code == 403
+
+    board_response = client.post(
+        "/forum/boards",
+        json={
+            "category_id": math["id"],
+            "name": "Linear Algebra Help",
+            "description": "Eigenvalues, vector spaces, and proof sketches.",
+        },
+    )
+    assert board_response.status_code == 200
+    board = board_response.json()
+
+    thread_response = client.post(
+        "/forum/threads",
+        json={
+            "board_id": board["id"],
+            "title": "Diagonalisation intuition",
+            "body": "@dylen when is a matrix diagonalizable?",
+        },
+    )
+    assert thread_response.status_code == 200
+    thread = thread_response.json()
+    assert thread["reply_count"] == 1
+    assert thread["dylen_replied"] is True
+    assert thread["replies"][0]["author_username"] == "dylen"
+    assert thread["replies"][0]["author_role"] == "bot"
+
+    reply_response = client.post(
+        f"/forum/threads/{thread['id']}/replies",
+        json={"body": "That helps, thanks."},
+    )
+    assert reply_response.status_code == 200
+    assert reply_response.json()["reply_count"] == 2
+
+    board_threads = client.get(f"/forum/boards/{board['id']}")
+    assert board_threads.status_code == 200
+    assert board_threads.json()["threads"][0]["title"] == "Diagonalisation intuition"
+
+
+def test_forum_admin_can_create_subject_category(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    session = register(client, username="admin")
+
+    assert session["user"]["is_admin"] is True
+
+    response = client.post(
+        "/forum/categories",
+        json={
+            "name": "Economics",
+            "description": "Micro, macro, game theory, and quantitative methods.",
+            "color": "#7a6076",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Economics"
+
+
 def test_index_edstem_endpoint_uses_injected_indexer(tmp_path: Path) -> None:
     class FakeEdStemIndexer:
         async def index_course_scope_notes(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from datetime import timedelta
 from pathlib import Path
@@ -30,6 +31,18 @@ from studylens.api.schemas import (
     CoursesListResponse,
     DiscoverCoursesCourse,
     DiscoverCoursesResponse,
+    ForumBoard,
+    ForumBoardCreateRequest,
+    ForumBoardThreadsResponse,
+    ForumCategory,
+    ForumCategoryCreateRequest,
+    ForumCategoryWithBoards,
+    ForumIndexResponse,
+    ForumReply,
+    ForumReplyCreateRequest,
+    ForumThread,
+    ForumThreadCreateRequest,
+    ForumThreadSummary,
     GeneratedLatexResponse,
     GenerateRequest,
     HealthResponse,
@@ -58,8 +71,22 @@ from studylens.ingestion.edstem import EdStemIndexer, build_edstem_indexer
 from studylens.ingestion.edstem_agent import discover_edstem_courses
 from studylens.ingestion.exams import ExamsIndexer, build_exams_indexer
 from studylens.retrieval.qa import RAGService
-from studylens.storage import AuthStore, CourseRecord, CourseStore, UserRecord
+from studylens.storage import (
+    AuthStore,
+    CourseRecord,
+    CourseStore,
+    ForumBoardRecord,
+    ForumCategoryRecord,
+    ForumReplyRecord,
+    ForumStore,
+    ForumThreadRecord,
+    ForumThreadSummaryRecord,
+    UserRecord,
+)
 from studylens.storage.auth import AuthStoreError, load_or_create_local_secret
+from studylens.storage.forum import ForumRole, ForumStoreError
+
+DYLEN_MENTION_RE = re.compile(r"(^|[^\w])@dylen\b", re.IGNORECASE)
 
 
 class AutoIndexerLike(Protocol):
@@ -90,6 +117,10 @@ def _service(request: Request) -> RAGService:
 
 def _auth_store(request: Request) -> AuthStore:
     return request.app.state.auth_store
+
+
+def _forum_store(request: Request) -> ForumStore:
+    return request.app.state.forum_store
 
 
 def _browser_state_manager(request: Request) -> BrowserStateManager:
@@ -126,12 +157,22 @@ def _samesite_cookie(settings: Settings) -> Literal["lax", "none", "strict"]:
     return settings.session_cookie_samesite or "lax"
 
 
-def _auth_user_schema(user: UserRecord) -> AuthUser:
+def _is_forum_admin(user: UserRecord, settings: Settings) -> bool:
+    admins = {username.casefold() for username in settings.forum_admin_usernames}
+    return user.username.casefold() in admins
+
+
+def _forum_role(user: UserRecord, settings: Settings) -> ForumRole:
+    return "admin" if _is_forum_admin(user, settings) else "student"
+
+
+def _auth_user_schema(user: UserRecord, settings: Settings | None = None) -> AuthUser:
     return AuthUser(
         id=user.id,
         username=user.username,
         grade=user.grade,
         course=user.course,
+        is_admin=_is_forum_admin(user, settings) if settings is not None else False,
     )
 
 
@@ -139,11 +180,12 @@ def _auth_session_response(
     *,
     store: AuthStore,
     user: UserRecord,
+    settings: Settings | None = None,
     created: bool = False,
 ) -> AuthSessionResponse:
     browser_state_ready = store.has_browser_state(user.id)
     return AuthSessionResponse(
-        user=_auth_user_schema(user),
+        user=_auth_user_schema(user, settings),
         created=created,
         browser_state_ready=browser_state_ready,
         needs_browser_state=not browser_state_ready,
@@ -210,6 +252,176 @@ def _record_to_schema(record: CourseRecord) -> DiscoverCoursesCourse:
     )
 
 
+def _forum_category_schema(record: ForumCategoryRecord) -> ForumCategory:
+    return ForumCategory(
+        id=record.id,
+        name=record.name,
+        slug=record.slug,
+        description=record.description,
+        color=record.color,
+        created_by_username=record.created_by_username,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _forum_board_schema(record: ForumBoardRecord) -> ForumBoard:
+    return ForumBoard(
+        id=record.id,
+        category_id=record.category_id,
+        category_name=record.category_name,
+        name=record.name,
+        slug=record.slug,
+        description=record.description,
+        created_by_username=record.created_by_username,
+        thread_count=record.thread_count,
+        reply_count=record.reply_count,
+        latest_activity_at=record.latest_activity_at,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _forum_thread_summary_schema(record: ForumThreadSummaryRecord) -> ForumThreadSummary:
+    return ForumThreadSummary(
+        id=record.id,
+        board_id=record.board_id,
+        board_name=record.board_name,
+        category_id=record.category_id,
+        category_name=record.category_name,
+        title=record.title,
+        body_preview=record.body_preview,
+        course_id=record.course_id,
+        author_username=record.author_username,
+        author_role=record.author_role,
+        reply_count=record.reply_count,
+        dylen_replied=record.dylen_replied,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        latest_activity_at=record.latest_activity_at,
+    )
+
+
+def _forum_reply_schema(record: ForumReplyRecord) -> ForumReply:
+    return ForumReply(
+        id=record.id,
+        thread_id=record.thread_id,
+        author_username=record.author_username,
+        author_role=record.author_role,
+        body=record.body,
+        citations=record.citations,
+        created_at=record.created_at,
+    )
+
+
+def _forum_thread_schema(record: ForumThreadRecord) -> ForumThread:
+    summary = _forum_thread_summary_schema(
+        ForumThreadSummaryRecord(
+            id=record.id,
+            board_id=record.board_id,
+            board_name=record.board_name,
+            category_id=record.category_id,
+            category_name=record.category_name,
+            title=record.title,
+            body_preview=record.body[:220],
+            course_id=record.course_id,
+            author_id=record.author_id,
+            author_username=record.author_username,
+            author_role=record.author_role,
+            reply_count=record.reply_count,
+            dylen_replied=record.dylen_replied,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            latest_activity_at=record.latest_activity_at,
+        )
+    )
+    return ForumThread(
+        **summary.model_dump(),
+        body=record.body,
+        replies=[_forum_reply_schema(reply) for reply in record.replies],
+    )
+
+
+def _forum_index_response(
+    *,
+    store: ForumStore,
+    user: UserRecord,
+    settings: Settings,
+) -> ForumIndexResponse:
+    boards_by_category: dict[int, list[ForumBoard]] = {}
+    for board in store.list_boards():
+        boards_by_category.setdefault(board.category_id, []).append(_forum_board_schema(board))
+
+    categories = []
+    for category in store.list_categories():
+        category_schema = _forum_category_schema(category)
+        categories.append(
+            ForumCategoryWithBoards(
+                **category_schema.model_dump(),
+                boards=boards_by_category.get(category.id, []),
+            )
+        )
+    return ForumIndexResponse(
+        categories=categories,
+        can_create_categories=_is_forum_admin(user, settings),
+    )
+
+
+def _mentions_dylen(text: str) -> bool:
+    return DYLEN_MENTION_RE.search(text) is not None
+
+
+def _dylen_question(thread: ForumThreadRecord, latest_text: str) -> str:
+    parts = [
+        "A student mentioned @dylen in the StudyLens forum.",
+        f"Subject: {thread.category_name}",
+        f"Sub-board: {thread.board_name}",
+        f"Thread: {thread.title}",
+        f"Original post:\n{thread.body}",
+    ]
+    if latest_text != thread.body:
+        parts.append(f"Latest reply:\n{latest_text}")
+    return "\n\n".join(parts)
+
+
+def _maybe_add_dylen_reply(
+    *,
+    request: Request,
+    thread: ForumThreadRecord,
+    latest_text: str,
+) -> ForumThreadRecord:
+    if not _mentions_dylen(latest_text):
+        return thread
+    try:
+        answer = _service(request).answer(
+            _dylen_question(thread, latest_text),
+            course_id=thread.course_id,
+            top_k=6,
+            include_exercises=False,
+        )
+        body = answer.answer
+        citations = answer.citations
+    except Exception:
+        body = (
+            "I was mentioned, but I could not reach the StudyLens context service "
+            "right now. Reply with @dylen again and I will try another pass."
+        )
+        citations = []
+    store = _forum_store(request)
+    store.add_reply(
+        thread_id=thread.id,
+        body=body,
+        author_id=None,
+        author_username="dylen",
+        author_role="bot",
+        citations=citations,
+    )
+    refreshed = store.get_thread(thread.id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="thread not found")
+    return refreshed
+
+
 def _cors_settings(settings: Settings) -> tuple[list[str], str | None]:
     origins = [
         origin
@@ -265,6 +477,7 @@ def create_app(
     edstem_indexer: EdStemIndexer | None = None,
     course_store: CourseStore | None = None,
     auth_store: AuthStore | None = None,
+    forum_store: ForumStore | None = None,
     browser_state_manager: BrowserStateManager | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
@@ -293,6 +506,9 @@ def create_app(
         secret_key=_auth_secret(settings),
     )
     application.state.auth_store = resolved_auth_store
+    application.state.forum_store = forum_store or ForumStore.from_database_url(
+        settings.database_url
+    )
     application.state.browser_state_manager = (
         browser_state_manager
         or PlaywrightBrowserStateManager(
@@ -330,7 +546,12 @@ def create_app(
             token=session.token,
             max_age=max(0, int(ttl.total_seconds())),
         )
-        return _auth_session_response(store=store, user=user, created=created)
+        return _auth_session_response(
+            store=store,
+            user=user,
+            settings=settings,
+            created=created,
+        )
 
     @application.post("/auth/register", response_model=AuthSessionResponse)
     def register(
@@ -381,7 +602,11 @@ def create_app(
         request: Request,
         user: UserRecord = Depends(_current_user),
     ) -> AuthSessionResponse:
-        return _auth_session_response(store=_auth_store(request), user=user)
+        return _auth_session_response(
+            store=_auth_store(request),
+            user=user,
+            settings=settings,
+        )
 
     @application.post("/auth/logout")
     def logout(request: Request, response: Response) -> dict[str, str]:
@@ -423,7 +648,7 @@ def create_app(
             )
         store = _auth_store(request)
         store.save_browser_state(user.id, payload)
-        return _auth_session_response(store=store, user=user)
+        return _auth_session_response(store=store, user=user, settings=settings)
 
     @application.post("/browser-state/advance", response_model=BrowserStateStatusResponse)
     async def browser_state_advance(
@@ -548,6 +773,141 @@ def create_app(
             num_turns=report.num_turns,
             total_cost_usd=report.total_cost_usd,
             error=report.error,
+        )
+
+    @application.get("/forum", response_model=ForumIndexResponse)
+    def forum_index(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumIndexResponse:
+        return _forum_index_response(
+            store=_forum_store(request),
+            user=user,
+            settings=settings,
+        )
+
+    @application.post("/forum/categories", response_model=ForumCategory)
+    def forum_create_category(
+        payload: ForumCategoryCreateRequest,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumCategory:
+        if not _is_forum_admin(user, settings):
+            raise HTTPException(status_code=403, detail="admin required")
+        try:
+            category = _forum_store(request).create_category(
+                name=payload.name,
+                description=payload.description,
+                color=payload.color,
+                created_by=user.id,
+                created_by_username=user.username,
+            )
+        except ForumStoreError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _forum_category_schema(category)
+
+    @application.post("/forum/boards", response_model=ForumBoard)
+    def forum_create_board(
+        payload: ForumBoardCreateRequest,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumBoard:
+        try:
+            board = _forum_store(request).create_board(
+                category_id=payload.category_id,
+                name=payload.name,
+                description=payload.description,
+                created_by=user.id,
+                created_by_username=user.username,
+            )
+        except ForumStoreError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _forum_board_schema(board)
+
+    @application.get("/forum/boards/{board_id}", response_model=ForumBoardThreadsResponse)
+    def forum_board_threads(
+        board_id: int,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumBoardThreadsResponse:
+        store = _forum_store(request)
+        board = store.get_board(board_id)
+        if board is None:
+            raise HTTPException(status_code=404, detail="board not found")
+        return ForumBoardThreadsResponse(
+            board=_forum_board_schema(board),
+            threads=[
+                _forum_thread_summary_schema(thread)
+                for thread in store.list_threads(board_id=board_id)
+            ],
+        )
+
+    @application.post("/forum/threads", response_model=ForumThread)
+    def forum_create_thread(
+        payload: ForumThreadCreateRequest,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumThread:
+        store = _forum_store(request)
+        try:
+            thread = store.create_thread(
+                board_id=payload.board_id,
+                title=payload.title,
+                body=payload.body,
+                course_id=payload.course_id,
+                author_id=user.id,
+                author_username=user.username,
+                author_role=_forum_role(user, settings),
+            )
+        except ForumStoreError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _forum_thread_schema(
+            _maybe_add_dylen_reply(
+                request=request,
+                thread=thread,
+                latest_text=payload.body,
+            )
+        )
+
+    @application.get("/forum/threads/{thread_id}", response_model=ForumThread)
+    def forum_thread(
+        thread_id: int,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumThread:
+        thread = _forum_store(request).get_thread(thread_id)
+        if thread is None:
+            raise HTTPException(status_code=404, detail="thread not found")
+        return _forum_thread_schema(thread)
+
+    @application.post("/forum/threads/{thread_id}/replies", response_model=ForumThread)
+    def forum_create_reply(
+        thread_id: int,
+        payload: ForumReplyCreateRequest,
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> ForumThread:
+        store = _forum_store(request)
+        try:
+            store.add_reply(
+                thread_id=thread_id,
+                body=payload.body,
+                author_id=user.id,
+                author_username=user.username,
+                author_role=_forum_role(user, settings),
+            )
+        except ForumStoreError as exc:
+            status_code = 404 if str(exc) == "thread not found" else 400
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        thread = store.get_thread(thread_id)
+        if thread is None:
+            raise HTTPException(status_code=404, detail="thread not found")
+        return _forum_thread_schema(
+            _maybe_add_dylen_reply(
+                request=request,
+                thread=thread,
+                latest_text=payload.body,
+            )
         )
 
     @application.post("/index/edstem", response_model=IndexEdStemResponse)

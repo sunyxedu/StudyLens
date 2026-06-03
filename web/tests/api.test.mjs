@@ -46,6 +46,126 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
         indexed_chunks: 2,
         items: []
       },
+      "/forum": {
+        can_create_categories: true,
+        categories: [
+          {
+            id: 1,
+            name: "Mathematics",
+            slug: "mathematics",
+            description: "Maths",
+            color: "#2e5d4d",
+            created_at: "2026-01-01T00:00:00+00:00",
+            updated_at: "2026-01-01T00:00:00+00:00",
+            boards: []
+          }
+        ]
+      },
+      "/forum/categories": {
+        id: 2,
+        name: "Physics",
+        slug: "physics",
+        description: "Physics",
+        color: "#8a5560",
+        created_at: "2026-01-01T00:00:00+00:00",
+        updated_at: "2026-01-01T00:00:00+00:00"
+      },
+      "/forum/boards": {
+        id: 1,
+        category_id: 1,
+        category_name: "Mathematics",
+        name: "Linear Algebra",
+        slug: "linear-algebra",
+        description: "Matrices",
+        thread_count: 0,
+        reply_count: 0,
+        latest_activity_at: null,
+        created_at: "2026-01-01T00:00:00+00:00",
+        updated_at: "2026-01-01T00:00:00+00:00"
+      },
+      "/forum/boards/1": {
+        board: {
+          id: 1,
+          category_id: 1,
+          category_name: "Mathematics",
+          name: "Linear Algebra",
+          slug: "linear-algebra",
+          description: "Matrices",
+          thread_count: 1,
+          reply_count: 0,
+          latest_activity_at: "2026-01-01T00:00:00+00:00",
+          created_at: "2026-01-01T00:00:00+00:00",
+          updated_at: "2026-01-01T00:00:00+00:00"
+        },
+        threads: []
+      },
+      "/forum/threads": {
+        id: 1,
+        board_id: 1,
+        board_name: "Linear Algebra",
+        category_id: 1,
+        category_name: "Mathematics",
+        title: "Eigenvectors",
+        body_preview: "How do I find them?",
+        body: "How do I find them?",
+        course_id: null,
+        author_username: "alice",
+        author_role: "student",
+        reply_count: 0,
+        dylen_replied: false,
+        created_at: "2026-01-01T00:00:00+00:00",
+        updated_at: "2026-01-01T00:00:00+00:00",
+        latest_activity_at: "2026-01-01T00:00:00+00:00",
+        replies: []
+      },
+      "/forum/threads/1": {
+        id: 1,
+        board_id: 1,
+        board_name: "Linear Algebra",
+        category_id: 1,
+        category_name: "Mathematics",
+        title: "Eigenvectors",
+        body_preview: "How do I find them?",
+        body: "How do I find them?",
+        course_id: null,
+        author_username: "alice",
+        author_role: "student",
+        reply_count: 0,
+        dylen_replied: false,
+        created_at: "2026-01-01T00:00:00+00:00",
+        updated_at: "2026-01-01T00:00:00+00:00",
+        latest_activity_at: "2026-01-01T00:00:00+00:00",
+        replies: []
+      },
+      "/forum/threads/1/replies": {
+        id: 1,
+        board_id: 1,
+        board_name: "Linear Algebra",
+        category_id: 1,
+        category_name: "Mathematics",
+        title: "Eigenvectors",
+        body_preview: "How do I find them?",
+        body: "How do I find them?",
+        course_id: null,
+        author_username: "alice",
+        author_role: "student",
+        reply_count: 1,
+        dylen_replied: false,
+        created_at: "2026-01-01T00:00:00+00:00",
+        updated_at: "2026-01-01T00:00:00+00:00",
+        latest_activity_at: "2026-01-01T00:00:00+00:00",
+        replies: [
+          {
+            id: 1,
+            thread_id: 1,
+            author_username: "alice",
+            author_role: "student",
+            body: "Thanks",
+            citations: [],
+            created_at: "2026-01-01T00:00:00+00:00"
+          }
+        ]
+      },
       "/ask": { question: "q", answer: "a", citations: [], follow_up: null },
       "/retrieve": { results: [] },
       "/generate/cheatsheet": { latex: "\\documentclass{article}" },
@@ -85,6 +205,25 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     course_title: "Advanced Algorithms",
     course_url: null
   })).indexed_chunks, 2);
+  assert.equal((await api.forumIndex()).categories[0].name, "Mathematics");
+  assert.equal((await api.createForumCategory({
+    name: "Physics",
+    description: "Physics",
+    color: "#8a5560",
+  })).name, "Physics");
+  assert.equal((await api.createForumBoard({
+    category_id: 1,
+    name: "Linear Algebra",
+    description: "Matrices",
+  })).name, "Linear Algebra");
+  assert.equal((await api.forumBoard(1)).board.name, "Linear Algebra");
+  assert.equal((await api.createForumThread({
+    board_id: 1,
+    title: "Eigenvectors",
+    body: "How do I find them?",
+  })).title, "Eigenvectors");
+  assert.equal((await api.forumThread(1)).body, "How do I find them?");
+  assert.equal((await api.createForumReply(1, { body: "Thanks" })).reply_count, 1);
   assert.equal((await api.ask({
     question: "q",
     course_id: "COMP70001",
@@ -111,13 +250,17 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     question_count: 4,
   })).latex, /documentclass/);
 
-  assert.equal(calls.length, 14);
+  const callFor = (path) => calls.find((call) => String(call.input).endsWith(path));
+
+  assert.equal(calls.length, 21);
   assert.equal(JSON.parse(calls[0].init.body).username, "alice");
   assert.equal(JSON.parse(calls[1].init.body).password, "correct horse battery staple");
   assert.equal(calls.every((call) => call.init.credentials === "include"), true);
-  assert.equal(JSON.parse(calls[8].init.body).title, "Notes");
-  assert.equal(JSON.parse(calls[9].init.body).course_title, "Advanced Algorithms");
-  assert.equal(JSON.parse(calls[10].init.body).include_exercises, true);
+  assert.equal(JSON.parse(callFor("/chunks").init.body).title, "Notes");
+  assert.equal(JSON.parse(callFor("/index/course").init.body).course_title, "Advanced Algorithms");
+  assert.equal(JSON.parse(callFor("/forum/boards").init.body).category_id, 1);
+  assert.equal(JSON.parse(callFor("/forum/threads").init.body).title, "Eigenvectors");
+  assert.equal(JSON.parse(callFor("/ask").init.body).include_exercises, true);
 });
 
 test("StudyLensApi surfaces backend errors", async () => {

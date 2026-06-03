@@ -59,6 +59,12 @@ import type {
   ChatMessage,
   Conversation,
   DiscoveredCourse,
+  ForumBoard,
+  ForumCategoryWithBoards,
+  ForumIndexResponse,
+  ForumReply,
+  ForumThread,
+  ForumThreadSummary,
   ResourceKind,
   SearchResult,
 } from "./types.js";
@@ -81,6 +87,7 @@ const elements = {
   loginStatus: byId<HTMLSpanElement>("login-status"),
   browserStateStart: byId<HTMLButtonElement>("browser-state-start"),
   browserStateNext: byId<HTMLButtonElement>("browser-state-next"),
+  browserStateSkip: byId<HTMLButtonElement>("browser-state-skip"),
   browserStateCancel: byId<HTMLButtonElement>("browser-state-cancel"),
   browserStateStatus: byId<HTMLSpanElement>("browser-state-status"),
   browserStateCount: byId<HTMLSpanElement>("browser-state-count"),
@@ -97,6 +104,41 @@ const elements = {
   coursesList: byId<HTMLUListElement>("courses-list"),
   coursesProgress: byId<HTMLElement>("courses-progress"),
   coursesProgressList: byId<HTMLUListElement>("courses-progress-list"),
+  forumOpen: byId<HTMLButtonElement>("forum-open"),
+  forumBack: byId<HTMLButtonElement>("forum-back"),
+  forumRefresh: byId<HTMLButtonElement>("forum-refresh"),
+  forumStatus: byId<HTMLSpanElement>("forum-status"),
+  forumRole: byId<HTMLSpanElement>("forum-role"),
+  forumCategoryForm: byId<HTMLFormElement>("forum-category-form"),
+  forumCategoryName: byId<HTMLInputElement>("forum-category-name"),
+  forumCategoryDescription: byId<HTMLTextAreaElement>("forum-category-description"),
+  forumCategoryColor: byId<HTMLInputElement>("forum-category-color"),
+  forumCategorySubmit: byId<HTMLButtonElement>("forum-category-submit"),
+  forumBoardForm: byId<HTMLFormElement>("forum-board-form"),
+  forumBoardCategory: byId<HTMLSelectElement>("forum-board-category"),
+  forumBoardName: byId<HTMLInputElement>("forum-board-name"),
+  forumBoardDescription: byId<HTMLTextAreaElement>("forum-board-description"),
+  forumBoardSubmit: byId<HTMLButtonElement>("forum-board-submit"),
+  forumNav: byId<HTMLElement>("forum-nav"),
+  forumHome: byId<HTMLElement>("forum-home"),
+  forumBoardView: byId<HTMLElement>("forum-board-view"),
+  forumBoardTitle: byId<HTMLHeadingElement>("forum-board-title"),
+  forumBoardMeta: byId<HTMLSpanElement>("forum-board-meta"),
+  forumBoardThreads: byId<HTMLElement>("forum-board-threads"),
+  forumThreadForm: byId<HTMLFormElement>("forum-thread-form"),
+  forumThreadTitle: byId<HTMLInputElement>("forum-thread-title"),
+  forumThreadCourse: byId<HTMLInputElement>("forum-thread-course"),
+  forumThreadBody: byId<HTMLTextAreaElement>("forum-thread-body"),
+  forumThreadSubmit: byId<HTMLButtonElement>("forum-thread-submit"),
+  forumThreadView: byId<HTMLElement>("forum-thread-view"),
+  forumThreadBack: byId<HTMLButtonElement>("forum-thread-back"),
+  forumThreadMeta: byId<HTMLSpanElement>("forum-thread-meta"),
+  forumThreadTitleView: byId<HTMLHeadingElement>("forum-thread-title-view"),
+  forumThreadBodyView: byId<HTMLElement>("forum-thread-body-view"),
+  forumReplies: byId<HTMLElement>("forum-replies"),
+  forumReplyForm: byId<HTMLFormElement>("forum-reply-form"),
+  forumReplyBody: byId<HTMLTextAreaElement>("forum-reply-body"),
+  forumReplySubmit: byId<HTMLButtonElement>("forum-reply-submit"),
   // Sidebar course context
   sidebarCourseContext: byId<HTMLElement>("sidebar-course-context"),
   sidebarCourseCode: byId<HTMLSpanElement>("sidebar-course-code"),
@@ -151,6 +193,9 @@ let currentCourse: DiscoveredCourse | null = null;
 let authSession: AuthSession | null = null;
 let authMode: "register" | "login" = "register";
 const selectedCourseCodes = new Set<string>();
+let forumData: ForumIndexResponse | null = null;
+let currentForumBoard: ForumBoard | null = null;
+let currentForumThread: ForumThread | null = null;
 
 // ── Course card accent palette ────────────────────────────────────────
 const CARD_ACCENTS = [
@@ -203,6 +248,7 @@ function init(): void {
   });
   elements.browserStateStart.addEventListener("click", handleBrowserStateStart);
   elements.browserStateNext.addEventListener("click", handleBrowserStateNext);
+  elements.browserStateSkip.addEventListener("click", showCoursesApp);
   elements.browserStateCancel.addEventListener("click", handleBrowserStateCancel);
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
@@ -219,6 +265,34 @@ function init(): void {
   elements.coursesDiscover.addEventListener("click", handleDiscoverCourses);
   elements.coursesIndex.addEventListener("click", handleIndexSelected);
   elements.coursesSelectAll.addEventListener("click", handleSelectAllCourses);
+  elements.forumOpen.addEventListener("click", openForum);
+  elements.forumBack.addEventListener("click", showCoursesPage);
+  elements.forumRefresh.addEventListener("click", () => { void loadForum(); });
+  elements.forumCategoryForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handleCreateForumCategory();
+  });
+  elements.forumBoardForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handleCreateForumBoard();
+  });
+  elements.forumThreadForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handleCreateForumThread();
+  });
+  elements.forumThreadBody.addEventListener("input", () =>
+    autoResizeTextarea(elements.forumThreadBody)
+  );
+  elements.forumThreadBack.addEventListener("click", () => {
+    if (currentForumBoard) void loadForumBoard(currentForumBoard.id);
+  });
+  elements.forumReplyForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handleCreateForumReply();
+  });
+  elements.forumReplyBody.addEventListener("input", () =>
+    autoResizeTextarea(elements.forumReplyBody)
+  );
   elements.modeButtons.forEach((button) => {
     button.addEventListener("click", () =>
       setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet")
@@ -299,6 +373,9 @@ function resetAuthenticatedState(): void {
   discoveredCourses = [];
   selectedCourseCodes.clear();
   currentCourse = null;
+  forumData = null;
+  currentForumBoard = null;
+  currentForumThread = null;
   conversations = [];
   activeConversation = null;
   latestLatex = "";
@@ -312,6 +389,12 @@ function resetAuthenticatedState(): void {
   elements.coursesList.replaceChildren();
   elements.coursesProgressList.replaceChildren();
   elements.coursesProgress.hidden = true;
+  elements.forumNav.replaceChildren();
+  elements.forumHome.replaceChildren();
+  elements.forumBoardThreads.replaceChildren();
+  elements.forumReplies.replaceChildren();
+  elements.forumBoardCategory.replaceChildren();
+  clearForumForms();
   elements.convList.replaceChildren();
   Array.from(elements.chatMessages.children)
     .filter((node) => node !== elements.chatEmpty)
@@ -715,6 +798,446 @@ function handleSelectAllCourses(): void {
     card.classList.toggle("ccard--selected", selectedCourseCodes.has(code));
   });
   updateCoursesActions();
+}
+
+// ── Forum ─────────────────────────────────────────────────────────────
+
+function openForum(): void {
+  shell.classList.remove("mode-login", "mode-setup");
+  shell.classList.add("mode-courses");
+  elements.sidebarCourseContext.classList.add("hidden");
+  elements.sidebarCourseNav.classList.add("hidden");
+  activateTopLevelView("view-forum");
+  currentCourse = null;
+  void loadForum();
+}
+
+async function loadForum(): Promise<void> {
+  const boardId = currentForumBoard?.id ?? null;
+  const threadId = currentForumThread?.id ?? null;
+  elements.forumRefresh.disabled = true;
+  setStatus(elements.forumStatus, "Loading");
+  try {
+    await refreshForumIndex();
+    if (threadId) {
+      await loadForumThread(threadId);
+    } else if (boardId) {
+      await loadForumBoard(boardId);
+    } else {
+      renderForumHome();
+    }
+    setStatus(elements.forumStatus, "Loaded");
+  } catch (error) {
+    if (handleAuthRequired(error)) return;
+    setStatus(elements.forumStatus, error instanceof Error ? error.message : "Forum failed", "error");
+  } finally {
+    elements.forumRefresh.disabled = false;
+  }
+}
+
+async function refreshForumIndex(): Promise<void> {
+  forumData = await api.forumIndex();
+  renderForumChrome();
+}
+
+function renderForumChrome(): void {
+  const categories = forumCategories();
+  const canCreateCategories = forumData?.can_create_categories === true;
+  elements.forumRole.textContent = canCreateCategories ? "Admin" : "Student";
+  elements.forumCategoryForm.classList.toggle("hidden", !canCreateCategories);
+  elements.forumBoardCategory.replaceChildren(
+    ...categories.map((category) => {
+      const option = document.createElement("option");
+      option.value = String(category.id);
+      option.textContent = category.name;
+      return option;
+    })
+  );
+  elements.forumBoardSubmit.disabled = categories.length === 0;
+  renderForumNav();
+}
+
+function renderForumNav(): void {
+  const activeBoardId = currentForumBoard?.id ?? currentForumThread?.board_id ?? null;
+  const groups = forumCategories().map((category) => {
+    const section = document.createElement("section");
+    section.className = "forum-nav-group";
+    section.style.setProperty("--forum-accent", category.color);
+
+    const title = document.createElement("div");
+    title.className = "forum-nav-title";
+    title.textContent = category.name;
+    section.appendChild(title);
+
+    if (category.boards.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "forum-nav-empty";
+      empty.textContent = "No sub-boards";
+      section.appendChild(empty);
+      return section;
+    }
+
+    category.boards.forEach((board) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `forum-nav-board${board.id === activeBoardId ? " active" : ""}`;
+      button.textContent = board.name;
+      button.addEventListener("click", () => { void loadForumBoard(board.id); });
+      section.appendChild(button);
+    });
+    return section;
+  });
+  elements.forumNav.replaceChildren(...groups);
+}
+
+function renderForumHome(): void {
+  currentForumBoard = null;
+  currentForumThread = null;
+  renderForumNav();
+  showForumPanel("home");
+
+  const sections = forumCategories().map((category) => {
+    const section = document.createElement("section");
+    section.className = "forum-category-section";
+    section.style.setProperty("--forum-accent", category.color);
+
+    const head = document.createElement("div");
+    head.className = "forum-category-head";
+    const title = document.createElement("h2");
+    title.textContent = category.name;
+    const description = document.createElement("p");
+    description.textContent = category.description;
+    head.append(title, description);
+    section.appendChild(head);
+
+    const list = document.createElement("div");
+    list.className = "forum-board-grid";
+    if (category.boards.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "forum-empty";
+      empty.textContent = "No sub-boards yet.";
+      list.appendChild(empty);
+    } else {
+      list.append(...category.boards.map((board) => createForumBoardCard(board)));
+    }
+    section.appendChild(list);
+    return section;
+  });
+
+  if (sections.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "forum-empty";
+    empty.textContent = "No subjects yet.";
+    elements.forumHome.replaceChildren(empty);
+  } else {
+    elements.forumHome.replaceChildren(...sections);
+  }
+}
+
+function createForumBoardCard(board: ForumBoard): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "forum-board-card";
+  button.addEventListener("click", () => { void loadForumBoard(board.id); });
+
+  const title = document.createElement("span");
+  title.className = "forum-board-card-title";
+  title.textContent = board.name;
+
+  const desc = document.createElement("span");
+  desc.className = "forum-board-card-desc";
+  desc.textContent = board.description;
+
+  const meta = document.createElement("span");
+  meta.className = "forum-card-meta";
+  meta.textContent = `${board.thread_count} posts · ${board.reply_count} replies`;
+
+  button.append(title, desc, meta);
+  return button;
+}
+
+async function loadForumBoard(boardId: number): Promise<void> {
+  setStatus(elements.forumStatus, "Loading board");
+  try {
+    const response = await api.forumBoard(boardId);
+    renderForumBoard(response.board, response.threads);
+    setStatus(elements.forumStatus, `${response.threads.length} posts`);
+  } catch (error) {
+    if (handleAuthRequired(error)) return;
+    setStatus(elements.forumStatus, error instanceof Error ? error.message : "Board failed", "error");
+  }
+}
+
+function renderForumBoard(board: ForumBoard, threads: ForumThreadSummary[]): void {
+  currentForumBoard = board;
+  currentForumThread = null;
+  renderForumNav();
+  showForumPanel("board");
+  elements.forumBoardTitle.textContent = board.name;
+  elements.forumBoardMeta.textContent =
+    `${board.category_name} · ${board.thread_count} posts · ${board.reply_count} replies`;
+  elements.forumBoardCategory.value = String(board.category_id);
+  elements.forumThreadTitle.value = "";
+  elements.forumThreadBody.value = "";
+  elements.forumThreadCourse.value = "";
+  autoResizeTextarea(elements.forumThreadBody);
+
+  if (threads.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "forum-empty";
+    empty.textContent = "No posts yet.";
+    elements.forumBoardThreads.replaceChildren(empty);
+    return;
+  }
+  elements.forumBoardThreads.replaceChildren(...threads.map((thread) => createForumThreadCard(thread)));
+}
+
+function createForumThreadCard(thread: ForumThreadSummary): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "forum-thread-card";
+  button.addEventListener("click", () => { void loadForumThread(thread.id); });
+
+  const head = document.createElement("span");
+  head.className = "forum-thread-card-head";
+
+  const title = document.createElement("span");
+  title.className = "forum-thread-card-title";
+  title.textContent = thread.title;
+  head.appendChild(title);
+
+  if (thread.dylen_replied) {
+    const dylen = document.createElement("span");
+    dylen.className = "forum-chip dylen";
+    dylen.textContent = "dylen";
+    head.appendChild(dylen);
+  }
+
+  const preview = document.createElement("span");
+  preview.className = "forum-thread-preview";
+  preview.textContent = thread.body_preview;
+
+  const meta = document.createElement("span");
+  meta.className = "forum-card-meta";
+  meta.textContent = `${thread.author_username} · ${plural(thread.reply_count, "reply")} · ${formatTimestamp(thread.latest_activity_at)}`;
+
+  button.append(head, preview, meta);
+  return button;
+}
+
+async function loadForumThread(threadId: number): Promise<void> {
+  setStatus(elements.forumStatus, "Loading post");
+  try {
+    renderForumThread(await api.forumThread(threadId));
+    setStatus(elements.forumStatus, "Post loaded");
+  } catch (error) {
+    if (handleAuthRequired(error)) return;
+    setStatus(elements.forumStatus, error instanceof Error ? error.message : "Post failed", "error");
+  }
+}
+
+function renderForumThread(thread: ForumThread): void {
+  currentForumThread = thread;
+  currentForumBoard = findForumBoard(thread.board_id) ?? currentForumBoard;
+  renderForumNav();
+  showForumPanel("thread");
+  elements.forumThreadTitleView.textContent = thread.title;
+  elements.forumThreadMeta.textContent =
+    `${thread.category_name} / ${thread.board_name} · ${thread.author_username} · ${formatTimestamp(thread.created_at)}`;
+  elements.forumThreadBodyView.textContent = thread.body;
+  elements.forumReplyBody.value = "";
+  autoResizeTextarea(elements.forumReplyBody);
+
+  const replies = thread.replies.map((reply) => createForumReply(reply));
+  if (replies.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "forum-empty";
+    empty.textContent = "No replies yet.";
+    elements.forumReplies.replaceChildren(empty);
+  } else {
+    elements.forumReplies.replaceChildren(...replies);
+  }
+}
+
+function createForumReply(reply: ForumReply): HTMLElement {
+  const article = document.createElement("article");
+  article.className = `forum-reply forum-reply-${reply.author_role}`;
+
+  const head = document.createElement("div");
+  head.className = "forum-reply-head";
+  const author = document.createElement("span");
+  author.className = "forum-reply-author";
+  author.textContent = reply.author_username;
+  const role = document.createElement("span");
+  role.className = `forum-chip ${reply.author_role}`;
+  role.textContent = roleLabel(reply.author_role);
+  const time = document.createElement("span");
+  time.className = "forum-reply-time";
+  time.textContent = formatTimestamp(reply.created_at);
+  head.append(author, role, time);
+
+  const body = document.createElement("div");
+  body.className = "forum-reply-body";
+  if (reply.author_role === "bot") {
+    body.innerHTML = renderAnswer(reply.body);
+  } else {
+    body.textContent = reply.body;
+  }
+
+  article.append(head, body);
+
+  if (reply.citations.length > 0) {
+    const cites = document.createElement("div");
+    cites.className = "forum-citations";
+    reply.citations.forEach((citation, index) => {
+      const chip = document.createElement("a");
+      chip.className = "chat-citation-chip";
+      chip.textContent = citationLabel(citation, index);
+      const url = buildCitationUrl(citation);
+      if (url) {
+        chip.href = url;
+        chip.target = "_blank";
+        chip.rel = "noopener noreferrer";
+      }
+      cites.appendChild(chip);
+    });
+    article.appendChild(cites);
+  }
+
+  return article;
+}
+
+async function handleCreateForumCategory(): Promise<void> {
+  const name = elements.forumCategoryName.value.trim();
+  const description = elements.forumCategoryDescription.value.trim();
+  if (!name || !description) {
+    setStatus(elements.forumStatus, "Name and description required", "error");
+    return;
+  }
+  await withBusy(elements.forumCategorySubmit, elements.forumStatus, "Creating", async () => {
+    await api.createForumCategory({
+      name,
+      description,
+      color: elements.forumCategoryColor.value,
+    });
+    clearForumCategoryForm();
+    await loadForum();
+    showToast("Subject created");
+  });
+}
+
+async function handleCreateForumBoard(): Promise<void> {
+  const name = elements.forumBoardName.value.trim();
+  const description = elements.forumBoardDescription.value.trim();
+  const categoryId = numeric(elements.forumBoardCategory.value, 0);
+  if (!categoryId || !name || !description) {
+    setStatus(elements.forumStatus, "Subject, name, and description required", "error");
+    return;
+  }
+  await withBusy(elements.forumBoardSubmit, elements.forumStatus, "Creating", async () => {
+    const board = await api.createForumBoard({
+      category_id: categoryId,
+      name,
+      description,
+    });
+    clearForumBoardForm();
+    await refreshForumIndex();
+    await loadForumBoard(board.id);
+    showToast("Sub-board created");
+  });
+}
+
+async function handleCreateForumThread(): Promise<void> {
+  if (!currentForumBoard) return;
+  const title = elements.forumThreadTitle.value.trim();
+  const body = elements.forumThreadBody.value.trim();
+  const courseId = elements.forumThreadCourse.value.trim().toUpperCase();
+  if (!title || !body) {
+    setStatus(elements.forumStatus, "Title and post required", "error");
+    return;
+  }
+  await withBusy(elements.forumThreadSubmit, elements.forumStatus, "Posting", async () => {
+    const thread = await api.createForumThread({
+      board_id: currentForumBoard!.id,
+      title,
+      body,
+      course_id: courseId || null,
+    });
+    elements.forumThreadTitle.value = "";
+    elements.forumThreadBody.value = "";
+    elements.forumThreadCourse.value = "";
+    autoResizeTextarea(elements.forumThreadBody);
+    await refreshForumIndex();
+    renderForumThread(thread);
+    setStatus(elements.forumStatus, "Posted");
+    showToast(thread.dylen_replied ? "Posted · dylen replied" : "Posted");
+  });
+}
+
+async function handleCreateForumReply(): Promise<void> {
+  if (!currentForumThread) return;
+  const body = elements.forumReplyBody.value.trim();
+  if (!body) {
+    setStatus(elements.forumStatus, "Reply required", "error");
+    return;
+  }
+  await withBusy(elements.forumReplySubmit, elements.forumStatus, "Replying", async () => {
+    const thread = await api.createForumReply(currentForumThread!.id, { body });
+    elements.forumReplyBody.value = "";
+    autoResizeTextarea(elements.forumReplyBody);
+    await refreshForumIndex();
+    renderForumThread(thread);
+    setStatus(elements.forumStatus, "Reply posted");
+    showToast("Reply posted");
+  });
+}
+
+function showForumPanel(panel: "home" | "board" | "thread"): void {
+  elements.forumHome.classList.toggle("hidden", panel !== "home");
+  elements.forumBoardView.classList.toggle("hidden", panel !== "board");
+  elements.forumThreadView.classList.toggle("hidden", panel !== "thread");
+}
+
+function forumCategories(): ForumCategoryWithBoards[] {
+  return forumData?.categories ?? [];
+}
+
+function allForumBoards(): ForumBoard[] {
+  return forumCategories().flatMap((category) => category.boards);
+}
+
+function findForumBoard(boardId: number): ForumBoard | null {
+  return allForumBoards().find((board) => board.id === boardId) ?? null;
+}
+
+function roleLabel(role: string): string {
+  if (role === "bot") return "bot";
+  if (role === "admin") return "admin";
+  return "student";
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function clearForumForms(): void {
+  clearForumCategoryForm();
+  clearForumBoardForm();
+  elements.forumThreadTitle.value = "";
+  elements.forumThreadBody.value = "";
+  elements.forumThreadCourse.value = "";
+  elements.forumReplyBody.value = "";
+}
+
+function clearForumCategoryForm(): void {
+  elements.forumCategoryName.value = "";
+  elements.forumCategoryDescription.value = "";
+  elements.forumCategoryColor.value = "#566884";
+}
+
+function clearForumBoardForm(): void {
+  elements.forumBoardName.value = "";
+  elements.forumBoardDescription.value = "";
 }
 
 async function confirmIndexedCourse(code: string): Promise<DiscoveredCourse | null> {

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from studylens.domain import Answer, SearchResult
+from studylens.domain import Answer, Citation, SearchResult
 from studylens.domain.models import ResourceKind
 from studylens.ingestion.auto_index import AutoIndexReport
 from studylens.ingestion.edstem import EdStemIndexResult
@@ -33,6 +33,7 @@ class AuthUser(BaseModel):
     username: str
     grade: str
     course: str
+    is_admin: bool = False
 
 
 class AuthSessionResponse(BaseModel):
@@ -155,3 +156,99 @@ class RetrieveResponse(BaseModel):
 
 class AskResponse(Answer):
     pass
+
+
+class ForumCategoryCreateRequest(BaseModel):
+    name: str
+    description: str
+    color: str | None = None
+
+
+class ForumBoardCreateRequest(BaseModel):
+    category_id: int
+    name: str
+    description: str
+
+
+class ForumThreadCreateRequest(BaseModel):
+    board_id: int
+    title: str
+    body: str
+    course_id: str | None = None
+
+
+class ForumReplyCreateRequest(BaseModel):
+    body: str
+
+
+class ForumCategory(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: str
+    color: str
+    created_by_username: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class ForumBoard(BaseModel):
+    id: int
+    category_id: int
+    category_name: str
+    name: str
+    slug: str
+    description: str
+    created_by_username: str | None = None
+    thread_count: int
+    reply_count: int
+    latest_activity_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class ForumCategoryWithBoards(ForumCategory):
+    boards: list[ForumBoard] = Field(default_factory=list)
+
+
+class ForumThreadSummary(BaseModel):
+    id: int
+    board_id: int
+    board_name: str
+    category_id: int
+    category_name: str
+    title: str
+    body_preview: str
+    course_id: str | None = None
+    author_username: str
+    author_role: str
+    reply_count: int
+    dylen_replied: bool
+    created_at: str
+    updated_at: str
+    latest_activity_at: str
+
+
+class ForumReply(BaseModel):
+    id: int
+    thread_id: int
+    author_username: str
+    author_role: str
+    body: str
+    citations: list[Citation] = Field(default_factory=list)
+    created_at: str
+
+
+class ForumThread(ForumThreadSummary):
+    body: str
+    replies: list[ForumReply] = Field(default_factory=list)
+
+
+class ForumIndexResponse(BaseModel):
+    categories: list[ForumCategoryWithBoards]
+    can_create_categories: bool
+
+
+class ForumBoardThreadsResponse(BaseModel):
+    board: ForumBoard
+    threads: list[ForumThreadSummary]

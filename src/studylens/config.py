@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     imperial_password: str | None = None
     browser_storage_state: Path | None = None
     admin_token: str | None = None
+    forum_admin_usernames: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["admin"]
+    )
     auth_secret_key: str | None = None
     session_cookie_name: str = "studylens_session"
     session_cookie_secure: bool | None = None
@@ -72,6 +75,17 @@ class Settings(BaseSettings):
     def split_origins(cls, value: object) -> object:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("forum_admin_usernames", mode="before")
+    @classmethod
+    def split_forum_admins(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [
+                username.strip().casefold()
+                for username in value.split(",")
+                if username.strip()
+            ]
         return value
 
     @field_validator("session_cookie_secure", mode="before")

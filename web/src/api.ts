@@ -6,6 +6,15 @@ import type {
   AutoIndexReport,
   BrowserStateStatus,
   DiscoverCoursesResponse,
+  ForumBoard,
+  ForumBoardCreateRequest,
+  ForumBoardThreadsResponse,
+  ForumCategory,
+  ForumCategoryCreateRequest,
+  ForumIndexResponse,
+  ForumReplyCreateRequest,
+  ForumThread,
+  ForumThreadCreateRequest,
   GenerateRequest,
   IndexTextRequest,
   LoginRequest,
@@ -126,6 +135,53 @@ export class StudyLensApi {
     return this.request("/courses/discover", {
       method: "POST",
       headers: jsonHeaders(),
+    });
+  }
+
+  async forumIndex(): Promise<ForumIndexResponse> {
+    return this.request("/forum");
+  }
+
+  async createForumCategory(payload: ForumCategoryCreateRequest): Promise<ForumCategory> {
+    return this.request("/forum/categories", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async createForumBoard(payload: ForumBoardCreateRequest): Promise<ForumBoard> {
+    return this.request("/forum/boards", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async forumBoard(boardId: number): Promise<ForumBoardThreadsResponse> {
+    return this.request(`/forum/boards/${boardId}`);
+  }
+
+  async createForumThread(payload: ForumThreadCreateRequest): Promise<ForumThread> {
+    return this.request("/forum/threads", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async forumThread(threadId: number): Promise<ForumThread> {
+    return this.request(`/forum/threads/${threadId}`);
+  }
+
+  async createForumReply(
+    threadId: number,
+    payload: ForumReplyCreateRequest
+  ): Promise<ForumThread> {
+    return this.request(`/forum/threads/${threadId}/replies`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload),
     });
   }
 
