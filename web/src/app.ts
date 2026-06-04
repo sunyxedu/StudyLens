@@ -94,7 +94,6 @@ const elements = {
   discoveringHint: byId<HTMLSpanElement>("discovering-hint"),
   discoveringStatus: byId<HTMLSpanElement>("discovering-status"),
   // Course library (main page)
-  coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
   coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
   coursesStatus: byId<HTMLSpanElement>("courses-status"),
@@ -245,7 +244,6 @@ function init(): void {
   elements.generateSubmit.addEventListener("click", handleGenerate);
   elements.downloadLatex.addEventListener("click", handleDownloadLatex);
   elements.retrieveSubmit.addEventListener("click", handleRetrieve);
-  elements.coursesDiscover.addEventListener("click", handleDiscoverCourses);
   elements.coursesIndex.addEventListener("click", handleIndexSelected);
   elements.coursesSelectAll.addEventListener("click", handleSelectAllCourses);
   elements.forumOpen.addEventListener("click", openForum);
@@ -655,24 +653,6 @@ async function loadCachedCourses(): Promise<void> {
   } catch (error) {
     handleAuthRequired(error);
   }
-}
-
-async function handleDiscoverCourses(): Promise<void> {
-  await withBusy(elements.coursesDiscover, elements.coursesStatus, "Discovering…", async () => {
-    const response = await api.discoverCourses();
-    discoveredCourses = response.courses;
-    selectedCourseCodes.clear();
-    renderCourseList();
-    elements.coursesProgressList.replaceChildren();
-    elements.coursesProgress.hidden = true;
-    if (response.error) {
-      setStatus(elements.coursesStatus, response.error, "error");
-    } else {
-      showToast(`Loaded ${response.courses.length} courses from EdStem`);
-    }
-    updateCoursesSummary(response.dropped_titles.length, response.error ? null : "just now");
-    updateCoursesActions();
-  });
 }
 
 function showToast(msg: string, durationMs = 2600): void {
@@ -2163,7 +2143,6 @@ async function handleIndexSelected(): Promise<void> {
     return;
   }
   elements.coursesIndex.disabled = true;
-  elements.coursesDiscover.disabled = true;
   elements.coursesSelectAll.disabled = true;
 
   // Show processing state on each target card
@@ -2209,7 +2188,6 @@ async function handleIndexSelected(): Promise<void> {
     renderCourseList();
   } finally {
     elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
-    elements.coursesDiscover.disabled = false;
     elements.coursesSelectAll.disabled = false;
   }
 }
