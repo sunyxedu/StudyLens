@@ -114,7 +114,7 @@ def push_user_browser_state() -> None:
         upload = client.post("/browser-state/upload", json=state)
         if upload.status_code != 200:
             raise SystemExit(f"Upload failed ({upload.status_code}): {upload.text}")
-        print(f"Uploaded browser state to {backend}: {upload.json()}")
+        print("This stage is finished.")
 
 
 if __name__ == "__main__":
