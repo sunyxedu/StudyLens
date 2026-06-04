@@ -38,9 +38,12 @@ def test_browser_state_router_uses_imperial_credentials_for_http_auth(
 def test_browser_state_cli_prompts_for_imperial_username_and_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("builtins.input", lambda prompt: "abc123")
     monkeypatch.setattr(
-        "studylens.tools.browser_state.getpass.getpass",
+        "studylens.tools.browser_state._prompt_text",
+        lambda prompt: "abc123",
+    )
+    monkeypatch.setattr(
+        "studylens.tools.browser_state._prompt_password",
         lambda prompt: "secret",
     )
 

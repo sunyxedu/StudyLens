@@ -91,27 +91,15 @@ def push_user_browser_state() -> None:
     """
     import json
     import os
-    import sys
 
     import httpx
 
-    def _prompt(label: str) -> str:
-        # Write+flush the prompt to stdout ourselves, then read, so the prompt
-        # always shows before we block. getpass writes its prompt to /dev/tty,
-        # which can race ahead of a buffered stdout prompt (e.g. under `uv run`)
-        # and print the username and password prompts together on one line.
-        sys.stdout.write(label)
-        sys.stdout.flush()
-        return sys.stdin.readline().strip()
-
     backend = (os.environ.get("STUDYLENS_BACKEND_URL") or DEFAULT_BACKEND_URL).rstrip("/")
 
-    username = os.environ.get("STUDYLENS_USERNAME") or _prompt("StudyLens username: ")
+    username = os.environ.get("STUDYLENS_USERNAME") or _prompt_text("StudyLens username: ")
     password = os.environ.get("STUDYLENS_PASSWORD")
     if not password:
-        sys.stdout.write("StudyLens password: ")
-        sys.stdout.flush()
-        password = getpass.getpass("")  # empty prompt: we already printed it above
+        password = _prompt_password("StudyLens password: ")
     if not username or not password:
         raise SystemExit("StudyLens username and password are both required.")
 
@@ -140,11 +128,25 @@ def push_user_browser_state() -> None:
 
 def _prompt_imperial_credentials() -> dict[str, str] | None:
     print("\nDOC Exams uses Imperial HTTP Basic authentication.")
-    username = input("Imperial username: ").strip()
-    password = getpass.getpass("Imperial password: ")
+    username = _prompt_text("Imperial username: ")
+    password = _prompt_password("Imperial password: ")
     if not username or not password:
         return None
     return {"username": username, "password": password}
+
+
+def _prompt_text(label: str) -> str:
+    try:
+        with open("/dev/tty", "r+", encoding="utf-8") as tty:
+            tty.write(label)
+            tty.flush()
+            return tty.readline().strip()
+    except OSError:
+        return input(label).strip()
+
+
+def _prompt_password(label: str) -> str:
+    return getpass.getpass(label)
 
 
 async def _apply_basic_auth_header(
