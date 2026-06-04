@@ -59,6 +59,14 @@ class BrowserStateRouter:
     def steps_for(self, *, grade: str, course: str) -> list[BrowserStateStep]:
         return list(DEFAULT_BROWSER_STATE_STEPS)
 
+    def http_credentials(self) -> dict[str, str] | None:
+        if not self._settings.imperial_username or not self._settings.imperial_password:
+            return None
+        return {
+            "username": self._settings.imperial_username,
+            "password": self._settings.imperial_password,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class BrowserStateStatus:
@@ -93,7 +101,7 @@ class PlaywrightBrowserStateManager:
             return await existing.status(ready=self._auth_store.has_browser_state(user.id))
 
         steps = self._router.steps_for(grade=user.grade, course=user.course)
-        session = _CaptureSession(steps)
+        session = _CaptureSession(steps, http_credentials=self._router.http_credentials())
         self._sessions[user.id] = session
         try:
             await session.start()
@@ -167,10 +175,16 @@ class PlaywrightBrowserStateManager:
 
 
 class _CaptureSession:
-    def __init__(self, steps: list[BrowserStateStep]) -> None:
+    def __init__(
+        self,
+        steps: list[BrowserStateStep],
+        *,
+        http_credentials: dict[str, str] | None = None,
+    ) -> None:
         if not steps:
             raise ValueError("browser state flow requires at least one step")
         self.steps = steps
+        self._http_credentials = http_credentials
         self._index = 0
         self._playwright: Any = None
         self._browser: Any = None
@@ -194,7 +208,8 @@ class _CaptureSession:
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/136.0.0.0 Safari/537.36"
-            )
+            ),
+            http_credentials=self._http_credentials,
         )
         self._page = await self._context.new_page()
         await self._goto_current_step()

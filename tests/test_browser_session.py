@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
+from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS, BrowserStateRouter
 from studylens.config import Settings
 from studylens.errors import ConfigurationError
 from studylens.ingestion.browser_session import BrowserSession
@@ -15,6 +15,22 @@ def test_default_browser_state_steps_include_exams_site() -> None:
 
     assert len(exams_steps) == 1
     assert exams_steps[0].url == "https://exams.doc.ic.ac.uk/"
+
+
+def test_browser_state_router_uses_imperial_credentials_for_http_auth(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        imperial_username="abc123",
+        imperial_password="secret",
+    )
+    router = BrowserStateRouter(settings)
+
+    assert router.http_credentials() == {
+        "username": "abc123",
+        "password": "secret",
+    }
 
 
 def test_from_settings_requires_storage_state_path(tmp_path: Path) -> None:

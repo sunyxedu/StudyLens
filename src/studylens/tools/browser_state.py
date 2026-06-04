@@ -8,11 +8,16 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
 
 from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
+from studylens.config import Settings, get_settings
 
-DEFAULT_BACKEND_URL = "https://studylens-production.up.railway.app"
+DEFAULT_BACKEND_URL = "http://127.0.0.1:8000/"
 
 
-async def save_browser_state(output: Path) -> None:
+async def save_browser_state(
+    output: Path,
+    *,
+    http_credentials: dict[str, str] | None = None,
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
         try:
@@ -34,7 +39,8 @@ async def save_browser_state(output: Path) -> None:
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/136.0.0.0 Safari/537.36"
-            )
+            ),
+            http_credentials=http_credentials,
         )
         page = await context.new_page()
 
@@ -59,7 +65,13 @@ def main() -> None:
         help="Path to write Playwright storage state JSON.",
     )
     args = parser.parse_args()
-    asyncio.run(save_browser_state(args.output))
+    settings = get_settings()
+    asyncio.run(
+        save_browser_state(
+            args.output,
+            http_credentials=_http_credentials_from_settings(settings),
+        )
+    )
 
 
 def push_user_browser_state() -> None:
@@ -107,7 +119,13 @@ def push_user_browser_state() -> None:
         print(f"Signed in to {backend} as {username}. Opening a browser to capture course logins…")
 
         output = Path("data/auth/browser-state.json")
-        asyncio.run(save_browser_state(output))
+        settings = get_settings()
+        asyncio.run(
+            save_browser_state(
+                output,
+                http_credentials=_http_credentials_from_settings(settings),
+            )
+        )
         state = json.loads(output.read_text(encoding="utf-8"))
 
         # The session cookie set by /auth/login is carried by the client jar.
@@ -115,6 +133,15 @@ def push_user_browser_state() -> None:
         if upload.status_code != 200:
             raise SystemExit(f"Upload failed ({upload.status_code}): {upload.text}")
         print("This stage is finished.")
+
+
+def _http_credentials_from_settings(settings: Settings) -> dict[str, str] | None:
+    if not settings.imperial_username or not settings.imperial_password:
+        return None
+    return {
+        "username": settings.imperial_username,
+        "password": settings.imperial_password,
+    }
 
 
 if __name__ == "__main__":
