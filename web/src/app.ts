@@ -1513,7 +1513,7 @@ function createForumPostBlock(
 
   const textEl = document.createElement("div");
   textEl.className = "forum-post-text";
-  textEl.textContent = body;
+  textEl.appendChild(highlightMentions(body));
   postBody.appendChild(textEl);
 
   if (citations.length > 0) {
@@ -1580,8 +1580,8 @@ function createForumReplyBlock(reply: ForumReply): HTMLElement {
 
   const bodyEl = document.createElement("div");
   bodyEl.className = "forum-reply-body";
-  if (isBot) { bodyEl.innerHTML = renderAnswer(reply.body); }
-  else { bodyEl.textContent = reply.body; }
+  if (isBot) { bodyEl.innerHTML = renderAnswer(reply.body); applyMentionHighlight(bodyEl); }
+  else { bodyEl.appendChild(highlightMentions(reply.body)); }
 
   content.append(head, bodyEl);
 
@@ -1745,6 +1745,31 @@ async function handleCreateForumThread(): Promise<void> {
 }
 
 // ── Forum helpers ──────────────────────────────────────────────────────
+
+function highlightMentions(text: string): DocumentFragment {
+  const frag = document.createDocumentFragment();
+  text.split(/(@dylen)/gi).forEach((part) => {
+    if (part.toLowerCase() === "@dylen") {
+      const span = document.createElement("span");
+      span.className = "fx-mention";
+      span.textContent = part;
+      frag.appendChild(span);
+    } else if (part) {
+      frag.appendChild(document.createTextNode(part));
+    }
+  });
+  return frag;
+}
+
+function applyMentionHighlight(el: HTMLElement): void {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const hits: Text[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) {
+    if (/@dylen/i.test((n as Text).textContent ?? "")) hits.push(n as Text);
+  }
+  hits.forEach((tn) => tn.parentNode?.replaceChild(highlightMentions(tn.textContent ?? ""), tn));
+}
 
 function forumCategories(): ForumCategoryWithBoards[] {
   return forumData?.categories ?? [];
