@@ -8,6 +8,8 @@ from playwright.async_api import async_playwright
 
 from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
 
+DEFAULT_BACKEND_URL = "https://studylens-production.up.railway.app"
+
 
 async def save_browser_state(output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -50,12 +52,14 @@ def main() -> None:
 
 
 def push_user_browser_state() -> None:
-    """Capture course logins locally, then upload them to your hosted account.
+    """Sign into your StudyLens account, then capture and upload course logins.
 
-    Reads the StudyLens URL/credentials from env (STUDYLENS_BACKEND_URL,
-    STUDYLENS_USERNAME, STUDYLENS_PASSWORD) or prompts for them, opens a real
-    browser to log into each course site, then POSTs the captured state to
-    /browser-state/upload authenticated as your user.
+    Prompts for your StudyLens username and password (or reads them from
+    STUDYLENS_USERNAME / STUDYLENS_PASSWORD) and signs in first. Only once the
+    credentials check out does it open a real browser to log into each course
+    site, then POST the captured state to /browser-state/upload as your user.
+
+    The hosted backend is used by default; override it with STUDYLENS_BACKEND_URL.
     """
     import getpass
     import json
@@ -63,22 +67,23 @@ def push_user_browser_state() -> None:
 
     import httpx
 
-    backend = os.environ.get("STUDYLENS_BACKEND_URL") or input(
-        "StudyLens URL (e.g. https://studylens-production.up.railway.app): "
-    ).strip()
+    backend = (os.environ.get("STUDYLENS_BACKEND_URL") or DEFAULT_BACKEND_URL).rstrip("/")
     username = os.environ.get("STUDYLENS_USERNAME") or input("StudyLens username: ").strip()
     password = os.environ.get("STUDYLENS_PASSWORD") or getpass.getpass("StudyLens password: ")
-    if not backend or not username or not password:
-        raise SystemExit("StudyLens URL, username, and password are all required.")
+    if not username or not password:
+        raise SystemExit("StudyLens username and password are both required.")
 
-    output = Path("data/auth/browser-state.json")
-    asyncio.run(save_browser_state(output))
-    state = json.loads(output.read_text(encoding="utf-8"))
-
-    with httpx.Client(base_url=backend.rstrip("/"), timeout=30) as client:
+    with httpx.Client(base_url=backend, timeout=30) as client:
+        # Verify the credentials before bothering to open a browser.
         login = client.post("/auth/login", json={"username": username, "password": password})
         if login.status_code != 200:
             raise SystemExit(f"Login failed ({login.status_code}): {login.text}")
+        print(f"Signed in to {backend} as {username}. Opening a browser to capture course logins…")
+
+        output = Path("data/auth/browser-state.json")
+        asyncio.run(save_browser_state(output))
+        state = json.loads(output.read_text(encoding="utf-8"))
+
         # The session cookie set by /auth/login is carried by the client jar.
         upload = client.post("/browser-state/upload", json=state)
         if upload.status_code != 200:

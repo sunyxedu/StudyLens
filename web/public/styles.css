@@ -386,6 +386,76 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.setup-instructions {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.setup-instructions strong {
+  color: var(--ink);
+}
+
+.setup-cmd {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  overflow-x: auto;
+}
+
+.setup-cmd code {
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Discovery progress */
+.discovering-panel {
+  min-height: 280px;
+}
+
+.discovering-body {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.progress-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.5s ease;
+}
+
+.discovering-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.discovering-percent {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
 .inline-controls,
 .generation-controls {
   display: flex;

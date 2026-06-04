@@ -6,6 +6,7 @@ import type {
   AutoIndexReport,
   BrowserStateStatus,
   DiscoverCoursesResponse,
+  DiscoveryStatus,
   ForumBoard,
   ForumBoardCreateRequest,
   ForumBoardThreadsResponse,
@@ -136,6 +137,17 @@ export class StudyLensApi {
       method: "POST",
       headers: jsonHeaders(),
     });
+  }
+
+  async startDiscovery(): Promise<DiscoveryStatus> {
+    return this.request("/courses/discover/start", {
+      method: "POST",
+      headers: jsonHeaders(),
+    });
+  }
+
+  async discoveryStatus(): Promise<DiscoveryStatus> {
+    return this.request("/courses/discover/status");
   }
 
   async forumIndex(): Promise<ForumIndexResponse> {

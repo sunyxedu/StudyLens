@@ -120,6 +120,14 @@ class CoursesListResponse(BaseModel):
     courses: list[DiscoverCoursesCourse]
 
 
+class DiscoveryStatusResponse(BaseModel):
+    status: Literal["idle", "running", "done", "error"]
+    started_at: float | None = None
+    finished_at: float | None = None
+    error: str | None = None
+    course_count: int = 0
+
+
 class AskRequest(BaseModel):
     question: str
     course_id: str | None = None
