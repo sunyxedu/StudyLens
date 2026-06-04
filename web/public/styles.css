@@ -677,6 +677,41 @@ textarea:focus {
   text-decoration: none;
 }
 
+.login-brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.login-brand-name {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .2em;
+  color: var(--ink, #23282a);
+}
+
+/* Left column: headline + sub */
+.login-headline {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.12;
+  color: var(--ink, #23282a);
+  margin: 0 0 20px;
+}
+
+.login-sub {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--muted, #6c736e);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 440px;
+}
+
 /* Two-column layout */
 .login-layout {
   position: relative;
