@@ -159,6 +159,14 @@ export interface DiscoverCoursesResponse {
   error?: string | null;
 }
 
+export interface DiscoveryStatus {
+  status: "idle" | "running" | "done" | "error";
+  started_at?: number | null;
+  finished_at?: number | null;
+  error?: string | null;
+  course_count: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
