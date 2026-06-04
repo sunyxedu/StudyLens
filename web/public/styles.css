@@ -609,7 +609,7 @@ textarea:focus {
 /* ── Login page redesign ──────────────────────────────────────────────── */
 
 /* Hide topbar on the pre-auth login screen */
-.shell.mode-login .topbar {
+body:has(.shell.mode-login) .topbar {
   display: none;
 }
 
