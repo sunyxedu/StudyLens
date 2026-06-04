@@ -676,6 +676,374 @@ textarea:focus {
   box-shadow: 0 2px 8px rgba(183, 98, 42, 0.2);
 }
 
+/* ── Login page redesign ──────────────────────────────────────────────── */
+
+/* Hide topbar on the pre-auth login screen */
+body:has(.shell.mode-login) .topbar {
+  display: none;
+}
+
+/* Full-viewport login section */
+#view-login.auth-view.active {
+  position: fixed;
+  inset: 0;
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  overflow-y: auto;
+  background: #26352c;
+}
+
+/* Layer: blurred library photo */
+.login-bg {
+  position: fixed;
+  inset: 0;
+  background: url('/login-bg.jpg') center 38% / cover no-repeat;
+  filter: blur(7px) brightness(1.04) saturate(1.22) sepia(.18);
+  transform: scale(1.12);
+  transform-origin: center;
+  z-index: 0;
+}
+
+/* Layer: cream/amber wash */
+.login-wash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    100deg,
+    rgba(245, 235, 220, .85)  0%,
+    rgba(245, 234, 217, .58) 34%,
+    rgba(244, 232, 214, .30) 60%,
+    rgba(240, 227, 206, .52) 100%
+  );
+}
+
+/* Layer: warm radial glow behind headline */
+.login-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(
+    115% 95% at 16% 42%,
+    rgba(183, 98, 42, .16),
+    transparent 56%
+  );
+}
+
+/* Brand mark */
+.login-brand {
+  position: fixed;
+  top: 28px;
+  left: 40px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.login-brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.login-brand-name {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .2em;
+  color: var(--ink, #23282a);
+}
+
+/* Left column: headline + sub */
+.login-headline {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.12;
+  color: var(--ink, #23282a);
+  margin: 0 0 20px;
+}
+
+.login-sub {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--muted, #6c736e);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 440px;
+}
+
+/* Feature rows */
+.login-features {
+  list-style: none;
+  margin: 36px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-feature {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink, #23282a);
+}
+
+.login-feature-chip {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, .82);
+  border: 1px solid rgba(46, 93, 77, .18);
+  border-radius: 12px;
+  color: var(--green, #2e5d4d);
+  box-shadow: 0 1px 3px rgba(38, 55, 46, .08);
+}
+
+/* Two-column layout */
+.login-layout {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: minmax(100dvh, auto); /* row ≥ viewport — keeps left col stable */
+  align-items: center;
+  padding: 96px 84px 60px 80px;
+  gap: 48px;
+}
+
+.login-left {
+  max-width: 520px;
+}
+
+.login-right {
+  flex-shrink: 0;
+}
+
+/* Override legacy .auth-view centering for the new layout */
+#view-login .workspace {
+  padding: 0;
+}
+
+/* ── Login card ───────────────────────────────────────────────────────── */
+
+#view-login .login-panel {
+  width: 432px;
+  background: var(--paper, #fffdf8);
+  border: 1px solid var(--line, #efe7d6);
+  border-radius: 18px;
+  padding: 30px 30px 26px;
+  box-shadow: 0 2px 6px rgba(38, 55, 46, .07),
+              0 30px 70px -28px rgba(20, 32, 25, .50);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Remove old border-color override from data-auth-mode */
+#view-login .login-panel[data-auth-mode="register"],
+#view-login .login-panel[data-auth-mode="login"] {
+  border-color: var(--line, #efe7d6);
+}
+
+.login-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-card-header h2 {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--ink, #23282a);
+  margin: 0;
+  letter-spacing: -.02em;
+}
+
+.login-card-note {
+  font-size: 13px;
+  color: var(--muted, #6c736e);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.login-divider {
+  border: none;
+  border-top: 1px solid var(--line, #efe7d6);
+  margin: 0;
+}
+
+/* Segmented control — ochre active */
+#view-login .auth-mode-switch {
+  background: rgba(0, 0, 0, .045);
+  border-radius: 11px;
+  padding: 3px;
+  gap: 2px;
+  width: 100%;
+}
+
+#view-login .auth-mode-switch .segment {
+  flex: 1;
+  border: 0;
+  border-radius: 9px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #23282a);
+  background: transparent;
+  padding: 8px 0;
+  transition: background 130ms, color 130ms, box-shadow 130ms;
+}
+
+#view-login .auth-mode-switch .segment.active {
+  background: var(--ochre, #b06a35);
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(176, 106, 53, .75);
+}
+
+/* Override: login mode also uses ochre (both modes now share ochre) */
+#view-login .login-panel[data-auth-mode="login"] .auth-mode-switch .segment.active {
+  background: var(--ochre, #b06a35);
+  box-shadow: 0 6px 14px -8px rgba(176, 106, 53, .75);
+}
+
+/* ── Card fields ──────────────────────────────────────────────────────── */
+
+#view-login .login-grid {
+  gap: 14px;
+}
+
+#view-login .field > span {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #23282a);
+  margin-bottom: 5px;
+}
+
+#view-login .field input {
+  background: #fff;
+  border: 1px solid var(--line, #efe7d6);
+  border-radius: 11px;
+  padding: 11px 13px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 14.5px;
+  color: var(--ink, #23282a);
+  min-height: 44px;
+  transition: border-color 130ms, box-shadow 130ms;
+}
+
+/* ── Submit button ────────────────────────────────────────────────────── */
+
+#view-login #login-submit {
+  background: var(--green-btn, #2e6d54);
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  padding: 13px 26px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: 0 10px 22px -12px rgba(46, 109, 84, .85);
+  transition: background 130ms, box-shadow 130ms, transform 110ms;
+}
+
+/* ── Focus, hover, reduced-motion, responsive ─────────────────────────── */
+
+/* Input focus */
+#view-login .field input:focus {
+  outline: none;
+  border-color: var(--green, #2e5d4d);
+  box-shadow: 0 0 0 3px rgba(46, 93, 77, .12);
+}
+
+/* Submit hover/active */
+#view-login #login-submit:hover {
+  background: var(--green-deep, #264c3f);
+  box-shadow: 0 14px 28px -14px rgba(46, 109, 84, .9);
+  transform: translateY(-1px);
+}
+
+#view-login #login-submit:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 14px -8px rgba(46, 109, 84, .8);
+}
+
+/* Feature chip hover */
+.login-feature-chip {
+  transition: background 130ms, box-shadow 130ms;
+}
+
+/* Responsive: stack to single column ≤900px */
+@media (max-width: 900px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 88px 24px 48px;
+    gap: 36px;
+  }
+
+  .login-left {
+    max-width: none;
+  }
+
+  .login-brand {
+    left: 24px;
+  }
+
+  #view-login .login-panel {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .login-headline {
+    font-size: clamp(30px, 8vw, 44px);
+  }
+}
+
+/* Very narrow: hide feature list, keep headline + sub */
+@media (max-width: 480px) {
+  .login-features {
+    display: none;
+  }
+
+  .login-layout {
+    padding: 80px 16px 40px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .login-bg,
+  #view-login .field input,
+  #view-login #login-submit,
+  #view-login .auth-mode-switch .segment,
+  .login-feature-chip {
+    transition: none !important;
+  }
+}
+
 .latex-output {
   min-height: 360px;
   max-height: 56vh;
