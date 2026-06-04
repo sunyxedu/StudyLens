@@ -40,39 +40,86 @@
 
       <section class="workspace">
 
-        <section class="view active auth-view" id="view-login" aria-labelledby="login-title">
-          <form id="login-form" class="login-panel">
-            <div class="view-head">
-              <h2 id="login-title">Register</h2>
-              <span id="login-subtitle" class="subtle">Create your StudyLens account</span>
+        <section class="view active auth-view" id="view-login" aria-labelledby="login-card-title">
+
+          <!-- Background layers (treated in slice 3) -->
+          <div class="login-bg" aria-hidden="true"></div>
+          <div class="login-wash" aria-hidden="true"></div>
+          <div class="login-glow" aria-hidden="true"></div>
+
+          <!-- Brand mark top-left (slice 4) -->
+          <div class="login-brand" aria-label="StudyLens">
+            <img src="/logo.png" alt="" class="login-brand-logo" aria-hidden="true" />
+            <span class="login-brand-name">STUDYLENS</span>
+          </div>
+
+          <!-- Two-column content -->
+          <div class="login-layout">
+
+            <!-- Left column: headline + features (slices 4–5) -->
+            <div class="login-left">
+              <h1 class="login-headline">Study smarter<br>with StudyLens</h1>
+              <p class="login-sub">Access your course materials, past papers, Panopto lectures and forum discussions — all in one place.</p>
+              <ul class="login-features" aria-label="Features">
+                <li class="login-feature">
+                  <span class="login-feature-chip" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </span>
+                  <span>Course-grounded search</span>
+                </li>
+                <li class="login-feature">
+                  <span class="login-feature-chip" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  </span>
+                  <span>Past exam retrieval</span>
+                </li>
+                <li class="login-feature">
+                  <span class="login-feature-chip" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                  </span>
+                  <span>Lecture-aware revision</span>
+                </li>
+              </ul>
             </div>
-            <div class="segmented auth-mode-switch" role="tablist" aria-label="Authentication mode">
-              <button class="segment auth-mode active" data-auth-mode="register" type="button">Register</button>
-              <button class="segment auth-mode" data-auth-mode="login" type="button">Login</button>
+
+            <!-- Right column: login card (slices 6–7) -->
+            <div class="login-right">
+              <form id="login-form" class="login-panel">
+                <div class="login-card-header">
+                  <h2 id="login-card-title" id="login-title">Register</h2>
+                  <span id="login-subtitle" class="login-card-note subtle">Create your StudyLens account</span>
+                </div>
+                <hr class="login-divider" />
+                <div class="segmented auth-mode-switch" role="tablist" aria-label="Authentication mode">
+                  <button class="segment auth-mode active" data-auth-mode="register" type="button">Register</button>
+                  <button class="segment auth-mode" data-auth-mode="login" type="button">Login</button>
+                </div>
+                <div class="login-grid">
+                  <label class="field">
+                    <span>Username</span>
+                    <input id="login-username" name="username" autocomplete="username" required />
+                  </label>
+                  <label id="login-grade-field" class="field">
+                    <span>Grade</span>
+                    <input id="login-grade" name="grade" autocomplete="organization-title" required />
+                  </label>
+                  <label id="login-course-field" class="field">
+                    <span>Course</span>
+                    <input id="login-course" name="course" autocomplete="organization" required />
+                  </label>
+                  <label id="login-password-field" class="field">
+                    <span>Password</span>
+                    <input id="login-password" name="password" type="password" autocomplete="current-password" minlength="8" required />
+                  </label>
+                </div>
+                <div class="actions">
+                  <button id="login-submit" class="button primary" type="submit">Register</button>
+                  <span id="login-status" class="status"></span>
+                </div>
+              </form>
             </div>
-            <div class="login-grid">
-              <label class="field">
-                <span>Username</span>
-                <input id="login-username" name="username" autocomplete="username" required />
-              </label>
-              <label id="login-grade-field" class="field">
-                <span>Grade</span>
-                <input id="login-grade" name="grade" autocomplete="organization-title" required />
-              </label>
-              <label id="login-course-field" class="field">
-                <span>Course</span>
-                <input id="login-course" name="course" autocomplete="organization" required />
-              </label>
-              <label id="login-password-field" class="field">
-                <span>Password</span>
-                <input id="login-password" name="password" type="password" autocomplete="current-password" minlength="8" required />
-              </label>
-            </div>
-            <div class="actions">
-              <button id="login-submit" class="button primary" type="submit">Register</button>
-              <span id="login-status" class="status"></span>
-            </div>
-          </form>
+
+          </div>
         </section>
 
         <section class="view auth-view" id="view-browser-state" aria-labelledby="browser-state-title">

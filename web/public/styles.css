@@ -606,6 +606,82 @@ textarea:focus {
   box-shadow: 0 2px 8px rgba(183, 98, 42, 0.2);
 }
 
+/* ── Login page redesign ──────────────────────────────────────────────── */
+
+/* Hide topbar on the pre-auth login screen */
+.shell.mode-login .topbar {
+  display: none;
+}
+
+/* Full-viewport login section */
+#view-login.auth-view.active {
+  position: fixed;
+  inset: 0;
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  overflow-y: auto;
+  background: #26352c;
+}
+
+/* Layer: blurred library photo */
+.login-bg {
+  position: fixed;
+  inset: 0;
+  background: url('/login-bg.jpg') center 38% / cover no-repeat;
+  transform: scale(1.12);
+  transform-origin: center;
+  z-index: 0;
+}
+
+/* Layers: wash and glow (styled in slice 3) */
+.login-wash,
+.login-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Brand mark */
+.login-brand {
+  position: fixed;
+  top: 28px;
+  left: 40px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+/* Two-column layout */
+.login-layout {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  min-height: 100dvh;
+  padding: 96px 84px 60px 80px;
+  gap: 48px;
+}
+
+.login-left {
+  max-width: 520px;
+}
+
+.login-right {
+  flex-shrink: 0;
+}
+
+/* Override legacy .auth-view centering for the new layout */
+#view-login .workspace {
+  padding: 0;
+}
+
 .latex-output {
   min-height: 360px;
   max-height: 56vh;
