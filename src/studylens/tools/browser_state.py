@@ -2,22 +2,24 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import getpass
+from collections.abc import Callable
 from pathlib import Path
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
 
 from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
-from studylens.config import Settings, get_settings
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8000/"
+CredentialsProvider = Callable[[], dict[str, str] | None]
 
 
 async def save_browser_state(
     output: Path,
     *,
-    http_credentials: dict[str, str] | None = None,
+    credentials_provider: CredentialsProvider | None = None,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
@@ -40,17 +42,20 @@ async def save_browser_state(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/136.0.0.0 Safari/537.36"
-            ),
-            http_credentials=http_credentials,
+            )
         )
         page = await context.new_page()
 
         for index, step in enumerate(DEFAULT_BROWSER_STATE_STEPS, start=1):
+            if step.key == "exams" and credentials_provider is not None:
+                await _apply_basic_auth_header(page, credentials_provider())
             await page.goto(step.url, wait_until="domcontentloaded")
             print(f"\n[{index}/{len(DEFAULT_BROWSER_STATE_STEPS)}] {step.title}")
             print(step.instruction)
             print("When this step is loaded, press Enter here.")
             input()
+            if step.key == "exams":
+                await page.set_extra_http_headers({})
 
         await context.storage_state(path=str(output))
         await browser.close()
@@ -66,11 +71,10 @@ def main() -> None:
         help="Path to write Playwright storage state JSON.",
     )
     args = parser.parse_args()
-    settings = get_settings()
     asyncio.run(
         save_browser_state(
             args.output,
-            http_credentials=_http_credentials_from_settings(settings, prompt=True),
+            credentials_provider=_prompt_imperial_credentials,
         )
     )
 
@@ -119,11 +123,10 @@ def push_user_browser_state() -> None:
         print(f"Signed in to {backend} as {username}. Opening a browser to capture course logins…")
 
         output = Path("data/auth/browser-state.json")
-        settings = get_settings()
         asyncio.run(
             save_browser_state(
                 output,
-                http_credentials=_http_credentials_from_settings(settings, prompt=True),
+                credentials_provider=_prompt_imperial_credentials,
             )
         )
         state = json.loads(output.read_text(encoding="utf-8"))
@@ -135,23 +138,25 @@ def push_user_browser_state() -> None:
         print("This stage is finished.")
 
 
-def _http_credentials_from_settings(
-    settings: Settings,
-    *,
-    prompt: bool = False,
-) -> dict[str, str] | None:
-    username = settings.imperial_username
-    password = settings.imperial_password
-    if prompt and not username:
-        username = input("Imperial username: ").strip()
-    if prompt and username and not password:
-        password = getpass.getpass("Imperial password: ")
+def _prompt_imperial_credentials() -> dict[str, str] | None:
+    print("\nDOC Exams uses Imperial HTTP Basic authentication.")
+    username = input("Imperial username: ").strip()
+    password = getpass.getpass("Imperial password: ")
     if not username or not password:
         return None
-    return {
-        "username": username,
-        "password": password,
-    }
+    return {"username": username, "password": password}
+
+
+async def _apply_basic_auth_header(
+    page: object,
+    credentials: dict[str, str] | None,
+) -> None:
+    if not credentials:
+        return
+    token = base64.b64encode(
+        f"{credentials['username']}:{credentials['password']}".encode()
+    ).decode("ascii")
+    await page.set_extra_http_headers({"Authorization": f"Basic {token}"})
 
 
 if __name__ == "__main__":
