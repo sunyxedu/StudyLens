@@ -3081,6 +3081,10 @@ button.forum-bc-seg:hover {
   min-width: 120px;
 }
 
+.forum-compose-selects .compact-field select {
+  width: 100%;
+}
+
 .forum-compose-arrow {
   color: var(--muted-2);
   font-size: 18px;
