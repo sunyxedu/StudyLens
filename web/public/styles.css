@@ -3250,6 +3250,17 @@ button.forum-bc-seg:hover {
   margin: 0;
 }
 
+.forum-board-picker-wrap.invalid {
+  border-color: var(--danger, #b6433b);
+}
+
+.forum-board-picker-error {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--danger, #b6433b);
+  line-height: 1.4;
+}
+
 .forum-compose-arrow {
   color: var(--muted-2);
   font-size: 18px;

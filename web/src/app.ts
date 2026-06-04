@@ -120,6 +120,7 @@ const elements = {
   forumComposeCategorySel: byId<HTMLSelectElement>("forum-compose-category-sel"),
   forumBoardPickerInput: byId<HTMLInputElement>("forum-board-picker-input"),
   forumBoardPickerMenu: byId<HTMLElement>("forum-board-picker-menu"),
+  forumBoardPickerError: byId<HTMLElement>("forum-board-picker-error"),
   forumComposeTitle: byId<HTMLInputElement>("forum-compose-title"),
   forumComposeBody: byId<HTMLElement>("forum-compose-body"),
 
@@ -268,11 +269,15 @@ function init(): void {
   elements.forumBoardPickerInput.addEventListener("focus", () => renderBoardPickerMenu());
   elements.forumBoardPickerInput.addEventListener("input", () => {
     forumComposeSelectedBoard = null;
+    clearBoardPickerError();
     renderBoardPickerMenu();
     updateForumComposeSubmitState();
   });
   elements.forumBoardPickerInput.addEventListener("blur", () => {
-    setTimeout(() => elements.forumBoardPickerMenu.classList.add("hidden"), 160);
+    setTimeout(() => {
+      elements.forumBoardPickerMenu.classList.add("hidden");
+      validateBoardPicker();
+    }, 160);
   });
   elements.forumComposeTitle.addEventListener("input", updateForumComposeSubmitState);
   setupMentionEditor(elements.forumComposeBody, updateForumComposeSubmitState);
@@ -1793,6 +1798,24 @@ function resetBoardPicker(): void {
   forumComposeSelectedBoard = null;
   elements.forumBoardPickerInput.value = "";
   elements.forumBoardPickerMenu.classList.add("hidden");
+  clearBoardPickerError();
+}
+
+function validateBoardPicker(): void {
+  const q = elements.forumBoardPickerInput.value.trim();
+  if (!q || forumComposeSelectedBoard) { clearBoardPickerError(); return; }
+  const catName = forumCategories().find(
+    (c) => c.id === Number(elements.forumComposeCategorySel.value)
+  )?.name ?? "this category";
+  elements.forumBoardPickerInput.closest<HTMLElement>(".forum-board-picker-wrap")?.classList.add("invalid");
+  elements.forumBoardPickerError.textContent =
+    `"${q}" isn't a board in ${catName}. Pick an existing board, or create it from the ${catName} page first.`;
+  elements.forumBoardPickerError.classList.remove("hidden");
+}
+
+function clearBoardPickerError(): void {
+  elements.forumBoardPickerInput.closest<HTMLElement>(".forum-board-picker-wrap")?.classList.remove("invalid");
+  elements.forumBoardPickerError.classList.add("hidden");
 }
 
 function updateForumComposeSubmitState(): void {
