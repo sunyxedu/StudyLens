@@ -124,7 +124,6 @@ const elements = {
   forumComposeTitle: byId<HTMLInputElement>("forum-compose-title"),
   forumComposeBody: byId<HTMLElement>("forum-compose-body"),
 
-  forumComposePrivate: byId<HTMLInputElement>("forum-compose-private"),
   forumComposeAnon: byId<HTMLInputElement>("forum-compose-anon"),
   forumComposeCancel2: byId<HTMLButtonElement>("forum-compose-cancel-2"),
   forumComposeSubmit2: byId<HTMLButtonElement>("forum-compose-submit-2"),
@@ -1717,7 +1716,6 @@ function openForumCompose(targetBoardId?: number): void {
   elements.forumComposeTitle.value = "";
   elements.forumComposeBody.innerHTML = "";
 
-  elements.forumComposePrivate.checked = false;
   elements.forumComposeAnon.checked = false;
   updateForumComposeSubmitState();
   elements.forumCompose.classList.remove("hidden");

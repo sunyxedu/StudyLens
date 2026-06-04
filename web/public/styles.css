@@ -3278,6 +3278,11 @@ button.forum-bc-seg:hover {
   overflow: hidden;
 }
 
+/* Single toggle: don't stretch edge-to-edge */
+.forum-compose-toggles--single {
+  max-width: 420px;
+}
+
 .forum-toggle-row {
   display: flex;
   align-items: center;
