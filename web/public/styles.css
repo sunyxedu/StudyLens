@@ -771,6 +771,90 @@ textarea:focus {
   padding: 0;
 }
 
+/* ── Login card ───────────────────────────────────────────────────────── */
+
+#view-login .login-panel {
+  width: 432px;
+  background: var(--paper, #fffdf8);
+  border: 1px solid var(--line, #efe7d6);
+  border-radius: 18px;
+  padding: 30px 30px 26px;
+  box-shadow: 0 2px 6px rgba(38, 55, 46, .07),
+              0 30px 70px -28px rgba(20, 32, 25, .50);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Remove old border-color override from data-auth-mode */
+#view-login .login-panel[data-auth-mode="register"],
+#view-login .login-panel[data-auth-mode="login"] {
+  border-color: var(--line, #efe7d6);
+}
+
+.login-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-card-header h2 {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--ink, #23282a);
+  margin: 0;
+  letter-spacing: -.02em;
+}
+
+.login-card-note {
+  font-size: 13px;
+  color: var(--muted, #6c736e);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.login-divider {
+  border: none;
+  border-top: 1px solid var(--line, #efe7d6);
+  margin: 0;
+}
+
+/* Segmented control — ochre active */
+#view-login .auth-mode-switch {
+  background: rgba(0, 0, 0, .045);
+  border-radius: 11px;
+  padding: 3px;
+  gap: 2px;
+  width: 100%;
+}
+
+#view-login .auth-mode-switch .segment {
+  flex: 1;
+  border: 0;
+  border-radius: 9px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #23282a);
+  background: transparent;
+  padding: 8px 0;
+  transition: background 130ms, color 130ms, box-shadow 130ms;
+}
+
+#view-login .auth-mode-switch .segment.active {
+  background: var(--ochre, #b06a35);
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(176, 106, 53, .75);
+}
+
+/* Override: login mode also uses ochre (both modes now share ochre) */
+#view-login .login-panel[data-auth-mode="login"] .auth-mode-switch .segment.active {
+  background: var(--ochre, #b06a35);
+  box-shadow: 0 6px 14px -8px rgba(176, 106, 53, .75);
+}
+
 .latex-output {
   min-height: 360px;
   max-height: 56vh;
