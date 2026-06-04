@@ -587,18 +587,12 @@ async function loadCachedCourses(): Promise<void> {
     discoveredCourses = courses;
     selectedCourseCodes.clear();
     renderCourseList();
-    updateCoursesSummary();
-    updateCoursesActions();
     const latest = courses.reduce<string | null>(
       (acc, c) => (c.updated_at && (!acc || c.updated_at > acc) ? c.updated_at : acc),
       null
     );
-    setStatus(
-      elements.coursesStatus,
-      latest
-        ? `Loaded ${courses.length} courses · last refreshed ${formatTimestamp(latest)}`
-        : `Loaded ${courses.length} courses`
-    );
+    updateCoursesSummary(0, latest);
+    updateCoursesActions();
   } catch (error) {
     handleAuthRequired(error);
   }
@@ -615,10 +609,9 @@ async function handleDiscoverCourses(): Promise<void> {
     if (response.error) {
       setStatus(elements.coursesStatus, response.error, "error");
     } else {
-      setStatus(elements.coursesStatus, `Loaded ${response.courses.length} courses · just now`);
       showToast(`Loaded ${response.courses.length} courses from EdStem`);
     }
-    updateCoursesSummary(response.dropped_titles.length);
+    updateCoursesSummary(response.dropped_titles.length, response.error ? null : "just now");
     updateCoursesActions();
   });
 }
@@ -737,13 +730,16 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   return li;
 }
 
-function updateCoursesSummary(dropped: number = 0): void {
+function updateCoursesSummary(dropped: number = 0, refreshedAt?: string | null): void {
   if (discoveredCourses.length === 0) {
     elements.coursesSummary.textContent = "";
     return;
   }
   const dropNote = dropped > 0 ? ` · ${dropped} without a code skipped` : "";
-  elements.coursesSummary.textContent = `${discoveredCourses.length} courses${dropNote}`;
+  const refreshNote = refreshedAt
+    ? ` · refreshed ${refreshedAt === "just now" ? "just now" : formatTimestamp(refreshedAt)}`
+    : "";
+  elements.coursesSummary.textContent = `${discoveredCourses.length} courses${dropNote}${refreshNote}`;
 }
 
 function updateCoursesActions(): void {
