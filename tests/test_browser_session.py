@@ -8,6 +8,7 @@ from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS, BrowserStat
 from studylens.config import Settings
 from studylens.errors import ConfigurationError
 from studylens.ingestion.browser_session import BrowserSession
+from studylens.tools.browser_state import _http_credentials_from_settings
 
 
 def test_default_browser_state_steps_include_exams_site() -> None:
@@ -28,6 +29,26 @@ def test_browser_state_router_uses_imperial_credentials_for_http_auth(
     router = BrowserStateRouter(settings)
 
     assert router.http_credentials() == {
+        "username": "abc123",
+        "password": "secret",
+    }
+
+
+def test_browser_state_cli_prompts_for_missing_imperial_password(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        imperial_username="abc123",
+        imperial_password=None,
+    )
+    monkeypatch.setattr(
+        "studylens.tools.browser_state.getpass.getpass",
+        lambda prompt: "secret",
+    )
+
+    assert _http_credentials_from_settings(settings, prompt=True) == {
         "username": "abc123",
         "password": "secret",
     }

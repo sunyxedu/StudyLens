@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 from pathlib import Path
 
 from playwright.async_api import Error as PlaywrightError
@@ -69,7 +70,7 @@ def main() -> None:
     asyncio.run(
         save_browser_state(
             args.output,
-            http_credentials=_http_credentials_from_settings(settings),
+            http_credentials=_http_credentials_from_settings(settings, prompt=True),
         )
     )
 
@@ -84,7 +85,6 @@ def push_user_browser_state() -> None:
 
     The hosted backend is used by default; override it with STUDYLENS_BACKEND_URL.
     """
-    import getpass
     import json
     import os
     import sys
@@ -123,7 +123,7 @@ def push_user_browser_state() -> None:
         asyncio.run(
             save_browser_state(
                 output,
-                http_credentials=_http_credentials_from_settings(settings),
+                http_credentials=_http_credentials_from_settings(settings, prompt=True),
             )
         )
         state = json.loads(output.read_text(encoding="utf-8"))
@@ -135,12 +135,22 @@ def push_user_browser_state() -> None:
         print("This stage is finished.")
 
 
-def _http_credentials_from_settings(settings: Settings) -> dict[str, str] | None:
-    if not settings.imperial_username or not settings.imperial_password:
+def _http_credentials_from_settings(
+    settings: Settings,
+    *,
+    prompt: bool = False,
+) -> dict[str, str] | None:
+    username = settings.imperial_username
+    password = settings.imperial_password
+    if prompt and not username:
+        username = input("Imperial username: ").strip()
+    if prompt and username and not password:
+        password = getpass.getpass("Imperial password: ")
+    if not username or not password:
         return None
     return {
-        "username": settings.imperial_username,
-        "password": settings.imperial_password,
+        "username": username,
+        "password": password,
     }
 
 
