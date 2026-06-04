@@ -1662,23 +1662,34 @@ function createReplyComposer(threadId: number): HTMLElement {
   setupMentionEditor(editor, () => {
     submitBtn.disabled = !getEditorText(editor).trim();
   });
-  submitBtn.addEventListener("click", () => { void handleCreateForumReply(threadId, editor, submitBtn); });
+  const anonLabel = document.createElement("label");
+  anonLabel.className = "forum-reply-anon";
+  const anonCheck = document.createElement("input");
+  anonCheck.type = "checkbox";
+  anonCheck.className = "forum-toggle-input";
+  anonLabel.append(anonCheck, document.createTextNode(" Post anonymously"));
+
+  submitBtn.addEventListener("click", async () => {
+    await handleCreateForumReply(threadId, editor, submitBtn, anonCheck.checked);
+    anonCheck.checked = false;
+  });
   actions.appendChild(submitBtn);
-  composer.append(hint, editor, actions);
+  composer.append(hint, editor, anonLabel, actions);
   return composer;
 }
 
 async function handleCreateForumReply(
   threadId: number,
   editor: HTMLElement,
-  submitBtn: HTMLButtonElement
+  submitBtn: HTMLButtonElement,
+  anonymous = false
 ): Promise<void> {
   const body = getEditorText(editor).trim();
   if (!body) return;
   submitBtn.disabled = true;
   submitBtn.textContent = "Posting…";
   try {
-    const thread = await api.createForumReply(threadId, { body });
+    const thread = await api.createForumReply(threadId, { body, anonymous });
     editor.innerHTML = "";
     forumData = await api.forumIndex();
     renderForumThread(thread);

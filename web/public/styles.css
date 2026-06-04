@@ -2916,6 +2916,16 @@ button.forum-bc-seg:hover {
   color: var(--muted-2);
 }
 
+.forum-reply-anon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
 /* ── @dylen mention chip ─────────────────────────────────────────────── */
 
 .fx-mention {
