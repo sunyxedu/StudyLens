@@ -371,6 +371,23 @@ def _mentions_dylen(text: str) -> bool:
     return DYLEN_MENTION_RE.search(text) is not None
 
 
+def _infer_course_id(board_name: str, courses: list[CourseRecord]) -> str | None:
+    """Infer a course_id from the board name.
+
+    Two rules, applied in order (first match wins):
+    1. Board name contains a course code  (case-insensitive substring).
+    2. Board name exactly equals a course title (case-insensitive full match).
+    """
+    name = board_name.strip().lower()
+    for course in courses:
+        if course.code.lower() in name:
+            return course.code
+    for course in courses:
+        if course.title.strip().lower() == name:
+            return course.code
+    return None
+
+
 def _dylen_question(thread: ForumThreadRecord, latest_text: str) -> str:
     meta = [
         f"Subject: {thread.category_name}",
@@ -400,13 +417,22 @@ def _maybe_add_dylen_reply(
     request: Request,
     thread: ForumThreadRecord,
     latest_text: str,
+    user: UserRecord,
 ) -> ForumThreadRecord:
     if not _mentions_dylen(latest_text):
         return thread
+    # Resolve course_id: use stored value, or infer from board name
+    course_id = thread.course_id
+    if not course_id:
+        try:
+            course_store: CourseStore = request.app.state.course_store
+            course_id = _infer_course_id(thread.board_name, course_store.list_all(user_id=user.id))
+        except Exception:
+            pass
     try:
         answer = _service(request).answer(
             _dylen_question(thread, latest_text),
-            course_id=thread.course_id,
+            course_id=course_id,
             top_k=6,
             include_exercises=False,
         )
@@ -877,6 +903,7 @@ def create_app(
                 request=request,
                 thread=thread,
                 latest_text=payload.body,
+                user=user,
             )
         )
 
@@ -918,6 +945,7 @@ def create_app(
                 request=request,
                 thread=thread,
                 latest_text=payload.body,
+                user=user,
             )
         )
 
