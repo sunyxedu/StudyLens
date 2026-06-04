@@ -120,7 +120,7 @@ const elements = {
   forumComposeCategorySel: byId<HTMLSelectElement>("forum-compose-category-sel"),
   forumComposeBoardSel: byId<HTMLSelectElement>("forum-compose-board-sel"),
   forumComposeTitle: byId<HTMLInputElement>("forum-compose-title"),
-  forumComposeBody: byId<HTMLTextAreaElement>("forum-compose-body"),
+  forumComposeBody: byId<HTMLElement>("forum-compose-body"),
   forumComposeCourse: byId<HTMLInputElement>("forum-compose-course"),
   forumComposePrivate: byId<HTMLInputElement>("forum-compose-private"),
   forumComposeAnon: byId<HTMLInputElement>("forum-compose-anon"),
@@ -261,10 +261,7 @@ function init(): void {
   elements.forumComposeSubmit2.addEventListener("click", () => { void handleCreateForumThread(); });
   elements.forumComposeCategorySel.addEventListener("change", updateForumComposeBoardOptions);
   elements.forumComposeTitle.addEventListener("input", updateForumComposeSubmitState);
-  elements.forumComposeBody.addEventListener("input", () => {
-    autoResizeTextarea(elements.forumComposeBody);
-    updateForumComposeSubmitState();
-  });
+  setupMentionEditor(elements.forumComposeBody, updateForumComposeSubmitState);
   elements.modeButtons.forEach((button) => {
     button.addEventListener("click", () =>
       setGenerationMode(button.dataset.mode === "exam" ? "exam" : "cheatsheet")
@@ -1627,11 +1624,12 @@ function createReplyComposer(threadId: number): HTMLElement {
   hint.className = "forum-composer-hint";
   hint.textContent = "@dylen answers from your course materials";
 
-  const textarea = document.createElement("textarea");
-  textarea.className = "forum-composer-textarea";
-  textarea.rows = 3;
-  textarea.maxLength = 8000;
-  textarea.placeholder = "Add your reply… Mention @dylen to ask the course assistant";
+  const editor = document.createElement("div");
+  editor.className = "forum-mention-editor";
+  editor.setAttribute("contenteditable", "true");
+  editor.setAttribute("role", "textbox");
+  editor.setAttribute("aria-multiline", "true");
+  editor.dataset.placeholder = "Add your reply… Mention @dylen to ask the course assistant";
 
   const actions = document.createElement("div");
   actions.className = "actions";
@@ -1640,29 +1638,27 @@ function createReplyComposer(threadId: number): HTMLElement {
   submitBtn.className = "button primary";
   submitBtn.textContent = "Reply";
   submitBtn.disabled = true;
-  textarea.addEventListener("input", () => {
-    autoResizeTextarea(textarea);
-    submitBtn.disabled = !textarea.value.trim();
+  setupMentionEditor(editor, () => {
+    submitBtn.disabled = !getEditorText(editor).trim();
   });
-  submitBtn.addEventListener("click", () => { void handleCreateForumReply(threadId, textarea, submitBtn); });
+  submitBtn.addEventListener("click", () => { void handleCreateForumReply(threadId, editor, submitBtn); });
   actions.appendChild(submitBtn);
-  composer.append(hint, textarea, actions);
+  composer.append(hint, editor, actions);
   return composer;
 }
 
 async function handleCreateForumReply(
   threadId: number,
-  textarea: HTMLTextAreaElement,
+  editor: HTMLElement,
   submitBtn: HTMLButtonElement
 ): Promise<void> {
-  const body = textarea.value.trim();
+  const body = getEditorText(editor).trim();
   if (!body) return;
   submitBtn.disabled = true;
   submitBtn.textContent = "Posting…";
   try {
     const thread = await api.createForumReply(threadId, { body });
-    textarea.value = "";
-    autoResizeTextarea(textarea);
+    editor.innerHTML = "";
     forumData = await api.forumIndex();
     renderForumThread(thread);
     showToast(thread.dylen_replied ? "Posted · dylen replied" : "Reply posted");
@@ -1697,7 +1693,7 @@ function openForumCompose(targetBoardId?: number): void {
   updateForumComposeBoardOptions();
   if (targetBoardId) elements.forumComposeBoardSel.value = String(targetBoardId);
   elements.forumComposeTitle.value = "";
-  elements.forumComposeBody.value = "";
+  elements.forumComposeBody.innerHTML = "";
   elements.forumComposeCourse.value = "";
   elements.forumComposePrivate.checked = false;
   elements.forumComposeAnon.checked = false;
@@ -1724,7 +1720,7 @@ function updateForumComposeBoardOptions(): void {
 }
 
 function updateForumComposeSubmitState(): void {
-  const ready = !!elements.forumComposeTitle.value.trim() && !!elements.forumComposeBody.value.trim();
+  const ready = !!elements.forumComposeTitle.value.trim() && !!getEditorText(elements.forumComposeBody).trim();
   elements.forumComposeSubmit.disabled = !ready;
   elements.forumComposeSubmit2.disabled = !ready;
 }
@@ -1732,7 +1728,7 @@ function updateForumComposeSubmitState(): void {
 async function handleCreateForumThread(): Promise<void> {
   const boardId = Number(elements.forumComposeBoardSel.value);
   const title = elements.forumComposeTitle.value.trim();
-  const body = elements.forumComposeBody.value.trim();
+  const body = getEditorText(elements.forumComposeBody).trim();
   const courseId = elements.forumComposeCourse.value.trim().toUpperCase();
   if (!boardId || !title || !body) return;
 
@@ -1761,6 +1757,155 @@ async function handleCreateForumThread(): Promise<void> {
 }
 
 // ── Forum helpers ──────────────────────────────────────────────────────
+
+// ── contenteditable mention editor ─────────────────────────────────────
+
+function getEditorText(el: HTMLElement): string {
+  let text = "";
+  function walk(node: Node): void {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent ?? "";
+    } else if ((node as Element).tagName === "BR") {
+      text += "\n";
+    } else {
+      for (const child of node.childNodes) walk(child);
+    }
+  }
+  for (const child of el.childNodes) walk(child);
+  return text;
+}
+
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return 0;
+  const { focusNode, focusOffset } = sel;
+  let count = 0;
+  function walk(node: Node): boolean {
+    if (node === focusNode) { count += focusOffset; return true; }
+    if (node.nodeType === Node.TEXT_NODE) { count += (node.textContent ?? "").length; }
+    else if ((node as Element).tagName === "BR") { count += 1; }
+    else { for (const c of node.childNodes) { if (walk(c)) return true; } }
+    return false;
+  }
+  walk(el);
+  return count;
+}
+
+function setCaretOffset(el: HTMLElement, target: number): void {
+  let rem = target;
+  function walk(node: Node): [Node, number] | null {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node.textContent ?? "").length;
+      if (rem <= len) return [node, rem];
+      rem -= len;
+    } else if ((node as Element).tagName === "BR") {
+      if (rem === 0) {
+        const idx = [...(node.parentNode!.childNodes)].indexOf(node as ChildNode);
+        return [node.parentNode!, idx];
+      }
+      rem -= 1;
+    } else {
+      for (const c of node.childNodes) { const r = walk(c); if (r) return r; }
+    }
+    return null;
+  }
+  const result = walk(el) ?? [el, el.childNodes.length];
+  const range = document.createRange();
+  try { range.setStart(result[0], result[1]); } catch { range.selectNodeContents(el); range.collapse(false); }
+  range.collapse(true);
+  const sel = window.getSelection()!;
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function buildEditorFrag(text: string): DocumentFragment {
+  const re = /(^|[^\w])(@dylen)\b/gi;
+  const frag = document.createDocumentFragment();
+  let last = 0;
+  let m: RegExpExecArray | null;
+
+  function appendText(s: string): void {
+    const lines = s.split("\n");
+    lines.forEach((line, i) => {
+      if (line) frag.appendChild(document.createTextNode(line));
+      if (i < lines.length - 1) frag.appendChild(document.createElement("br"));
+    });
+  }
+
+  while ((m = re.exec(text)) !== null) {
+    appendText(text.slice(last, m.index + m[1].length));
+    const span = document.createElement("span");
+    span.className = "fx-mention";
+    span.textContent = m[2];
+    frag.appendChild(span);
+    last = m.index + m[0].length;
+  }
+  appendText(text.slice(last));
+  // Trailing BR so cursor can sit on the last empty line
+  if (text.endsWith("\n")) frag.appendChild(document.createElement("br"));
+  return frag;
+}
+
+function formatEditorMentions(el: HTMLElement): void {
+  const text = getEditorText(el);
+  const caret = getCaretOffset(el);
+  el.replaceChildren(buildEditorFrag(text));
+  setCaretOffset(el, caret);
+}
+
+function setupMentionEditor(el: HTMLElement, onChange: () => void): void {
+  let composing = false;
+
+  el.addEventListener("compositionstart", () => { composing = true; });
+  el.addEventListener("compositionend", () => {
+    composing = false;
+    formatEditorMentions(el);
+    onChange();
+  });
+
+  el.addEventListener("input", () => {
+    if (composing) return;
+    formatEditorMentions(el);
+    onChange();
+  });
+
+  // Normalise Enter → <br> (browsers insert <div> or <p> by default)
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const sel = window.getSelection()!;
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const br = document.createElement("br");
+      range.insertNode(br);
+      // Ensure there is something after the br so cursor lands on the new line
+      if (br === el.lastChild) el.appendChild(document.createElement("br"));
+      range.setStartAfter(br);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      onChange();
+    }
+  });
+
+  // Paste: strip HTML, insert plain text
+  el.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const plain = e.clipboardData?.getData("text/plain") ?? "";
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const frag = buildEditorFrag(plain);
+    range.insertNode(frag);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    formatEditorMentions(el);
+    onChange();
+  });
+}
 
 function highlightMentions(text: string): DocumentFragment {
   const frag = document.createDocumentFragment();

@@ -193,7 +193,12 @@
                   </label>
                   <label class="field large">
                     <span>Post</span>
-                    <textarea id="forum-compose-body" rows="7" maxlength="8000" placeholder="Question, working, notes… Mention @dylen to ask the course assistant"></textarea>
+                    <div id="forum-compose-body"
+                         class="forum-mention-editor"
+                         role="textbox"
+                         aria-multiline="true"
+                         contenteditable="true"
+                         data-placeholder="Question, working, notes… Mention @dylen to ask the course assistant"></div>
                   </label>
                   <label class="compact-field forum-compose-course-field">
                     <span>Course code</span>

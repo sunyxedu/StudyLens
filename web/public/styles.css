@@ -2950,6 +2950,45 @@ button.forum-bc-seg:hover {
   background: var(--paper);
 }
 
+/* ── contenteditable mention editor ─────────────────────────────────── */
+
+.forum-mention-editor {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg, #f6f3ec);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  cursor: text;
+  outline: none;
+  transition: border-color 110ms, background 110ms;
+}
+
+.forum-mention-editor:focus {
+  border-color: var(--green);
+  background: var(--paper);
+}
+
+/* Placeholder via CSS when editor is empty */
+.forum-mention-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted-2);
+  pointer-events: none;
+}
+
+/* Compose body — taller initial height (~7 rows) */
+#forum-compose-body.forum-mention-editor {
+  min-height: 148px;
+}
+
 /* ── Forum chips ──────────────────────────────────────────────────────── */
 
 .forum-chip {
