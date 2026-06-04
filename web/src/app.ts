@@ -1268,16 +1268,19 @@ function renderForumBoard(board: ForumBoard, threads: ForumThreadSummary[]): voi
   newPostBtn.textContent = "+ New post";
   newPostBtn.addEventListener("click", () => openForumCompose(board.id));
 
+  let filterUnread = false;
+
   const filterSeg = document.createElement("div");
   filterSeg.className = "segmented forum-filter-seg";
   filterSeg.setAttribute("role", "tablist");
-  ["All", "Unread"].forEach((lbl, i) => {
+  const [btnAll, btnUnread] = (["All", "Unread"] as const).map((lbl, i) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `segment${i === 0 ? " active" : ""}`;
     btn.textContent = lbl;
     btn.setAttribute("role", "tab");
     filterSeg.appendChild(btn);
+    return btn;
   });
 
   const searchInput = document.createElement("input");
@@ -1295,35 +1298,59 @@ function renderForumBoard(board: ForumBoard, threads: ForumThreadSummary[]): voi
     return;
   }
 
-  // Time grouping (slice 7)
+  // Build thread list
   const now = Date.now();
   const weekMs = 7 * 24 * 60 * 60 * 1000;
-  const thisWeek = threads.filter((t) => now - new Date(t.latest_activity_at).getTime() < weekMs);
-  const earlier = threads.filter((t) => now - new Date(t.latest_activity_at).getTime() >= weekMs);
-
   const list = document.createElement("div");
   list.className = "forum-thread-list";
-
-  function addGroup(label: string, emoji: string, groupThreads: ForumThreadSummary[]): void {
-    if (groupThreads.length === 0) return;
-    const lbl = document.createElement("div");
-    lbl.className = "forum-group-label";
-    lbl.textContent = `${emoji} ${label}`.trim();
-    list.appendChild(lbl);
-    groupThreads.forEach((t) => list.appendChild(createForumThreadRow(t)));
-  }
-  addGroup("This week", "", thisWeek);
-  addGroup("Earlier", "", earlier);
   container.appendChild(list);
 
-  const allRows = Array.from(list.querySelectorAll<HTMLElement>(".forum-thread-row"));
-  searchInput.addEventListener("input", () => {
+  function rebuildList(): void {
     const q = searchInput.value.toLowerCase();
-    allRows.forEach((row) => {
-      const title = row.querySelector(".forum-thread-row-title")?.textContent?.toLowerCase() ?? "";
-      row.classList.toggle("hidden", q !== "" && !title.includes(q));
+    const visible = threads.filter((t) => {
+      if (filterUnread && t.is_read) return false;
+      if (q && !t.title.toLowerCase().includes(q)) return false;
+      return true;
     });
+    const thisWeek = visible.filter((t) => now - new Date(t.latest_activity_at).getTime() < weekMs);
+    const earlier  = visible.filter((t) => now - new Date(t.latest_activity_at).getTime() >= weekMs);
+    list.replaceChildren();
+
+    function addGroup(label: string, groupThreads: ForumThreadSummary[]): void {
+      if (groupThreads.length === 0) return;
+      const lbl = document.createElement("div");
+      lbl.className = "forum-group-label";
+      lbl.textContent = label;
+      list.appendChild(lbl);
+      groupThreads.forEach((t) => list.appendChild(createForumThreadRow(t)));
+    }
+    if (visible.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "forum-empty";
+      empty.style.padding = "12px 16px";
+      empty.textContent = filterUnread ? "No unread posts." : "No posts match your search.";
+      list.appendChild(empty);
+    } else {
+      addGroup("This week", thisWeek);
+      addGroup("Earlier", earlier);
+    }
+  }
+
+  rebuildList();
+
+  btnAll.addEventListener("click", () => {
+    filterUnread = false;
+    btnAll.classList.add("active");
+    btnUnread.classList.remove("active");
+    rebuildList();
   });
+  btnUnread.addEventListener("click", () => {
+    filterUnread = true;
+    btnUnread.classList.add("active");
+    btnAll.classList.remove("active");
+    rebuildList();
+  });
+  searchInput.addEventListener("input", rebuildList);
 }
 
 function createForumThreadRow(thread: ForumThreadSummary): HTMLElement {
@@ -1332,10 +1359,9 @@ function createForumThreadRow(thread: ForumThreadSummary): HTMLElement {
   row.className = "forum-thread-row";
   row.addEventListener("click", () => { void loadForumThread(thread.id); });
 
-  const isRead = localStorage.getItem(`studylens.forum.read.${thread.id}`) !== null;
   const dot = document.createElement("span");
-  dot.className = "forum-unread-dot" + (isRead ? " forum-unread-dot--off" : "");
-  dot.setAttribute("aria-label", isRead ? "" : "Unread");
+  dot.className = "forum-unread-dot" + (thread.is_read ? " forum-unread-dot--off" : "");
+  dot.setAttribute("aria-label", thread.is_read ? "" : "Unread");
 
   const content = document.createElement("div");
   content.className = "forum-thread-row-content";
@@ -1383,7 +1409,6 @@ async function loadForumThread(threadId: number): Promise<void> {
   try {
     const thread = await api.forumThread(threadId);
     renderForumThread(thread);
-    localStorage.setItem(`studylens.forum.read.${threadId}`, "1");
     setStatus(elements.forumStatus, "");
   } catch (error) {
     if (handleAuthRequired(error)) return;

@@ -295,6 +295,7 @@ def _forum_thread_summary_schema(record: ForumThreadSummaryRecord) -> ForumThrea
         author_username=record.author_username,
         author_role=record.author_role,
         is_anonymous=record.is_anonymous,
+        is_read=record.is_read,
         reply_count=record.reply_count,
         dylen_replied=record.dylen_replied,
         created_at=record.created_at,
@@ -878,7 +879,7 @@ def create_app(
             board=_forum_board_schema(board),
             threads=[
                 _forum_thread_summary_schema(thread)
-                for thread in store.list_threads(board_id=board_id)
+                for thread in store.list_threads(board_id=board_id, user_id=user.id)
             ],
         )
 
@@ -902,14 +903,11 @@ def create_app(
             )
         except ForumStoreError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return _forum_thread_schema(
-            _maybe_add_dylen_reply(
-                request=request,
-                thread=thread,
-                latest_text=payload.body,
-                user=user,
-            )
+        result = _maybe_add_dylen_reply(
+            request=request, thread=thread, latest_text=payload.body, user=user,
         )
+        store.mark_thread_read(user_id=user.id, thread_id=result.id)
+        return _forum_thread_schema(result)
 
     @application.get("/forum/threads/{thread_id}", response_model=ForumThread)
     def forum_thread(
@@ -917,9 +915,11 @@ def create_app(
         request: Request,
         user: UserRecord = Depends(_current_user),
     ) -> ForumThread:
-        thread = _forum_store(request).get_thread(thread_id)
+        store = _forum_store(request)
+        thread = store.get_thread(thread_id)
         if thread is None:
             raise HTTPException(status_code=404, detail="thread not found")
+        store.mark_thread_read(user_id=user.id, thread_id=thread_id)
         return _forum_thread_schema(thread)
 
     @application.post("/forum/threads/{thread_id}/replies", response_model=ForumThread)
@@ -945,14 +945,11 @@ def create_app(
         thread = store.get_thread(thread_id)
         if thread is None:
             raise HTTPException(status_code=404, detail="thread not found")
-        return _forum_thread_schema(
-            _maybe_add_dylen_reply(
-                request=request,
-                thread=thread,
-                latest_text=payload.body,
-                user=user,
-            )
+        result = _maybe_add_dylen_reply(
+            request=request, thread=thread, latest_text=payload.body, user=user,
         )
+        store.mark_thread_read(user_id=user.id, thread_id=result.id)
+        return _forum_thread_schema(result)
 
     @application.post("/index/edstem", response_model=IndexEdStemResponse)
     async def index_edstem(

@@ -88,6 +88,7 @@ class ForumThreadSummaryRecord:
     author_username: str
     author_role: ForumRole
     is_anonymous: bool
+    is_read: bool
     reply_count: int
     dylen_replied: bool
     created_at: str
@@ -241,6 +242,7 @@ def _board_from_row(row: sqlite3.Row) -> ForumBoardRecord:
 
 def _thread_summary_from_row(row: sqlite3.Row) -> ForumThreadSummaryRecord:
     is_anon = bool(row["is_anonymous"])
+    keys = row.keys()
     return ForumThreadSummaryRecord(
         id=int(row["id"]),
         board_id=int(row["board_id"]),
@@ -254,6 +256,7 @@ def _thread_summary_from_row(row: sqlite3.Row) -> ForumThreadSummaryRecord:
         author_username="Anonymous" if is_anon else str(row["author_username"]),
         author_role=row["author_role"],
         is_anonymous=is_anon,
+        is_read=bool(row["is_read"]) if "is_read" in keys else False,
         reply_count=int(row["reply_count"]),
         dylen_replied=bool(row["dylen_replied"]),
         created_at=str(row["created_at"]),
@@ -366,6 +369,22 @@ class ForumStore:
                     citations_json TEXT,
                     created_at TEXT NOT NULL
                 )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS forum_thread_reads (
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    thread_id INTEGER NOT NULL REFERENCES forum_threads(id) ON DELETE CASCADE,
+                    read_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, thread_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_forum_thread_reads_user
+                ON forum_thread_reads(user_id, thread_id)
                 """
             )
             # Migration: add is_anonymous to existing tables
@@ -526,14 +545,45 @@ class ForumStore:
             raise ForumStoreError("created board could not be loaded")
         return board
 
-    def list_threads(self, *, board_id: int) -> list[ForumThreadSummaryRecord]:
+    def list_threads(
+        self, *, board_id: int, user_id: int | None = None
+    ) -> list[ForumThreadSummaryRecord]:
         with self._connect() as connection:
-            rows = connection.execute(
-                f"{self._thread_summary_select()} WHERE t.board_id = ? "
-                "ORDER BY t.latest_activity_at DESC, t.id DESC",
-                (board_id,),
-            ).fetchall()
+            if user_id is not None:
+                rows = connection.execute(
+                    """
+                    SELECT t.*,
+                        b.name AS board_name,
+                        c.id   AS category_id,
+                        c.name AS category_name,
+                        (r.user_id IS NOT NULL) AS is_read
+                    FROM forum_threads t
+                    JOIN forum_boards b ON b.id = t.board_id
+                    JOIN forum_categories c ON c.id = b.category_id
+                    LEFT JOIN forum_thread_reads r
+                        ON r.thread_id = t.id AND r.user_id = ?
+                    WHERE t.board_id = ?
+                    ORDER BY t.latest_activity_at DESC, t.id DESC
+                    """,
+                    (user_id, board_id),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    f"{self._thread_summary_select()} WHERE t.board_id = ? "
+                    "ORDER BY t.latest_activity_at DESC, t.id DESC",
+                    (board_id,),
+                ).fetchall()
         return [_thread_summary_from_row(row) for row in rows]
+
+    def mark_thread_read(self, *, user_id: int, thread_id: int) -> None:
+        with self._connect() as connection, connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO forum_thread_reads (user_id, thread_id, read_at)
+                VALUES (?, ?, ?)
+                """,
+                (user_id, thread_id, _now()),
+            )
 
     def create_thread(
         self,

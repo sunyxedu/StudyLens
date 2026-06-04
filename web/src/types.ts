@@ -218,6 +218,7 @@ export interface ForumThreadSummary {
   author_username: string;
   author_role: "student" | "admin" | "bot" | string;
   is_anonymous: boolean;
+  is_read: boolean;
   reply_count: number;
   dylen_replied: boolean;
   created_at: string;

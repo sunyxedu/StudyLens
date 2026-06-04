@@ -225,6 +225,7 @@ class ForumThreadSummary(BaseModel):
     author_username: str
     author_role: str
     is_anonymous: bool = False
+    is_read: bool = False
     reply_count: int
     dylen_replied: bool
     created_at: str
