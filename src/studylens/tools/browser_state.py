@@ -4,6 +4,7 @@ import argparse
 import asyncio
 from pathlib import Path
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
 
 from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
@@ -14,10 +15,20 @@ DEFAULT_BACKEND_URL = "https://studylens-production.up.railway.app"
 async def save_browser_state(output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(
-            headless=False,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
+        try:
+            browser = await playwright.chromium.launch(
+                headless=False,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+        except PlaywrightError as exc:
+            message = str(exc).lower()
+            if "executable doesn't exist" in message or "playwright install" in message:
+                raise SystemExit(
+                    "Playwright's browser isn't installed yet. Run:\n"
+                    "    uv run playwright install chromium\n"
+                    "then re-run this command."
+                ) from exc
+            raise
         context = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
