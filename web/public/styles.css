@@ -752,23 +752,18 @@ body:has(.shell.mode-login) .topbar {
   z-index: 5;
   display: grid;
   grid-template-columns: 1fr auto;
-  align-items: stretch;
-  min-height: 100dvh;
+  grid-template-rows: minmax(100dvh, auto); /* row ≥ viewport — keeps left col stable */
+  align-items: center;
   padding: 96px 84px 60px 80px;
   gap: 48px;
 }
 
 .login-left {
   max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
 }
 
 .login-right {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
 }
 
 /* Override legacy .auth-view centering for the new layout */
