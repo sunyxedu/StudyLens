@@ -29,6 +29,15 @@ DEFAULT_BROWSER_STATE_STEPS: tuple[BrowserStateStep, ...] = (
         instruction="Complete the Panopto sign-in flow and wait for the session list.",
     ),
     BrowserStateStep(
+        key="exams",
+        title="DOC Exams",
+        url="https://exams.doc.ic.ac.uk/",
+        instruction=(
+            "Log into the Department of Computing exams site and wait for the "
+            "past papers index."
+        ),
+    ),
+    BrowserStateStep(
         key="edstem",
         title="EdStem",
         url="https://edstem.org/us/dashboard",

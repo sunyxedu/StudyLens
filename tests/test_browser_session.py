@@ -4,9 +4,17 @@ from pathlib import Path
 
 import pytest
 
+from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
 from studylens.config import Settings
 from studylens.errors import ConfigurationError
 from studylens.ingestion.browser_session import BrowserSession
+
+
+def test_default_browser_state_steps_include_exams_site() -> None:
+    exams_steps = [step for step in DEFAULT_BROWSER_STATE_STEPS if step.key == "exams"]
+
+    assert len(exams_steps) == 1
+    assert exams_steps[0].url == "https://exams.doc.ic.ac.uk/"
 
 
 def test_from_settings_requires_storage_state_path(tmp_path: Path) -> None:
