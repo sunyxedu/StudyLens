@@ -1779,12 +1779,32 @@ function getCaretOffset(el: HTMLElement): number {
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return 0;
   const { focusNode, focusOffset } = sel;
+  if (!focusNode) return 0;
   let count = 0;
+
+  function sumAll(node: Node): void {
+    if (node.nodeType === Node.TEXT_NODE) count += (node.textContent ?? "").length;
+    else if ((node as Element).tagName === "BR") count += 1;
+    else for (const c of node.childNodes) sumAll(c);
+  }
+
   function walk(node: Node): boolean {
-    if (node === focusNode) { count += focusOffset; return true; }
-    if (node.nodeType === Node.TEXT_NODE) { count += (node.textContent ?? "").length; }
-    else if ((node as Element).tagName === "BR") { count += 1; }
-    else { for (const c of node.childNodes) { if (walk(c)) return true; } }
+    if (node === focusNode) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        count += focusOffset; // char offset within text node
+      } else {
+        // focusOffset is a child index — sum the first focusOffset children
+        let i = 0;
+        for (const c of node.childNodes) {
+          if (i++ >= focusOffset) break;
+          sumAll(c);
+        }
+      }
+      return true;
+    }
+    if (node.nodeType === Node.TEXT_NODE) count += (node.textContent ?? "").length;
+    else if ((node as Element).tagName === "BR") count += 1;
+    else for (const c of node.childNodes) { if (walk(c)) return true; }
     return false;
   }
   walk(el);
@@ -1869,22 +1889,21 @@ function setupMentionEditor(el: HTMLElement, onChange: () => void): void {
     onChange();
   });
 
-  // Normalise Enter → <br> (browsers insert <div> or <p> by default)
+  // Enter: work in text-space so a BR can never land inside an fx-mention span
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       const sel = window.getSelection()!;
       if (!sel.rangeCount) return;
+      // Collapse any selection first (mirrors what deleteContents would do)
       const range = sel.getRangeAt(0);
-      range.deleteContents();
-      const br = document.createElement("br");
-      range.insertNode(br);
-      // Ensure there is something after the br so cursor lands on the new line
-      if (br === el.lastChild) el.appendChild(document.createElement("br"));
-      range.setStartAfter(br);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
+      if (!range.collapsed) range.deleteContents();
+      // Read current text and caret from the (possibly modified) DOM
+      const text = getEditorText(el);
+      const caret = getCaretOffset(el);
+      // Insert \n at caret, then rebuild — mentions re-evaluated automatically
+      el.replaceChildren(buildEditorFrag(text.slice(0, caret) + "\n" + text.slice(caret)));
+      setCaretOffset(el, caret + 1);
       onChange();
     }
   });
