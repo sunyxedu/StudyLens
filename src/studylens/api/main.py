@@ -332,6 +332,7 @@ def _forum_thread_schema(record: ForumThreadRecord) -> ForumThread:
             author_username=record.author_username,
             author_role=record.author_role,
             is_anonymous=record.is_anonymous,
+            is_read=False,
             reply_count=record.reply_count,
             dylen_replied=record.dylen_replied,
             created_at=record.created_at,
