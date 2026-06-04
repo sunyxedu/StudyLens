@@ -631,18 +631,38 @@ textarea:focus {
   position: fixed;
   inset: 0;
   background: url('/login-bg.jpg') center 38% / cover no-repeat;
+  filter: blur(7px) brightness(1.04) saturate(1.22) sepia(.18);
   transform: scale(1.12);
   transform-origin: center;
   z-index: 0;
 }
 
-/* Layers: wash and glow (styled in slice 3) */
-.login-wash,
-.login-glow {
+/* Layer: cream/amber wash */
+.login-wash {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 1;
+  background: linear-gradient(
+    100deg,
+    rgba(245, 235, 220, .85)  0%,
+    rgba(245, 234, 217, .58) 34%,
+    rgba(244, 232, 214, .30) 60%,
+    rgba(240, 227, 206, .52) 100%
+  );
+}
+
+/* Layer: warm radial glow behind headline */
+.login-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(
+    115% 95% at 16% 42%,
+    rgba(183, 98, 42, .16),
+    transparent 56%
+  );
 }
 
 /* Brand mark */
