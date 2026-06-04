@@ -118,7 +118,8 @@ const elements = {
   forumComposeCancel: byId<HTMLButtonElement>("forum-compose-cancel"),
   forumComposeSubmit: byId<HTMLButtonElement>("forum-compose-submit"),
   forumComposeCategorySel: byId<HTMLSelectElement>("forum-compose-category-sel"),
-  forumComposeBoardSel: byId<HTMLSelectElement>("forum-compose-board-sel"),
+  forumBoardPickerInput: byId<HTMLInputElement>("forum-board-picker-input"),
+  forumBoardPickerMenu: byId<HTMLElement>("forum-board-picker-menu"),
   forumComposeTitle: byId<HTMLInputElement>("forum-compose-title"),
   forumComposeBody: byId<HTMLElement>("forum-compose-body"),
 
@@ -185,6 +186,7 @@ let currentForumCategory: ForumCategoryWithBoards | null = null;
 let currentForumBoard: ForumBoard | null = null;
 let currentForumThread: ForumThread | null = null;
 let forumComposeTargetBoardId: number | null = null;
+let forumComposeSelectedBoard: { id: number; name: string } | null = null;
 
 // ── Course card accent palette ────────────────────────────────────────
 const CARD_ACCENTS = [
@@ -259,7 +261,19 @@ function init(): void {
   elements.forumComposeCancel2.addEventListener("click", closeForumCompose);
   elements.forumComposeSubmit.addEventListener("click", () => { void handleCreateForumThread(); });
   elements.forumComposeSubmit2.addEventListener("click", () => { void handleCreateForumThread(); });
-  elements.forumComposeCategorySel.addEventListener("change", updateForumComposeBoardOptions);
+  elements.forumComposeCategorySel.addEventListener("change", () => {
+    resetBoardPicker();
+    updateForumComposeSubmitState();
+  });
+  elements.forumBoardPickerInput.addEventListener("focus", () => renderBoardPickerMenu());
+  elements.forumBoardPickerInput.addEventListener("input", () => {
+    forumComposeSelectedBoard = null;
+    renderBoardPickerMenu();
+    updateForumComposeSubmitState();
+  });
+  elements.forumBoardPickerInput.addEventListener("blur", () => {
+    setTimeout(() => elements.forumBoardPickerMenu.classList.add("hidden"), 160);
+  });
   elements.forumComposeTitle.addEventListener("input", updateForumComposeSubmitState);
   setupMentionEditor(elements.forumComposeBody, updateForumComposeSubmitState);
   elements.modeButtons.forEach((button) => {
@@ -1690,8 +1704,11 @@ function openForumCompose(targetBoardId?: number): void {
   } else if (currentForumCategory) {
     elements.forumComposeCategorySel.value = String(currentForumCategory.id);
   }
-  updateForumComposeBoardOptions();
-  if (targetBoardId) elements.forumComposeBoardSel.value = String(targetBoardId);
+  resetBoardPicker();
+  if (targetBoardId) {
+    const board = allForumBoards().find((b) => b.id === targetBoardId);
+    if (board) selectBoardInPicker(board);
+  }
   elements.forumComposeTitle.value = "";
   elements.forumComposeBody.innerHTML = "";
 
@@ -1706,27 +1723,88 @@ function closeForumCompose(): void {
   elements.forumCompose.classList.add("hidden");
 }
 
-function updateForumComposeBoardOptions(): void {
+function getPickerCategoryBoards(): ForumBoard[] {
   const catId = Number(elements.forumComposeCategorySel.value);
-  const cat = forumCategories().find((c) => c.id === catId);
-  elements.forumComposeBoardSel.replaceChildren(
-    ...(cat?.boards ?? []).map((board) => {
-      const opt = document.createElement("option");
-      opt.value = String(board.id);
-      opt.textContent = board.name;
-      return opt;
-    })
-  );
+  return forumCategories().find((c) => c.id === catId)?.boards ?? [];
+}
+
+function renderBoardPickerMenu(): void {
+  const q = elements.forumBoardPickerInput.value.toLowerCase();
+  const boards = getPickerCategoryBoards();
+  const filtered = q ? boards.filter((b) => b.name.toLowerCase().includes(q)) : boards;
+  const menu = elements.forumBoardPickerMenu;
+
+  if (filtered.length === 0) {
+    const catName = forumCategories().find((c) => c.id === Number(elements.forumComposeCategorySel.value))?.name ?? "this category";
+    const li = document.createElement("li");
+    li.className = "forum-board-picker-empty";
+    li.textContent = q ? `No board matches "${q}" in ${catName}.` : "No boards in this category yet.";
+    menu.replaceChildren(li);
+  } else {
+    menu.replaceChildren(
+      ...filtered.map((board) => {
+        const li = document.createElement("li");
+        li.className = "forum-board-picker-item";
+        li.setAttribute("role", "option");
+        if (board.id === forumComposeSelectedBoard?.id) li.classList.add("selected");
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "forum-board-picker-name";
+        if (q) {
+          const idx = board.name.toLowerCase().indexOf(q);
+          if (idx >= 0) {
+            nameEl.appendChild(document.createTextNode(board.name.slice(0, idx)));
+            const mark = document.createElement("mark");
+            mark.className = "forum-board-picker-match";
+            mark.textContent = board.name.slice(idx, idx + q.length);
+            nameEl.appendChild(mark);
+            nameEl.appendChild(document.createTextNode(board.name.slice(idx + q.length)));
+          } else {
+            nameEl.textContent = board.name;
+          }
+        } else {
+          nameEl.textContent = board.name;
+        }
+
+        const countEl = document.createElement("span");
+        countEl.className = "forum-board-picker-count";
+        countEl.textContent = `${board.thread_count} posts`;
+
+        li.append(nameEl, countEl);
+        li.addEventListener("mousedown", (e) => {
+          e.preventDefault(); // keep focus on input
+          selectBoardInPicker(board);
+        });
+        return li;
+      })
+    );
+  }
+  menu.classList.remove("hidden");
+}
+
+function selectBoardInPicker(board: ForumBoard): void {
+  forumComposeSelectedBoard = { id: board.id, name: board.name };
+  elements.forumBoardPickerInput.value = board.name;
+  elements.forumBoardPickerMenu.classList.add("hidden");
+  updateForumComposeSubmitState();
+}
+
+function resetBoardPicker(): void {
+  forumComposeSelectedBoard = null;
+  elements.forumBoardPickerInput.value = "";
+  elements.forumBoardPickerMenu.classList.add("hidden");
 }
 
 function updateForumComposeSubmitState(): void {
-  const ready = !!elements.forumComposeTitle.value.trim() && !!getEditorText(elements.forumComposeBody).trim();
+  const ready = !!elements.forumComposeTitle.value.trim()
+    && !!getEditorText(elements.forumComposeBody).trim()
+    && !!forumComposeSelectedBoard;
   elements.forumComposeSubmit.disabled = !ready;
   elements.forumComposeSubmit2.disabled = !ready;
 }
 
 async function handleCreateForumThread(): Promise<void> {
-  const boardId = Number(elements.forumComposeBoardSel.value);
+  const boardId = forumComposeSelectedBoard?.id;
   const title = elements.forumComposeTitle.value.trim();
   const body = getEditorText(elements.forumComposeBody).trim();
   if (!boardId || !title || !body) return;

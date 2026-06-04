@@ -181,9 +181,15 @@
                         <select id="forum-compose-category-sel"></select>
                       </label>
                       <span class="forum-compose-arrow" aria-hidden="true">›</span>
-                      <label class="compact-field">
+                      <label class="compact-field forum-board-picker-label">
                         <span>Sub-board</span>
-                        <select id="forum-compose-board-sel"></select>
+                        <div class="forum-board-picker" id="forum-board-picker">
+                          <div class="forum-board-picker-wrap">
+                            <svg class="forum-board-picker-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input id="forum-board-picker-input" class="forum-board-picker-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search boards…" aria-haspopup="listbox" aria-autocomplete="list" />
+                          </div>
+                          <ul id="forum-board-picker-menu" class="forum-board-picker-menu hidden" role="listbox" aria-label="Boards"></ul>
+                        </div>
                       </label>
                     </div>
                   </div>

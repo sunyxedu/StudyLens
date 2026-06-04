@@ -3137,6 +3137,119 @@ button.forum-bc-seg:hover {
   width: 100%;
 }
 
+/* ── Board search-to-select picker ─────────────────────────────────── */
+
+.forum-board-picker-label {
+  flex: 1;
+  min-width: 140px;
+}
+
+.forum-board-picker {
+  position: relative;
+  width: 100%;
+}
+
+.forum-board-picker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  transition: border-color 110ms;
+}
+
+.forum-board-picker-wrap:focus-within {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+.forum-board-picker-ico {
+  flex-shrink: 0;
+  color: var(--muted-2);
+}
+
+.forum-board-picker-input {
+  flex: 1;
+  width: auto;
+  border: none;
+  background: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.forum-board-picker-input::placeholder {
+  color: var(--muted-2);
+}
+
+.forum-board-picker-menu {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-2);
+}
+
+.forum-board-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: background 80ms;
+}
+
+.forum-board-picker-item:hover,
+.forum-board-picker-item.selected {
+  background: var(--green-soft);
+}
+
+.forum-board-picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forum-board-picker-match {
+  background: none;
+  color: var(--green-deep);
+  font-weight: 700;
+}
+
+.forum-board-picker-count {
+  flex-shrink: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+.forum-board-picker-empty {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0;
+}
+
 .forum-compose-arrow {
   color: var(--muted-2);
   font-size: 18px;
