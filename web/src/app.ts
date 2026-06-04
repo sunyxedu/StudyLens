@@ -55,11 +55,11 @@ function renderAnswer(markdown: string): string {
 import { citationLabel, clippedText, formatSeconds, resultTitle, scoreLabel } from "./render.js";
 import type {
   AuthSession,
-  BrowserStateStatus,
   ChatMessage,
   Citation,
   Conversation,
   DiscoveredCourse,
+  DiscoveryStatus,
   ForumBoard,
   ForumCategoryWithBoards,
   ForumIndexResponse,
@@ -86,16 +86,13 @@ const elements = {
   loginPassword: byId<HTMLInputElement>("login-password"),
   loginSubmit: byId<HTMLButtonElement>("login-submit"),
   loginStatus: byId<HTMLSpanElement>("login-status"),
-  browserStateStart: byId<HTMLButtonElement>("browser-state-start"),
-  browserStateNext: byId<HTMLButtonElement>("browser-state-next"),
   browserStateSkip: byId<HTMLButtonElement>("browser-state-skip"),
-  browserStateCancel: byId<HTMLButtonElement>("browser-state-cancel"),
   browserStateStatus: byId<HTMLSpanElement>("browser-state-status"),
-  browserStateCount: byId<HTMLSpanElement>("browser-state-count"),
-  browserStateStepKey: byId<HTMLSpanElement>("browser-state-step-key"),
-  browserStateStepTitle: byId<HTMLHeadingElement>("browser-state-step-title"),
-  browserStateInstruction: byId<HTMLParagraphElement>("browser-state-instruction"),
-  browserStateUrl: byId<HTMLAnchorElement>("browser-state-url"),
+  discoveringProgressbar: byId<HTMLElement>("discovering-progressbar"),
+  discoveringProgressFill: byId<HTMLElement>("discovering-progress-fill"),
+  discoveringPercent: byId<HTMLSpanElement>("discovering-percent"),
+  discoveringHint: byId<HTMLSpanElement>("discovering-hint"),
+  discoveringStatus: byId<HTMLSpanElement>("discovering-status"),
   // Course library (main page)
   coursesDiscover: byId<HTMLButtonElement>("courses-discover"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
@@ -237,10 +234,7 @@ function init(): void {
       setAuthMode(button.dataset.authMode === "login" ? "login" : "register");
     });
   });
-  elements.browserStateStart.addEventListener("click", handleBrowserStateStart);
-  elements.browserStateNext.addEventListener("click", handleBrowserStateNext);
-  elements.browserStateSkip.addEventListener("click", showCoursesApp);
-  elements.browserStateCancel.addEventListener("click", handleBrowserStateCancel);
+  elements.browserStateSkip.addEventListener("click", () => { void handleContinueToDiscovery(); });
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.newConvBtn.addEventListener("click", handleNewConversation);
@@ -342,8 +336,24 @@ function handleAuthenticated(session: AuthSession): void {
   if (session.needs_browser_state) {
     void showBrowserStateView();
   } else {
-    showCoursesApp();
+    // Browser logins are in place. If a discovery run is in flight (e.g. the
+    // user refreshed mid-discovery), resume the progress view; the bar is
+    // recomputed from the server's started_at so it stays identical to before.
+    void resumeOrShowCourses();
   }
+}
+
+async function resumeOrShowCourses(): Promise<void> {
+  try {
+    const status = await api.discoveryStatus();
+    if (status.status === "running" && status.started_at) {
+      enterDiscoveringView(status.started_at);
+      return;
+    }
+  } catch (error) {
+    if (handleAuthRequired(error)) return;
+  }
+  showCoursesApp();
 }
 
 function showLoginView(): void {
@@ -356,6 +366,7 @@ function showLoginView(): void {
 }
 
 function resetAuthenticatedState(): void {
+  stopDiscoveryTicker();
   authSession = null;
   discoveredCourses = [];
   selectedCourseCodes.clear();
@@ -440,22 +451,15 @@ function setAuthMode(mode: "register" | "login"): void {
 }
 
 async function showBrowserStateView(): Promise<void> {
+  stopDiscoveryTicker();
   shell.classList.remove("mode-courses", "mode-login");
   shell.classList.add("mode-setup");
   activateTopLevelView("view-browser-state");
-  try {
-    renderBrowserStateStatus(await api.browserStateStatus());
-  } catch (error) {
-    if (handleAuthRequired(error)) return;
-    setStatus(
-      elements.browserStateStatus,
-      error instanceof Error ? error.message : "Setup status unavailable",
-      "error"
-    );
-  }
+  setStatus(elements.browserStateStatus, "");
 }
 
 function showCoursesApp(): void {
+  stopDiscoveryTicker();
   shell.classList.remove("mode-login", "mode-setup");
   shell.classList.add("mode-courses");
   activateTopLevelView("view-courses");
@@ -473,83 +477,125 @@ function activateTopLevelView(id: string): void {
   });
 }
 
-function handleBrowserStateStart(): void {
-  void withSetupBusy(
-    elements.browserStateStart,
-    elements.browserStateStatus,
-    "Opening",
-    () => api.startBrowserState()
-  );
+// ── Course discovery (auto, with a refresh-stable progress bar) ────────
+
+// Progress is a pure function of (started_at, now) so every refresh and every
+// tab for the same user shows the same percentage. It fills in slowing phases:
+// 0→85% over the first 3 min, 85→95% over the next 3 min, then 95→~100% over
+// 100 min — so it never reaches 100% until the server reports the run is done.
+const DISCOVERY_PHASE1_S = 180; // 3 min → 85%
+const DISCOVERY_PHASE2_S = 180; // +3 min → 95%
+const DISCOVERY_PHASE3_S = 6000; // +100 min → ~100%
+
+function computeDiscoveryProgress(startedAtMs: number, nowMs: number): number {
+  const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
+  if (elapsed <= DISCOVERY_PHASE1_S) {
+    return (85 * elapsed) / DISCOVERY_PHASE1_S;
+  }
+  if (elapsed <= DISCOVERY_PHASE1_S + DISCOVERY_PHASE2_S) {
+    return 85 + (10 * (elapsed - DISCOVERY_PHASE1_S)) / DISCOVERY_PHASE2_S;
+  }
+  const tail = elapsed - DISCOVERY_PHASE1_S - DISCOVERY_PHASE2_S;
+  return Math.min(99.5, 95 + (5 * tail) / DISCOVERY_PHASE3_S);
 }
 
-function handleBrowserStateNext(): void {
-  void withSetupBusy(
-    elements.browserStateNext,
-    elements.browserStateStatus,
-    "Checking",
-    () => api.advanceBrowserState(),
-    (status) => {
-      if (status.ready) {
-        authSession = authSession
-          ? {
-              ...authSession,
-              browser_state_ready: true,
-              needs_browser_state: false,
-            }
-          : null;
-        showCoursesApp();
+let discoveryStartedAtMs: number | null = null;
+let discoveryTicker: number | null = null;
+let discoveryPolling = false;
+let discoveryLastPollMs = 0;
+
+function stopDiscoveryTicker(): void {
+  if (discoveryTicker !== null) {
+    window.clearInterval(discoveryTicker);
+    discoveryTicker = null;
+  }
+  discoveryStartedAtMs = null;
+}
+
+function paintDiscoveryProgress(percent: number): void {
+  const clamped = Math.max(0, Math.min(100, percent));
+  elements.discoveringProgressFill.style.width = `${clamped}%`;
+  elements.discoveringPercent.textContent = `${Math.floor(clamped)}%`;
+  elements.discoveringProgressbar.setAttribute("aria-valuenow", String(Math.floor(clamped)));
+}
+
+async function handleContinueToDiscovery(): Promise<void> {
+  await withBusy(elements.browserStateSkip, elements.browserStateStatus, "Starting…", async () => {
+    try {
+      const status = await api.startDiscovery();
+      if (authSession) {
+        authSession = { ...authSession, browser_state_ready: true, needs_browser_state: false };
       }
+      const startedAt = status.started_at ? status.started_at * 1000 : Date.now();
+      enterDiscoveringView(startedAt);
+    } catch (error) {
+      if (error instanceof StudyLensApiError && error.status === 409) {
+        setStatus(
+          elements.browserStateStatus,
+          "We can't find your logins yet — run the command above, then click Continue.",
+          "error"
+        );
+        return;
+      }
+      throw error;
     }
-  );
+  });
 }
 
-function handleBrowserStateCancel(): void {
-  void withSetupBusy(
-    elements.browserStateCancel,
-    elements.browserStateStatus,
-    "Closing",
-    () => api.cancelBrowserState()
-  );
+function enterDiscoveringView(startedAtMs: number): void {
+  shell.classList.remove("mode-courses", "mode-login");
+  shell.classList.add("mode-setup");
+  activateTopLevelView("view-discovering");
+  setStatus(elements.discoveringStatus, "");
+  elements.discoveringHint.textContent =
+    "This usually takes a few minutes — you can leave this page open.";
+  discoveryStartedAtMs = startedAtMs;
+  discoveryLastPollMs = 0;
+  paintDiscoveryProgress(computeDiscoveryProgress(startedAtMs, Date.now()));
+  if (discoveryTicker === null) {
+    discoveryTicker = window.setInterval(() => { void discoveryTick(); }, 1000);
+  }
 }
 
-function renderBrowserStateStatus(status: BrowserStateStatus): void {
-  elements.browserStateStart.disabled = status.running;
-  elements.browserStateNext.disabled = !status.running;
-  elements.browserStateCancel.disabled = !status.running;
+async function discoveryTick(): Promise<void> {
+  if (discoveryStartedAtMs === null) return;
+  const now = Date.now();
+  paintDiscoveryProgress(computeDiscoveryProgress(discoveryStartedAtMs, now));
 
-  if (status.step) {
-    const humanIndex = (status.step_index ?? 0) + 1;
-    elements.browserStateStepKey.textContent = status.step.key;
-    elements.browserStateStepTitle.textContent = status.step.title;
-    elements.browserStateInstruction.textContent = status.step.instruction;
-    elements.browserStateCount.textContent = `${humanIndex}/${status.total_steps}`;
-    elements.browserStateUrl.textContent = shortUrl(status.step.url);
-    elements.browserStateUrl.href = status.step.url;
-    elements.browserStateUrl.classList.remove("hidden");
-    elements.browserStateNext.textContent =
-      humanIndex === status.total_steps ? "Save cookies" : "Next site";
-  } else {
-    elements.browserStateStepKey.textContent = status.ready ? "Saved" : "Ready";
-    elements.browserStateStepTitle.textContent = status.ready
-      ? "Cookies saved"
-      : "Connect course sites";
-    elements.browserStateInstruction.textContent = status.ready
-      ? "StudyLens can now process your course materials."
-      : "Open the setup browser and sign into each site.";
-    elements.browserStateCount.textContent = "";
-    elements.browserStateUrl.classList.add("hidden");
-    elements.browserStateNext.textContent = "Next";
+  // Poll the server every ~3s to learn when the run actually finishes.
+  if (discoveryPolling || now - discoveryLastPollMs < 3000) return;
+  discoveryPolling = true;
+  discoveryLastPollMs = now;
+  try {
+    const status = await api.discoveryStatus();
+    if (status.status === "done") {
+      finishDiscovery(status);
+    } else if (status.status === "error") {
+      elements.discoveringHint.textContent =
+        "Discovery hit a problem, but you can still review whatever was found.";
+      setStatus(elements.discoveringStatus, status.error ?? "Discovery failed", "error");
+      finishDiscovery(status, 1600);
+    }
+  } catch (error) {
+    if (handleAuthRequired(error)) {
+      stopDiscoveryTicker();
+    }
+  } finally {
+    discoveryPolling = false;
   }
+}
 
-  if (status.error) {
-    setStatus(elements.browserStateStatus, status.error, "error");
-  } else if (status.ready) {
-    setStatus(elements.browserStateStatus, "Saved");
-  } else if (status.running) {
-    setStatus(elements.browserStateStatus, "Browser is open");
-  } else {
-    setStatus(elements.browserStateStatus, "");
-  }
+function finishDiscovery(status: DiscoveryStatus, delayMs = 600): void {
+  paintDiscoveryProgress(100);
+  stopDiscoveryTicker();
+  const message =
+    status.status === "done"
+      ? `Found ${status.course_count} course${status.course_count === 1 ? "" : "s"}`
+      : null;
+  window.setTimeout(() => {
+    showCoursesApp();
+    if (message) showToast(message);
+  }, delayMs);
 }
 
 // ── Navigation ────────────────────────────────────────────────────────
@@ -2882,30 +2928,6 @@ async function withBusy(
     setStatus(status, error instanceof Error ? error.message : "Request failed", "error");
   } finally {
     button.disabled = false;
-    button.textContent = original;
-  }
-}
-
-async function withSetupBusy(
-  button: HTMLButtonElement,
-  statusNode: HTMLElement,
-  label: string,
-  action: () => Promise<BrowserStateStatus>,
-  afterRender?: (status: BrowserStateStatus) => void
-): Promise<void> {
-  const original = button.textContent || "";
-  button.disabled = true;
-  button.textContent = label;
-  setStatus(statusNode, label);
-  try {
-    const status = await action();
-    renderBrowserStateStatus(status);
-    afterRender?.(status);
-  } catch (error) {
-    button.disabled = false;
-    if (handleAuthRequired(error)) return;
-    setStatus(statusNode, error instanceof Error ? error.message : "Request failed", "error");
-  } finally {
     button.textContent = original;
   }
 }

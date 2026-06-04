@@ -78,24 +78,45 @@
         <section class="view auth-view" id="view-browser-state" aria-labelledby="browser-state-title">
           <div class="setup-panel">
             <div class="view-head">
-              <h2 id="browser-state-title">Browser Setup</h2>
-              <span id="browser-state-count" class="subtle"></span>
+              <h2 id="browser-state-title">Connect your course logins</h2>
+              <span class="subtle">One-time setup</span>
             </div>
             <div class="setup-body">
               <div class="setup-step">
-                <span id="browser-state-step-key" class="course-code">Ready</span>
-                <h3 id="browser-state-step-title">Connect course sites</h3>
-                <p id="browser-state-instruction">Open the setup browser and sign into each site.</p>
-                <a id="browser-state-url" class="setup-url hidden" href="#" target="_blank" rel="noopener noreferrer"></a>
-                <p class="subtle">On the hosted app, "Open Browser" can't run a browser on the server. Instead, run <code>python scripts/push_user_browser_state.py</code> locally to sign in and upload your course logins, then reopen this page.</p>
+                <p>StudyLens reads your courses from Scientia, Panopto, and EdStem. The server can't open a browser for you, so capture your logins once on your own machine and upload them to this account:</p>
+                <ol class="setup-instructions">
+                  <li>In a terminal on your computer, inside the StudyLens project folder, run:
+                    <pre class="setup-cmd"><code>uv run studylens-push-browser-state</code></pre>
+                  </li>
+                  <li>A browser window opens. Sign into <strong>Scientia</strong>, <strong>Panopto</strong>, and <strong>EdStem</strong>, pressing Enter in the terminal after each page loads.</li>
+                  <li>It uploads your logins here. Come back and click <strong>Continue</strong> to discover your courses.</li>
+                </ol>
+                <p class="subtle">You can preset the connection with environment variables: <code>STUDYLENS_BACKEND_URL=… STUDYLENS_USERNAME=… STUDYLENS_PASSWORD=… uv run studylens-push-browser-state</code></p>
               </div>
               <div class="actions">
-                <button id="browser-state-start" class="button primary" type="button">Open Browser</button>
-                <button id="browser-state-next" class="button primary" type="button" disabled>Next</button>
-                <button id="browser-state-skip" class="button secondary" type="button">Continue</button>
-                <button id="browser-state-cancel" class="button secondary" type="button">Cancel</button>
+                <button id="browser-state-skip" class="button primary" type="button">Continue</button>
                 <span id="browser-state-status" class="status"></span>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Discovering courses (auto, with progress) ─────────── -->
+        <section class="view auth-view" id="view-discovering" aria-labelledby="discovering-title">
+          <div class="setup-panel discovering-panel">
+            <div class="view-head">
+              <h2 id="discovering-title">Discovering your courses</h2>
+              <span class="subtle">Reading your EdStem dashboard…</span>
+            </div>
+            <div class="discovering-body">
+              <div id="discovering-progressbar" class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="discovering-progress-fill" class="progress-fill"></div>
+              </div>
+              <div class="discovering-meta">
+                <span id="discovering-percent" class="discovering-percent">0%</span>
+                <span id="discovering-hint" class="subtle">This usually takes a few minutes — you can leave this page open.</span>
+              </div>
+              <span id="discovering-status" class="status"></span>
             </div>
           </div>
         </section>
