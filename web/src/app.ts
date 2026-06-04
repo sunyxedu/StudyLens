@@ -140,7 +140,6 @@ const elements = {
   chatMessages: byId<HTMLElement>("chat-messages"),
   chatEmpty: byId<HTMLElement>("chat-empty"),
   askExercises: byId<HTMLInputElement>("ask-exercises"),
-  askTopK: byId<HTMLInputElement>("ask-top-k"),
   askQuestion: byId<HTMLTextAreaElement>("ask-question"),
   askSubmit: byId<HTMLButtonElement>("ask-submit"),
   askStatus: byId<HTMLSpanElement>("ask-status"),
@@ -152,7 +151,6 @@ const elements = {
   generateStatus: byId<HTMLSpanElement>("generate-status"),
   latexOutput: byId<HTMLPreElement>("latex-output"),
   // Retrieve tab
-  retrieveTopK: byId<HTMLInputElement>("retrieve-top-k"),
   retrieveQuery: byId<HTMLTextAreaElement>("retrieve-query"),
   retrieveKinds: byId<HTMLElement>("retrieve-kinds"),
   retrieveSubmit: byId<HTMLButtonElement>("retrieve-submit"),
@@ -2483,7 +2481,7 @@ async function sendQuestion(question: string): Promise<void> {
     const answer = await api.ask({
       question: contextQuestion,
       course_id: currentCourse.code,
-      top_k: numeric(elements.askTopK.value, 5),
+      top_k: 5,
       include_exercises: elements.askExercises.checked,
     });
     thinkingEl.remove();
@@ -2864,7 +2862,7 @@ async function handleRetrieve(): Promise<void> {
       query,
       course_id: currentCourse!.code,
       kinds: selectedKinds(),
-      top_k: numeric(elements.retrieveTopK.value, 8),
+      top_k: 5,
     });
     renderResults(response.results);
     setStatus(elements.retrieveStatus, `${response.results.length} results`);
