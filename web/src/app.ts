@@ -1748,16 +1748,21 @@ async function handleCreateForumThread(): Promise<void> {
 
 function highlightMentions(text: string): DocumentFragment {
   const frag = document.createDocumentFragment();
-  text.split(/(@dylen)/gi).forEach((part) => {
-    if (part.toLowerCase() === "@dylen") {
-      const span = document.createElement("span");
-      span.className = "fx-mention";
-      span.textContent = part;
-      frag.appendChild(span);
-    } else if (part) {
-      frag.appendChild(document.createTextNode(part));
-    }
-  });
+  // Mirror backend rule: @dylen must be at start of string or preceded by a non-word char.
+  const re = /(^|[^\w])(@dylen)\b/gi;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const pre = m[1];  // "" at start-of-string, or the non-word char before @
+    const men = m[2];  // "@dylen" (original casing)
+    frag.appendChild(document.createTextNode(text.slice(last, m.index + pre.length)));
+    const span = document.createElement("span");
+    span.className = "fx-mention";
+    span.textContent = men;
+    frag.appendChild(span);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
   return frag;
 }
 

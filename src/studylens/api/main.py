@@ -372,15 +372,26 @@ def _mentions_dylen(text: str) -> bool:
 
 
 def _dylen_question(thread: ForumThreadRecord, latest_text: str) -> str:
-    parts = [
-        "A student mentioned @dylen in the StudyLens forum.",
+    meta = [
         f"Subject: {thread.category_name}",
         f"Sub-board: {thread.board_name}",
-        f"Thread: {thread.title}",
-        f"Original post:\n{thread.body}",
+        f"Thread title: {thread.title}",
     ]
-    if latest_text != thread.body:
-        parts.append(f"Latest reply:\n{latest_text}")
+    is_reply = latest_text != thread.body
+    if is_reply:
+        parts = [
+            "A student mentioned @dylen in a reply to a forum thread. "
+            "Answer the reply's question; use the original post only as background context.",
+            *meta,
+            f"Reply (answer this):\n{latest_text}",
+            f"Original post (context only):\n{thread.body}",
+        ]
+    else:
+        parts = [
+            "A student mentioned @dylen in a new forum post.",
+            *meta,
+            f"Post:\n{thread.body}",
+        ]
     return "\n\n".join(parts)
 
 
