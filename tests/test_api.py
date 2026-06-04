@@ -636,3 +636,23 @@ def test_generation_endpoints_return_latex(tmp_path: Path) -> None:
     assert cheatsheet.json()["latex"].startswith("\\documentclass")
     assert predicted.status_code == 200
     assert "Predicted Paper" in predicted.json()["latex"]
+
+
+def test_discover_start_requires_browser_state(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    register(client)
+
+    response = client.post("/courses/discover/start")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "browser state setup required"
+
+
+def test_discover_status_is_idle_before_any_run(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    register(client)
+
+    response = client.get("/courses/discover/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "idle"
