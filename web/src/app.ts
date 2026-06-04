@@ -121,7 +121,7 @@ const elements = {
   forumComposeBoardSel: byId<HTMLSelectElement>("forum-compose-board-sel"),
   forumComposeTitle: byId<HTMLInputElement>("forum-compose-title"),
   forumComposeBody: byId<HTMLElement>("forum-compose-body"),
-  forumComposeCourse: byId<HTMLInputElement>("forum-compose-course"),
+
   forumComposePrivate: byId<HTMLInputElement>("forum-compose-private"),
   forumComposeAnon: byId<HTMLInputElement>("forum-compose-anon"),
   forumComposeCancel2: byId<HTMLButtonElement>("forum-compose-cancel-2"),
@@ -1694,7 +1694,7 @@ function openForumCompose(targetBoardId?: number): void {
   if (targetBoardId) elements.forumComposeBoardSel.value = String(targetBoardId);
   elements.forumComposeTitle.value = "";
   elements.forumComposeBody.innerHTML = "";
-  elements.forumComposeCourse.value = "";
+
   elements.forumComposePrivate.checked = false;
   elements.forumComposeAnon.checked = false;
   updateForumComposeSubmitState();
@@ -1729,7 +1729,6 @@ async function handleCreateForumThread(): Promise<void> {
   const boardId = Number(elements.forumComposeBoardSel.value);
   const title = elements.forumComposeTitle.value.trim();
   const body = getEditorText(elements.forumComposeBody).trim();
-  const courseId = elements.forumComposeCourse.value.trim().toUpperCase();
   if (!boardId || !title || !body) return;
 
   elements.forumComposeSubmit.disabled = true;
@@ -1737,7 +1736,7 @@ async function handleCreateForumThread(): Promise<void> {
   elements.forumComposeSubmit2.disabled = true;
   elements.forumComposeSubmit2.textContent = "Posting…";
   try {
-    const thread = await api.createForumThread({ board_id: boardId, title, body, course_id: courseId || null });
+    const thread = await api.createForumThread({ board_id: boardId, title, body, course_id: null });
     forumData = await api.forumIndex();
     closeForumCompose();
     const board = allForumBoards().find((b) => b.id === boardId);

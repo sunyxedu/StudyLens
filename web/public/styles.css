@@ -3143,9 +3143,6 @@ button.forum-bc-seg:hover {
   flex-shrink: 0;
 }
 
-.forum-compose-course-field {
-  max-width: 200px;
-}
 
 .forum-compose-toggles {
   display: flex;
