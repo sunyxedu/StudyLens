@@ -11,9 +11,10 @@ from pydantic import BaseModel
 
 from studylens.config import Settings
 from studylens.domain import Resource
-from studylens.errors import ConfigurationError, UnsupportedDocumentError
+from studylens.errors import ConfigurationError, IngestionError, UnsupportedDocumentError
 from studylens.ingestion._paths import safe_path_part, unique_path
 from studylens.ingestion.documents import build_chunks, build_pdf_chunks, extract_text
+from studylens.ingestion.exams_agent import discover_past_exams
 from studylens.retrieval.qa import RAGService
 
 
@@ -117,6 +118,56 @@ def _academic_year_start(year_url: str) -> int:
         return 0
     yy = int(match.group(1))
     return 2000 + yy if yy < 50 else 1900 + yy
+
+
+@dataclass(slots=True)
+class AgentExamsClient:
+    """Agent-backed client for crawling exams.doc.ic.ac.uk course papers."""
+
+    settings: Settings
+    timeout: float = 30.0
+    max_years: int = DEFAULT_MAX_YEARS
+
+    async def discover_exam_papers(self, course_id: str) -> list[Resource]:
+        report = await discover_past_exams(
+            course_id=_agent_course_code(course_id),
+            settings=self.settings,
+            max_years=self.max_years,
+        )
+        if report.error:
+            raise IngestionError(report.error)
+        return [
+            Resource(
+                course_id=course_id,
+                title=exam.title,
+                kind="past_exam",
+                source_url=exam.source_url,
+                metadata={
+                    "source": "exams",
+                    "academic_year": exam.academic_year,
+                    "discovered_by": "exams_agent",
+                },
+            )
+            for exam in report.exams
+        ]
+
+    async def download(self, url: str) -> tuple[bytes, str | None]:
+        username, password = self._require_credentials()
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+            auth=(username, password),
+        ) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.content, response.headers.get("content-type")
+
+    def _require_credentials(self) -> tuple[str, str]:
+        if not self.settings.imperial_username or not self.settings.imperial_password:
+            raise ConfigurationError(
+                "Exams access requires IMPERIAL_USERNAME and IMPERIAL_PASSWORD"
+            )
+        return self.settings.imperial_username, self.settings.imperial_password
 
 
 @dataclass(slots=True)
@@ -335,9 +386,12 @@ def build_exams_indexer(settings: Settings, rag: RAGService) -> ExamsIndexer:
     return ExamsIndexer(
         settings=settings,
         rag=rag,
-        client=ExamsClient(
-            base_url=str(settings.exams_base_url),
-            username=settings.imperial_username,
-            password=settings.imperial_password,
-        ),
+        client=AgentExamsClient(settings=settings),
     )
+
+
+def _agent_course_code(course_id: str) -> str:
+    normalized = course_id.strip().upper().replace(" ", "")
+    if normalized.isdigit():
+        return f"COMP{normalized}"
+    return normalized

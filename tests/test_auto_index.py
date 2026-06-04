@@ -8,7 +8,7 @@ from typing import Any
 from qdrant_client import QdrantClient
 
 from studylens.config import Settings
-from studylens.domain import CourseSummary
+from studylens.domain import CourseSummary, Resource
 from studylens.ingestion._paths import safe_path_part
 from studylens.ingestion.auto_index import (
     CourseAutoIndexer,
@@ -63,6 +63,7 @@ def _build_indexer(
     pan: Any = None,
     exams: Any = None,
     caption: Any = None,
+    exam_download: Any = None,
     course_url: str = "https://scientia.test/2526/modules/COMP70001/materials",
 ) -> CourseAutoIndexer:
     settings = Settings(
@@ -95,6 +96,7 @@ def _build_indexer(
         panopto_discoverer=pan or _empty_resources,
         exams_discoverer=exams or _empty_resources,
         panopto_caption_fetcher=caption,
+        exams_downloader=exam_download,
     )
 
 
@@ -255,6 +257,61 @@ def test_panopto_caption_writes_transcript_to_disk(tmp_path: Path) -> None:
         f.suffix == ".srt"
         for f in (course_root / "transcript").iterdir()
     )
+
+
+def test_crawl_exams_downloads_agent_discovered_papers(tmp_path: Path) -> None:
+    exam_url = "https://exams.doc.ic.ac.uk/pastpapers/papers.24-25/COMP70001.txt"
+
+    async def fake_exams(self: Any, summary: CourseSummary):
+        return [
+            Resource(
+                course_id=summary.id,
+                title="COMP70001 24-25 paper",
+                kind="past_exam",
+                source_url=exam_url,
+                metadata={"source": "exams", "academic_year": "24-25"},
+            )
+        ], None
+
+    async def fake_exam_download(self: Any, resource: Resource):
+        return b"Question 1: analyse a dynamic programming recurrence.", "text/plain"
+
+    indexer = _build_indexer(
+        tmp_path,
+        exams=fake_exams,
+        exam_download=fake_exam_download,
+    )
+
+    manifest = asyncio.run(
+        indexer.crawl_course(course_id="COMP70001", course_title="Advanced Algorithms")
+    )
+
+    assert [item.kind for item in manifest.items] == ["past_exam"]
+    item = manifest.items[0]
+    assert item.metadata["stage"] == "exams"
+    assert item.metadata["academic_year"] == "24-25"
+    assert item.metadata["discovered_by"] == "exams_agent"
+    assert item.local_path == "past_exam/COMP70001-24-25.txt"
+    assert (
+        tmp_path / "data" / "raw" / "COMP70001" / "past_exam" / "COMP70001-24-25.txt"
+    ).exists()
+
+
+def test_crawl_exams_reports_agent_errors(tmp_path: Path) -> None:
+    async def fake_exams(self: Any, summary: CourseSummary):
+        return [], "agent could not reach exams.doc.ic.ac.uk"
+
+    indexer = _build_indexer(tmp_path, exams=fake_exams)
+
+    manifest = asyncio.run(
+        indexer.crawl_course(course_id="COMP70001", course_title="Advanced Algorithms")
+    )
+    report = indexer.index_local("COMP70001")
+
+    assert manifest.items[0].kind == "past_exam"
+    assert manifest.items[0].metadata["stage"] == "exams"
+    assert report.items[0].status == "failed"
+    assert "agent could not reach exams.doc.ic.ac.uk" in (report.items[0].error or "")
 
 
 def test_index_local_skips_unsupported_files(tmp_path: Path) -> None:

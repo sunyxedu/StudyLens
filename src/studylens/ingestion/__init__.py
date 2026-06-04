@@ -17,6 +17,7 @@ from studylens.ingestion.edstem import (
     build_edstem_indexer,
 )
 from studylens.ingestion.exams import (
+    AgentExamsClient,
     ExamIndexResult,
     ExamsClient,
     ExamsIndexer,
@@ -27,6 +28,7 @@ from studylens.ingestion.scientia import derive_tab_urls, parse_course_page, par
 
 __all__ = [
     "AsyncFetcher",
+    "AgentExamsClient",
     "AutoIndexReport",
     "BrowserFetcher",
     "BrowserSession",

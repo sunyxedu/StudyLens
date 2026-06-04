@@ -3,9 +3,9 @@
 The pipeline is split into two phases on purpose:
 
   Phase 1 — crawl_course()
-    Agent-driven discovery (Scientia, Panopto) and deterministic discovery
-    (past exams, EdStem) per course. Everything that's found is downloaded
-    to `data/raw/{course_id}/{kind}/...` and a manifest `_crawl.json` is
+    Agent-driven discovery (Scientia, Panopto, past exams) per course.
+    Everything that's found is downloaded to
+    `data/raw/{course_id}/{kind}/...` and a manifest `_crawl.json` is
     written. No vectors, no LLM tokens spent on indexing yet.
 
   Phase 2 — index_local()
@@ -455,7 +455,9 @@ class CourseAutoIndexer:
         course_dir: Path,
     ) -> list[ManifestItem]:
         resources, error = await self._run_exams_discoverer(summary)
-        if error or not resources:
+        if error:
+            return [_stage_error_item("exams", IngestionError(error), kind="past_exam")]
+        if not resources:
             return []
         items: list[ManifestItem] = []
         for resource in resources:
@@ -496,7 +498,12 @@ class CourseAutoIndexer:
                     kind="past_exam",
                     title=resource.title,
                     downloaded_at=now_iso(),
-                    metadata={"stage": "exams", "content_type": content_type},
+                    metadata={
+                        **resource.metadata,
+                        "stage": "exams",
+                        "content_type": content_type,
+                        "discovered_by": "exams_agent",
+                    },
                 )
             )
         return items
@@ -777,12 +784,17 @@ def _failed_manifest_item(
     )
 
 
-def _stage_error_item(stage: str, exc: BaseException) -> ManifestItem:
+def _stage_error_item(
+    stage: str,
+    exc: BaseException,
+    *,
+    kind: ResourceKind = "material",
+) -> ManifestItem:
     """Record a whole stage that crashed before producing any item."""
     return ManifestItem(
         source_url="",
         local_path="",
-        kind="material",  # placeholder; index_local will skip (no local_path)
+        kind=kind,  # placeholder; index_local will skip (no local_path)
         title=f"[{stage} stage failed]",
         downloaded_at=now_iso(),
         metadata={"stage": stage, "error": f"{type(exc).__name__}: {exc}"},
