@@ -88,10 +88,10 @@
                   <li>In a terminal on your computer, inside the StudyLens project folder, run:
                     <pre class="setup-cmd"><code>uv run studylens-push-browser-state</code></pre>
                   </li>
-                  <li>A browser window opens. Sign into <strong>Scientia</strong>, <strong>Panopto</strong>, and <strong>EdStem</strong>, pressing Enter in the terminal after each page loads.</li>
+                  <li>Enter your StudyLens username and password. Once they check out, a browser window opens — sign into <strong>Scientia</strong>, <strong>Panopto</strong>, and <strong>EdStem</strong>, pressing Enter in the terminal after each page loads.</li>
                   <li>It uploads your logins here. Come back and click <strong>Continue</strong> to discover your courses.</li>
                 </ol>
-                <p class="subtle">You can preset the connection with environment variables: <code>STUDYLENS_BACKEND_URL=… STUDYLENS_USERNAME=… STUDYLENS_PASSWORD=… uv run studylens-push-browser-state</code></p>
+                <p class="subtle">You can skip the prompts by exporting <code>STUDYLENS_USERNAME</code> and <code>STUDYLENS_PASSWORD</code> first.</p>
               </div>
               <div class="actions">
                 <button id="browser-state-skip" class="button primary" type="button">Continue</button>
