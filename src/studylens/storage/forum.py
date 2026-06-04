@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import sqlite3
@@ -372,10 +373,8 @@ class ForumStore:
                 "ALTER TABLE forum_threads ADD COLUMN is_anonymous INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE forum_replies ADD COLUMN is_anonymous INTEGER NOT NULL DEFAULT 0",
             ):
-                try:
+                with contextlib.suppress(Exception):
                     connection.execute(stmt)
-                except Exception:
-                    pass  # column already exists
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_forum_boards_category
