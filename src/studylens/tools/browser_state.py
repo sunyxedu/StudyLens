@@ -64,12 +64,27 @@ def push_user_browser_state() -> None:
     import getpass
     import json
     import os
+    import sys
 
     import httpx
 
+    def _prompt(label: str) -> str:
+        # Write+flush the prompt to stdout ourselves, then read, so the prompt
+        # always shows before we block. getpass writes its prompt to /dev/tty,
+        # which can race ahead of a buffered stdout prompt (e.g. under `uv run`)
+        # and print the username and password prompts together on one line.
+        sys.stdout.write(label)
+        sys.stdout.flush()
+        return sys.stdin.readline().strip()
+
     backend = (os.environ.get("STUDYLENS_BACKEND_URL") or DEFAULT_BACKEND_URL).rstrip("/")
-    username = os.environ.get("STUDYLENS_USERNAME") or input("StudyLens username: ").strip()
-    password = os.environ.get("STUDYLENS_PASSWORD") or getpass.getpass("StudyLens password: ")
+
+    username = os.environ.get("STUDYLENS_USERNAME") or _prompt("StudyLens username: ")
+    password = os.environ.get("STUDYLENS_PASSWORD")
+    if not password:
+        sys.stdout.write("StudyLens password: ")
+        sys.stdout.flush()
+        password = getpass.getpass("")  # empty prompt: we already printed it above
     if not username or not password:
         raise SystemExit("StudyLens username and password are both required.")
 
