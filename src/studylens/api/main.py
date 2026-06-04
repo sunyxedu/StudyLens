@@ -19,6 +19,11 @@ from studylens.api.browser_state import (
     PlaywrightBrowserStateManager,
     _has_auth_material,
 )
+from studylens.api.discovery import (
+    BrowserStateMissingError,
+    CourseDiscoveryManager,
+    DiscoveryStatus,
+)
 from studylens.api.schemas import (
     AskRequest,
     AskResponse,
@@ -31,6 +36,7 @@ from studylens.api.schemas import (
     CoursesListResponse,
     DiscoverCoursesCourse,
     DiscoverCoursesResponse,
+    DiscoveryStatusResponse,
     ForumBoard,
     ForumBoardCreateRequest,
     ForumBoardThreadsResponse,
@@ -239,6 +245,16 @@ def _clear_session_cookie(response: Response, *, settings: Settings) -> None:
         secure=_secure_cookie(settings),
         samesite=_samesite_cookie(settings),
         path="/",
+    )
+
+
+def _discovery_status_schema(status: DiscoveryStatus) -> DiscoveryStatusResponse:
+    return DiscoveryStatusResponse(
+        status=status.status,
+        started_at=status.started_at,
+        finished_at=status.finished_at,
+        error=status.error,
+        course_count=status.course_count,
     )
 
 
@@ -556,6 +572,11 @@ def create_app(
             router=BrowserStateRouter(settings),
         )
     )
+    application.state.discovery_manager = CourseDiscoveryManager(
+        auth_store=resolved_auth_store,
+        course_store=application.state.course_store,
+        settings=settings,
+    )
 
     cors_origins, cors_regex = _cors_settings(settings)
     application.add_middleware(
@@ -814,6 +835,26 @@ def create_app(
             total_cost_usd=report.total_cost_usd,
             error=report.error,
         )
+
+    @application.post("/courses/discover/start", response_model=DiscoveryStatusResponse)
+    async def courses_discover_start(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> DiscoveryStatusResponse:
+        manager: CourseDiscoveryManager = request.app.state.discovery_manager
+        try:
+            status = manager.start(user)
+        except BrowserStateMissingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return _discovery_status_schema(status)
+
+    @application.get("/courses/discover/status", response_model=DiscoveryStatusResponse)
+    def courses_discover_status(
+        request: Request,
+        user: UserRecord = Depends(_current_user),
+    ) -> DiscoveryStatusResponse:
+        manager: CourseDiscoveryManager = request.app.state.discovery_manager
+        return _discovery_status_schema(manager.status(user))
 
     @application.get("/forum", response_model=ForumIndexResponse)
     def forum_index(
