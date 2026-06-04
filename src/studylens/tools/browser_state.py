@@ -4,6 +4,7 @@ import argparse
 import asyncio
 from pathlib import Path
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
 
 from studylens.api.browser_state import DEFAULT_BROWSER_STATE_STEPS
@@ -14,10 +15,20 @@ DEFAULT_BACKEND_URL = "https://studylens-production.up.railway.app"
 async def save_browser_state(output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(
-            headless=False,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
+        try:
+            browser = await playwright.chromium.launch(
+                headless=False,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+        except PlaywrightError as exc:
+            message = str(exc).lower()
+            if "executable doesn't exist" in message or "playwright install" in message:
+                raise SystemExit(
+                    "Playwright's browser isn't installed yet. Run:\n"
+                    "    uv run playwright install chromium\n"
+                    "then re-run this command."
+                ) from exc
+            raise
         context = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -64,12 +75,27 @@ def push_user_browser_state() -> None:
     import getpass
     import json
     import os
+    import sys
 
     import httpx
 
+    def _prompt(label: str) -> str:
+        # Write+flush the prompt to stdout ourselves, then read, so the prompt
+        # always shows before we block. getpass writes its prompt to /dev/tty,
+        # which can race ahead of a buffered stdout prompt (e.g. under `uv run`)
+        # and print the username and password prompts together on one line.
+        sys.stdout.write(label)
+        sys.stdout.flush()
+        return sys.stdin.readline().strip()
+
     backend = (os.environ.get("STUDYLENS_BACKEND_URL") or DEFAULT_BACKEND_URL).rstrip("/")
-    username = os.environ.get("STUDYLENS_USERNAME") or input("StudyLens username: ").strip()
-    password = os.environ.get("STUDYLENS_PASSWORD") or getpass.getpass("StudyLens password: ")
+
+    username = os.environ.get("STUDYLENS_USERNAME") or _prompt("StudyLens username: ")
+    password = os.environ.get("STUDYLENS_PASSWORD")
+    if not password:
+        sys.stdout.write("StudyLens password: ")
+        sys.stdout.flush()
+        password = getpass.getpass("")  # empty prompt: we already printed it above
     if not username or not password:
         raise SystemExit("StudyLens username and password are both required.")
 
