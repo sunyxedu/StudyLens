@@ -898,6 +898,82 @@ textarea:focus {
   transition: background 130ms, box-shadow 130ms, transform 110ms;
 }
 
+/* ── Focus, hover, reduced-motion, responsive ─────────────────────────── */
+
+/* Input focus */
+#view-login .field input:focus {
+  outline: none;
+  border-color: var(--green, #2e5d4d);
+  box-shadow: 0 0 0 3px rgba(46, 93, 77, .12);
+}
+
+/* Submit hover/active */
+#view-login #login-submit:hover {
+  background: var(--green-deep, #264c3f);
+  box-shadow: 0 14px 28px -14px rgba(46, 109, 84, .9);
+  transform: translateY(-1px);
+}
+
+#view-login #login-submit:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 14px -8px rgba(46, 109, 84, .8);
+}
+
+/* Feature chip hover */
+.login-feature-chip {
+  transition: background 130ms, box-shadow 130ms;
+}
+
+/* Responsive: stack to single column ≤900px */
+@media (max-width: 900px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 88px 24px 48px;
+    gap: 36px;
+  }
+
+  .login-left {
+    max-width: none;
+  }
+
+  .login-brand {
+    left: 24px;
+  }
+
+  #view-login .login-panel {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .login-headline {
+    font-size: clamp(30px, 8vw, 44px);
+  }
+}
+
+/* Very narrow: hide feature list, keep headline + sub */
+@media (max-width: 480px) {
+  .login-features {
+    display: none;
+  }
+
+  .login-layout {
+    padding: 80px 16px 40px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .login-bg,
+  #view-login .field input,
+  #view-login #login-submit,
+  #view-login .auth-mode-switch .segment,
+  .login-feature-chip {
+    transition: none !important;
+  }
+}
+
 .latex-output {
   min-height: 360px;
   max-height: 56vh;
