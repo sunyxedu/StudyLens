@@ -855,6 +855,49 @@ textarea:focus {
   box-shadow: 0 6px 14px -8px rgba(176, 106, 53, .75);
 }
 
+/* ── Card fields ──────────────────────────────────────────────────────── */
+
+#view-login .login-grid {
+  gap: 14px;
+}
+
+#view-login .field > span {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #23282a);
+  margin-bottom: 5px;
+}
+
+#view-login .field input {
+  background: #fff;
+  border: 1px solid var(--line, #efe7d6);
+  border-radius: 11px;
+  padding: 11px 13px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 14.5px;
+  color: var(--ink, #23282a);
+  min-height: 44px;
+  transition: border-color 130ms, box-shadow 130ms;
+}
+
+/* ── Submit button ────────────────────────────────────────────────────── */
+
+#view-login #login-submit {
+  background: var(--green-btn, #2e6d54);
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  padding: 13px 26px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: 0 10px 22px -12px rgba(46, 109, 84, .85);
+  transition: background 130ms, box-shadow 130ms, transform 110ms;
+}
+
 .latex-output {
   min-height: 360px;
   max-height: 56vh;
