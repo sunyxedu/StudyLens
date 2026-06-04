@@ -1074,7 +1074,6 @@ def create_app(
             course_id=payload.course_id,
             course_title=payload.course_title,
             scope_notes=payload.scope_notes,
-            question_count=payload.question_count,
             top_k=payload.top_k,
         )
         return GeneratedLatexResponse(latex=latex)

@@ -59,7 +59,7 @@ def test_cheatsheet_generator_wraps_latex_and_includes_scope_notes() -> None:
     assert provider.requests[0][1] is None
 
 
-def test_predicted_exam_generator_mentions_question_count_and_scope() -> None:
+def test_predicted_exam_generator_infers_structure_from_papers_and_notes() -> None:
     llm = RecordingLLM()
     provider = RecordingContextProvider()
     generator = PredictedExamGenerator(context_provider=provider, llm=llm)
@@ -68,13 +68,21 @@ def test_predicted_exam_generator_mentions_question_count_and_scope() -> None:
         course_id="COMP70001",
         course_title="Advanced Algorithms",
         scope_notes=["Only weeks 1-8 are examinable."],
-        question_count=3,
     )
 
+    prompt = llm.prompts[0]
     assert "Predicted Paper" in latex
-    assert "Produce 3 substantial questions" in llm.prompts[0]
-    assert "Only weeks 1-8" in llm.prompts[0]
-    assert provider.requests[0][1] is None
+    assert "Inferred past-paper format" in prompt
+    assert "typical number of questions" in prompt
+    assert "main question types" in prompt
+    assert "Do not ask for, assume, or mention a user-specified question count" in prompt
+    assert "Lecture-note context" in prompt
+    assert "Only weeks 1-8" in prompt
+    assert provider.requests == [
+        ("COMP70001", {"past_exam"}, 90_000),
+        ("COMP70001", {"material", "transcript"}, 70_000),
+        ("COMP70001", {"exercise", "tutorial"}, 30_000),
+    ]
 
 
 def test_cheatsheet_generator_auto_pulls_local_edstem_scope_notes() -> None:

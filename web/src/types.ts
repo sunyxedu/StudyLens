@@ -139,9 +139,7 @@ export interface GenerateRequest {
   top_k: number;
 }
 
-export interface PredictedExamRequest extends GenerateRequest {
-  question_count: number;
-}
+export type PredictedExamRequest = GenerateRequest;
 
 export interface DiscoveredCourse {
   code: string;

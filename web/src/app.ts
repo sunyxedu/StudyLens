@@ -148,8 +148,6 @@ const elements = {
   // Generate tab
   modeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".segment[data-mode]")),
   scopeNotes: byId<HTMLTextAreaElement>("scope-notes"),
-  questionCountField: byId<HTMLElement>("question-count-field"),
-  questionCount: byId<HTMLInputElement>("question-count"),
   generateSubmit: byId<HTMLButtonElement>("generate-submit"),
   downloadLatex: byId<HTMLButtonElement>("download-latex"),
   generateStatus: byId<HTMLSpanElement>("generate-status"),
@@ -2739,10 +2737,7 @@ async function handleGenerate(): Promise<void> {
     const response =
       generationMode === "cheatsheet"
         ? await api.generateCheatsheet(base)
-        : await api.generatePredictedExam({
-            ...base,
-            question_count: numeric(elements.questionCount.value, 4),
-          });
+        : await api.generatePredictedExam(base);
     latestLatex = response.latex;
     elements.latexOutput.textContent = latestLatex;
     elements.downloadLatex.disabled = false;
@@ -2771,7 +2766,6 @@ function setGenerationMode(mode: "cheatsheet" | "exam"): void {
   elements.modeButtons.forEach((button) =>
     button.classList.toggle("active", button.dataset.mode === mode)
   );
-  elements.questionCountField.classList.toggle("hidden", mode !== "exam");
 
   // Restore the new mode's state.
   const saved = generateModeState[mode];

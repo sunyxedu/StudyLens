@@ -151,7 +151,7 @@ class GenerateRequest(BaseModel):
 
 
 class PredictedExamRequest(GenerateRequest):
-    question_count: int = Field(default=4, ge=1, le=8)
+    pass
 
 
 class GeneratedLatexResponse(BaseModel):

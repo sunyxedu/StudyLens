@@ -247,7 +247,6 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
     course_title: "Advanced Algorithms",
     scope_notes: [],
     top_k: 40,
-    question_count: 4,
   })).latex, /documentclass/);
 
   const callFor = (path) => calls.find((call) => String(call.input).endsWith(path));
@@ -261,6 +260,8 @@ test("StudyLensApi posts index, ask, retrieve, and generation payloads", async (
   assert.equal(JSON.parse(callFor("/forum/boards").init.body).category_id, 1);
   assert.equal(JSON.parse(callFor("/forum/threads").init.body).title, "Eigenvectors");
   assert.equal(JSON.parse(callFor("/ask").init.body).include_exercises, true);
+  const predictedExamBody = JSON.parse(callFor("/generate/predicted-exam").init.body);
+  assert.equal("question_count" in predictedExamBody, false);
 });
 
 test("StudyLensApi surfaces backend errors", async () => {

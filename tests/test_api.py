@@ -628,7 +628,6 @@ def test_generation_endpoints_return_latex(tmp_path: Path) -> None:
         json={
             "course_id": "COMP70001",
             "course_title": "Advanced Algorithms",
-            "question_count": 2,
         },
     )
 
