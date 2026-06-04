@@ -827,7 +827,21 @@ function showForumPanel(panel: "home" | "category" | "board" | "thread"): void {
 function renderForumBreadcrumb(panel: "home" | "category" | "board" | "thread"): void {
   const frag = document.createDocumentFragment();
 
+  // Always-present "← My Courses" exit button
+  const courses = document.createElement("button");
+  courses.type = "button";
+  courses.className = "forum-back-pill forum-back-pill--courses";
+  courses.textContent = "← My Courses";
+  courses.addEventListener("click", showCoursesPage);
+  frag.appendChild(courses);
+
   if (panel !== "home") {
+    const sep0 = document.createElement("span");
+    sep0.className = "forum-bc-sep";
+    sep0.setAttribute("aria-hidden", "true");
+    sep0.textContent = "·";
+    frag.appendChild(sep0);
+
     const back = document.createElement("button");
     back.type = "button";
     back.className = "forum-back-pill";
@@ -843,6 +857,12 @@ function renderForumBreadcrumb(panel: "home" | "category" | "board" | "thread"):
     sep.setAttribute("aria-hidden", "true");
     sep.textContent = "·";
     frag.appendChild(sep);
+  } else {
+    const sep0 = document.createElement("span");
+    sep0.className = "forum-bc-sep";
+    sep0.setAttribute("aria-hidden", "true");
+    sep0.textContent = "·";
+    frag.appendChild(sep0);
   }
 
   type BcSeg = { label: string; action?: () => void };

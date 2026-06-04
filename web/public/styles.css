@@ -2035,6 +2035,17 @@ textarea:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent);
 }
 
+.forum-back-pill--courses {
+  color: var(--muted-2);
+  font-weight: 500;
+}
+
+.forum-back-pill--courses:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+  box-shadow: none;
+}
+
 .forum-bc-sep {
   color: var(--muted-2);
   font-size: 12px;
