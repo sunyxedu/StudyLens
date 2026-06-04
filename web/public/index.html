@@ -141,118 +141,93 @@
         </section>
 
         <!-- ── Forum ───────────────────────────────────────────── -->
-        <section class="view" id="view-forum" aria-labelledby="forum-title">
+        <section class="view" id="view-forum" aria-labelledby="forum-page-title">
           <div class="forum-page">
-            <div class="forum-header">
-              <button id="forum-back" class="back-btn" type="button">← Courses</button>
-              <div class="forum-title-group">
-                <h1 id="forum-title" class="forum-title">Forum</h1>
-                <span id="forum-role" class="subtle"></span>
+
+            <!-- Breadcrumb: Back pill + trail -->
+            <nav id="forum-breadcrumb" class="forum-breadcrumb" aria-label="Forum navigation"></nav>
+
+            <!-- Page head: eyebrow + h1 + status -->
+            <header class="forum-page-head">
+              <div class="forum-page-title-group">
+                <span id="forum-eyebrow" class="forum-eyebrow"></span>
+                <h1 id="forum-page-title" class="forum-title">Forum</h1>
               </div>
-              <div class="forum-header-actions">
-                <button id="forum-refresh" class="button secondary" type="button">Refresh</button>
+              <div class="forum-page-actions">
                 <span id="forum-status" class="status courses-status-mono"></span>
               </div>
-            </div>
+            </header>
 
-            <div class="forum-layout">
-              <aside class="forum-rail">
-                <form id="forum-category-form" class="forum-form hidden">
-                  <div class="forum-form-head">
-                    <span class="forum-form-title">New Subject</span>
-                    <span class="forum-chip admin">Admin</span>
-                  </div>
-                  <label class="field">
-                    <span>Name</span>
-                    <input id="forum-category-name" maxlength="80" />
-                  </label>
-                  <label class="field">
-                    <span>Description</span>
-                    <textarea id="forum-category-description" rows="3" maxlength="300"></textarea>
-                  </label>
-                  <label class="compact-field forum-color-field">
-                    <span>Color</span>
-                    <input id="forum-category-color" type="color" value="#566884" />
-                  </label>
-                  <button id="forum-category-submit" class="button primary" type="submit">Create</button>
-                </form>
+            <!-- Panels (one visible at a time) -->
+            <section id="forum-home"          class="forum-panel" aria-label="Forum home"></section>
+            <section id="forum-category-view" class="forum-panel hidden"></section>
+            <section id="forum-board-view"    class="forum-panel hidden"></section>
+            <section id="forum-thread-view"   class="forum-panel hidden"></section>
 
-                <form id="forum-board-form" class="forum-form">
-                  <div class="forum-form-head">
-                    <span class="forum-form-title">New Sub-board</span>
-                  </div>
-                  <label class="field">
-                    <span>Subject</span>
-                    <select id="forum-board-category"></select>
-                  </label>
-                  <label class="field">
-                    <span>Name</span>
-                    <input id="forum-board-name" maxlength="90" />
-                  </label>
-                  <label class="field">
-                    <span>Description</span>
-                    <textarea id="forum-board-description" rows="3" maxlength="360"></textarea>
-                  </label>
-                  <button id="forum-board-submit" class="button primary" type="submit">Create</button>
-                </form>
-
-                <nav id="forum-nav" class="forum-nav" aria-label="Forum boards"></nav>
-              </aside>
-
-              <section class="forum-content">
-                <section id="forum-home" class="forum-panel"></section>
-
-                <section id="forum-board-view" class="forum-panel hidden">
-                  <div class="forum-board-head">
-                    <div>
-                      <span id="forum-board-meta" class="forum-kicker"></span>
-                      <h2 id="forum-board-title"></h2>
-                    </div>
-                  </div>
-
-                  <form id="forum-thread-form" class="forum-composer">
-                    <div class="forum-composer-grid">
-                      <label class="field">
-                        <span>Title</span>
-                        <input id="forum-thread-title" maxlength="140" />
+            <!-- Compose overlay -->
+            <div id="forum-compose" class="forum-compose hidden" role="dialog" aria-modal="true" aria-label="New post">
+              <div class="forum-compose-bar">
+                <button id="forum-compose-cancel" class="forum-compose-nav-btn" type="button">Cancel</button>
+                <span class="forum-compose-bar-title">New post</span>
+                <button id="forum-compose-submit" class="button primary forum-compose-submit-btn" type="button" disabled>Post</button>
+              </div>
+              <div class="forum-compose-scroll">
+                <div class="forum-compose-inner">
+                  <div class="forum-compose-target">
+                    <span class="forum-compose-posting-label">Posting to</span>
+                    <div class="forum-compose-selects">
+                      <label class="compact-field">
+                        <span>Subject</span>
+                        <select id="forum-compose-category-sel"></select>
                       </label>
-                      <label class="field forum-course-field">
-                        <span>Course Code</span>
-                        <input id="forum-thread-course" maxlength="32" placeholder="Optional" />
+                      <span class="forum-compose-arrow" aria-hidden="true">›</span>
+                      <label class="compact-field forum-board-picker-label">
+                        <span>Sub-board</span>
+                        <div class="forum-board-picker" id="forum-board-picker">
+                          <div class="forum-board-picker-wrap">
+                            <svg class="forum-board-picker-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input id="forum-board-picker-input" class="forum-board-picker-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search boards…" aria-haspopup="listbox" aria-autocomplete="list" />
+                          </div>
+                          <ul id="forum-board-picker-menu" class="forum-board-picker-menu hidden" role="listbox" aria-label="Boards"></ul>
+                          <p id="forum-board-picker-error" class="forum-board-picker-error hidden" aria-live="polite"></p>
+                        </div>
                       </label>
                     </div>
-                    <label class="field large">
-                      <span>Post</span>
-                      <textarea id="forum-thread-body" rows="4" maxlength="8000" placeholder="Question, working, notes…"></textarea>
-                    </label>
-                    <div class="actions">
-                      <button id="forum-thread-submit" class="button primary" type="submit">Post</button>
-                    </div>
-                  </form>
+                  </div>
+                  <label class="field">
+                    <span>Title</span>
+                    <input id="forum-compose-title" maxlength="140" placeholder="What's your question?" />
+                  </label>
+                  <label class="field large">
+                    <span>Post</span>
+                    <div id="forum-compose-body"
+                         class="forum-mention-editor"
+                         role="textbox"
+                         aria-multiline="true"
+                         contenteditable="true"
+                         data-placeholder="Question, working, notes… Mention @dylen to ask the course assistant"></div>
+                  </label>
 
-                  <section id="forum-board-threads" class="forum-thread-list"></section>
-                </section>
-
-                <section id="forum-thread-view" class="forum-panel hidden">
-                  <button id="forum-thread-back" class="back-btn forum-thread-back" type="button">← Board</button>
-                  <article class="forum-thread-article">
-                    <span id="forum-thread-meta" class="forum-kicker"></span>
-                    <h2 id="forum-thread-title-view"></h2>
-                    <div id="forum-thread-body-view" class="forum-thread-body"></div>
-                  </article>
-                  <section id="forum-replies" class="forum-replies"></section>
-                  <form id="forum-reply-form" class="forum-composer forum-reply-composer">
-                    <label class="field large">
-                      <span>Reply</span>
-                      <textarea id="forum-reply-body" rows="3" maxlength="8000" placeholder="Add your reply…"></textarea>
+                  <div class="forum-compose-toggles forum-compose-toggles--single">
+                    <label class="forum-toggle-row">
+                      <div class="forum-toggle-info">
+                        <span class="forum-toggle-name">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                          Anonymous
+                        </span>
+                        <span class="forum-toggle-desc">Hide your name from other students</span>
+                      </div>
+                      <input id="forum-compose-anon" type="checkbox" class="forum-toggle-input" />
                     </label>
-                    <div class="actions">
-                      <button id="forum-reply-submit" class="button primary" type="submit">Reply</button>
-                    </div>
-                  </form>
-                </section>
-              </section>
+                  </div>
+                  <div class="actions forum-compose-footer">
+                    <button id="forum-compose-cancel-2" class="button secondary" type="button">Cancel</button>
+                    <button id="forum-compose-submit-2" class="button primary" type="button" disabled>Post</button>
+                  </div>
+                </div>
+              </div>
             </div>
+
           </div>
         </section>
 

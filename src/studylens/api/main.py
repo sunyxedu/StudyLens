@@ -294,6 +294,7 @@ def _forum_thread_summary_schema(record: ForumThreadSummaryRecord) -> ForumThrea
         course_id=record.course_id,
         author_username=record.author_username,
         author_role=record.author_role,
+        is_anonymous=record.is_anonymous,
         reply_count=record.reply_count,
         dylen_replied=record.dylen_replied,
         created_at=record.created_at,
@@ -308,6 +309,7 @@ def _forum_reply_schema(record: ForumReplyRecord) -> ForumReply:
         thread_id=record.thread_id,
         author_username=record.author_username,
         author_role=record.author_role,
+        is_anonymous=record.is_anonymous,
         body=record.body,
         citations=record.citations,
         created_at=record.created_at,
@@ -328,6 +330,7 @@ def _forum_thread_schema(record: ForumThreadRecord) -> ForumThread:
             author_id=record.author_id,
             author_username=record.author_username,
             author_role=record.author_role,
+            is_anonymous=record.is_anonymous,
             reply_count=record.reply_count,
             dylen_replied=record.dylen_replied,
             created_at=record.created_at,
@@ -371,16 +374,44 @@ def _mentions_dylen(text: str) -> bool:
     return DYLEN_MENTION_RE.search(text) is not None
 
 
+def _infer_course_id(board_name: str, courses: list[CourseRecord]) -> str | None:
+    """Infer a course_id from the board name.
+
+    Two rules, applied in order (first match wins):
+    1. Board name contains a course code  (case-insensitive substring).
+    2. Board name exactly equals a course title (case-insensitive full match).
+    """
+    name = board_name.strip().lower()
+    for course in courses:
+        if course.code.lower() in name:
+            return course.code
+    for course in courses:
+        if course.title.strip().lower() == name:
+            return course.code
+    return None
+
+
 def _dylen_question(thread: ForumThreadRecord, latest_text: str) -> str:
-    parts = [
-        "A student mentioned @dylen in the StudyLens forum.",
+    meta = [
         f"Subject: {thread.category_name}",
         f"Sub-board: {thread.board_name}",
-        f"Thread: {thread.title}",
-        f"Original post:\n{thread.body}",
+        f"Thread title: {thread.title}",
     ]
-    if latest_text != thread.body:
-        parts.append(f"Latest reply:\n{latest_text}")
+    is_reply = latest_text != thread.body
+    if is_reply:
+        parts = [
+            "A student mentioned @dylen in a reply to a forum thread. "
+            "Answer the reply's question; use the original post only as background context.",
+            *meta,
+            f"Reply (answer this):\n{latest_text}",
+            f"Original post (context only):\n{thread.body}",
+        ]
+    else:
+        parts = [
+            "A student mentioned @dylen in a new forum post.",
+            *meta,
+            f"Post:\n{thread.body}",
+        ]
     return "\n\n".join(parts)
 
 
@@ -389,13 +420,22 @@ def _maybe_add_dylen_reply(
     request: Request,
     thread: ForumThreadRecord,
     latest_text: str,
+    user: UserRecord,
 ) -> ForumThreadRecord:
     if not _mentions_dylen(latest_text):
         return thread
+    # Resolve course_id: use stored value, or infer from board name
+    course_id = thread.course_id
+    if not course_id:
+        try:
+            course_store: CourseStore = request.app.state.course_store
+            course_id = _infer_course_id(thread.board_name, course_store.list_all(user_id=user.id))
+        except Exception:
+            pass
     try:
         answer = _service(request).answer(
             _dylen_question(thread, latest_text),
-            course_id=thread.course_id,
+            course_id=course_id,
             top_k=6,
             include_exercises=False,
         )
@@ -858,6 +898,7 @@ def create_app(
                 author_id=user.id,
                 author_username=user.username,
                 author_role=_forum_role(user, settings),
+                anonymous=payload.anonymous,
             )
         except ForumStoreError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -866,6 +907,7 @@ def create_app(
                 request=request,
                 thread=thread,
                 latest_text=payload.body,
+                user=user,
             )
         )
 
@@ -895,6 +937,7 @@ def create_app(
                 author_id=user.id,
                 author_username=user.username,
                 author_role=_forum_role(user, settings),
+                anonymous=payload.anonymous,
             )
         except ForumStoreError as exc:
             status_code = 404 if str(exc) == "thread not found" else 400
@@ -907,6 +950,7 @@ def create_app(
                 request=request,
                 thread=thread,
                 latest_text=payload.body,
+                user=user,
             )
         )
 
