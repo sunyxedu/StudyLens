@@ -175,6 +175,15 @@ let currentCourse: DiscoveredCourse | null = null;
 let authSession: AuthSession | null = null;
 let authMode: "register" | "login" = "register";
 const selectedCourseCodes = new Set<string>();
+type CourseProcessingState = "processing" | "checking" | "failed";
+interface PersistedCourseProcessing {
+  state: CourseProcessingState;
+  updatedAt: string;
+}
+const COURSE_PROCESSING_STORAGE_KEY = "studylens.course.processing.v1";
+const courseProcessingState = new Map<string, PersistedCourseProcessing>(
+  loadPersistedCourseProcessing()
+);
 let forumData: ForumIndexResponse | null = null;
 let currentForumCategory: ForumCategoryWithBoards | null = null;
 let currentForumBoard: ForumBoard | null = null;
@@ -642,6 +651,7 @@ async function loadCachedCourses(): Promise<void> {
     const { courses } = await api.listCourses();
     if (courses.length === 0) return;
     discoveredCourses = courses;
+    reconcilePersistedCourseProcessing(courses);
     selectedCourseCodes.clear();
     renderCourseList();
     const latest = courses.reduce<string | null>(
@@ -650,6 +660,7 @@ async function loadCachedCourses(): Promise<void> {
     );
     updateCoursesSummary(0, latest);
     updateCoursesActions();
+    updatePersistedProcessingStatus();
   } catch (error) {
     handleAuthRequired(error);
   }
@@ -766,6 +777,10 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
 
   body.append(head, titleEl, foot);
   li.append(bar, body);
+  const persisted = courseProcessingState.get(course.code);
+  if (persisted && !course.indexed_at) {
+    applyCardProcessing(li, course.code, persisted.state);
+  }
   return li;
 }
 
@@ -2147,6 +2162,7 @@ async function handleIndexSelected(): Promise<void> {
 
   // Show processing state on each target card
   targets.forEach((c) => setCardProcessing(c.code, "processing"));
+  updatePersistedProcessingStatus();
 
   const queue = [...targets];
   let completed = 0;
@@ -2189,13 +2205,27 @@ async function handleIndexSelected(): Promise<void> {
   } finally {
     elements.coursesIndex.disabled = selectedCourseCodes.size === 0;
     elements.coursesSelectAll.disabled = false;
+    updatePersistedProcessingStatus();
   }
 }
 
-function setCardProcessing(code: string, state: "processing" | "checking" | "done" | "failed", ts?: string): void {
+function setCardProcessing(
+  code: string,
+  state: CourseProcessingState | "done",
+  ts?: string,
+): void {
+  persistCourseProcessing(code, state);
   const card = elements.coursesList.querySelector<HTMLElement>(`[data-code="${code}"]`);
   if (!card) return;
+  applyCardProcessing(card, code, state, ts);
+}
 
+function applyCardProcessing(
+  card: HTMLElement,
+  code: string,
+  state: CourseProcessingState | "done",
+  ts?: string,
+): void {
   const meta = card.querySelector<HTMLElement>("[data-role='meta']");
   const badge = card.querySelector<HTMLElement>("[data-role='badge']");
   const foot = card.querySelector<HTMLElement>(".ccard-foot");
@@ -2223,6 +2253,72 @@ function setCardProcessing(code: string, state: "processing" | "checking" | "don
     if (meta) meta.innerHTML = `<span style="color:var(--danger)">✗ Failed</span>`;
     if (badge) { badge.className = "ccard-badge ccard-badge--pending"; badge.textContent = "Failed"; }
   }
+}
+
+function persistCourseProcessing(
+  code: string,
+  state: CourseProcessingState | "done",
+): void {
+  if (state === "done") {
+    courseProcessingState.delete(code);
+  } else {
+    courseProcessingState.set(code, {
+      state,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  savePersistedCourseProcessing();
+}
+
+function loadPersistedCourseProcessing(): [string, PersistedCourseProcessing][] {
+  try {
+    const raw = localStorage.getItem(COURSE_PROCESSING_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Record<string, Partial<PersistedCourseProcessing>>;
+    return Object.entries(parsed).flatMap(([code, value]) => {
+      if (!isCourseProcessingState(value.state)) return [];
+      return [[code, { state: value.state, updatedAt: String(value.updatedAt || "") }]];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function savePersistedCourseProcessing(): void {
+  if (courseProcessingState.size === 0) {
+    localStorage.removeItem(COURSE_PROCESSING_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(
+    COURSE_PROCESSING_STORAGE_KEY,
+    JSON.stringify(Object.fromEntries(courseProcessingState)),
+  );
+}
+
+function reconcilePersistedCourseProcessing(courses: DiscoveredCourse[]): void {
+  let changed = false;
+  for (const course of courses) {
+    if (course.indexed_at && courseProcessingState.delete(course.code)) {
+      changed = true;
+    }
+  }
+  if (changed) savePersistedCourseProcessing();
+}
+
+function updatePersistedProcessingStatus(): void {
+  const activeCount = Array.from(courseProcessingState.values()).filter(
+    (item) => item.state !== "failed",
+  ).length;
+  if (activeCount > 0) {
+    setStatus(
+      elements.coursesStatus,
+      `${activeCount} course${activeCount === 1 ? "" : "s"} processing`,
+    );
+  }
+}
+
+function isCourseProcessingState(value: unknown): value is CourseProcessingState {
+  return value === "processing" || value === "checking" || value === "failed";
 }
 
 function createProgressRow(code: string, title: string, status: ProgressStatus): HTMLLIElement {
