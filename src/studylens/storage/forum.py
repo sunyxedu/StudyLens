@@ -86,6 +86,7 @@ class ForumThreadSummaryRecord:
     author_id: int
     author_username: str
     author_role: ForumRole
+    is_anonymous: bool
     reply_count: int
     dylen_replied: bool
     created_at: str
@@ -100,6 +101,7 @@ class ForumReplyRecord:
     author_id: int | None
     author_username: str
     author_role: ForumRole
+    is_anonymous: bool
     body: str
     citations: list[Citation]
     created_at: str
@@ -118,6 +120,7 @@ class ForumThreadRecord:
     author_id: int
     author_username: str
     author_role: ForumRole
+    is_anonymous: bool
     reply_count: int
     dylen_replied: bool
     created_at: str
@@ -236,6 +239,7 @@ def _board_from_row(row: sqlite3.Row) -> ForumBoardRecord:
 
 
 def _thread_summary_from_row(row: sqlite3.Row) -> ForumThreadSummaryRecord:
+    is_anon = bool(row["is_anonymous"])
     return ForumThreadSummaryRecord(
         id=int(row["id"]),
         board_id=int(row["board_id"]),
@@ -246,8 +250,9 @@ def _thread_summary_from_row(row: sqlite3.Row) -> ForumThreadSummaryRecord:
         body_preview=_body_preview(str(row["body"])),
         course_id=row["course_id"],
         author_id=int(row["author_id"]),
-        author_username=str(row["author_username"]),
+        author_username="Anonymous" if is_anon else str(row["author_username"]),
         author_role=row["author_role"],
+        is_anonymous=is_anon,
         reply_count=int(row["reply_count"]),
         dylen_replied=bool(row["dylen_replied"]),
         created_at=str(row["created_at"]),
@@ -257,12 +262,14 @@ def _thread_summary_from_row(row: sqlite3.Row) -> ForumThreadSummaryRecord:
 
 
 def _reply_from_row(row: sqlite3.Row) -> ForumReplyRecord:
+    is_anon = bool(row["is_anonymous"])
     return ForumReplyRecord(
         id=int(row["id"]),
         thread_id=int(row["thread_id"]),
         author_id=row["author_id"],
-        author_username=str(row["author_username"]),
+        author_username="Anonymous" if is_anon else str(row["author_username"]),
         author_role=row["author_role"],
+        is_anonymous=is_anon,
         body=str(row["body"]),
         citations=_citations_from_json(row["citations_json"]),
         created_at=str(row["created_at"]),
@@ -336,6 +343,7 @@ class ForumStore:
                     author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     author_username TEXT NOT NULL,
                     author_role TEXT NOT NULL,
+                    is_anonymous INTEGER NOT NULL DEFAULT 0,
                     reply_count INTEGER NOT NULL DEFAULT 0,
                     dylen_replied INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
@@ -352,12 +360,22 @@ class ForumStore:
                     author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
                     author_username TEXT NOT NULL,
                     author_role TEXT NOT NULL,
+                    is_anonymous INTEGER NOT NULL DEFAULT 0,
                     body TEXT NOT NULL,
                     citations_json TEXT,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            # Migration: add is_anonymous to existing tables
+            for stmt in (
+                "ALTER TABLE forum_threads ADD COLUMN is_anonymous INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE forum_replies ADD COLUMN is_anonymous INTEGER NOT NULL DEFAULT 0",
+            ):
+                try:
+                    connection.execute(stmt)
+                except Exception:
+                    pass  # column already exists
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_forum_boards_category
@@ -528,6 +546,7 @@ class ForumStore:
         author_id: int,
         author_username: str,
         author_role: ForumRole,
+        anonymous: bool = False,
     ) -> ForumThreadRecord:
         clean_title = _clean_text(title, "title", max_length=140)
         clean_body = _clean_text(body, "body", max_length=8000, min_length=3)
@@ -544,9 +563,9 @@ class ForumStore:
                 """
                 INSERT INTO forum_threads (
                     board_id, title, body, course_id, author_id, author_username,
-                    author_role, created_at, updated_at, latest_activity_at
+                    author_role, is_anonymous, created_at, updated_at, latest_activity_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     board_id,
@@ -556,6 +575,7 @@ class ForumStore:
                     author_id,
                     author_username,
                     author_role,
+                    1 if anonymous else 0,
                     timestamp,
                     timestamp,
                     timestamp,
@@ -586,6 +606,7 @@ class ForumStore:
                     (thread_id,),
                 ).fetchall()
             ]
+        is_anon = bool(row["is_anonymous"])
         return ForumThreadRecord(
             id=int(row["id"]),
             board_id=int(row["board_id"]),
@@ -596,8 +617,9 @@ class ForumStore:
             body=str(row["body"]),
             course_id=row["course_id"],
             author_id=int(row["author_id"]),
-            author_username=str(row["author_username"]),
+            author_username="Anonymous" if is_anon else str(row["author_username"]),
             author_role=row["author_role"],
+            is_anonymous=is_anon,
             reply_count=int(row["reply_count"]),
             dylen_replied=bool(row["dylen_replied"]),
             created_at=str(row["created_at"]),
@@ -615,6 +637,7 @@ class ForumStore:
         author_username: str,
         author_role: ForumRole,
         citations: list[Citation] | None = None,
+        anonymous: bool = False,
     ) -> ForumReplyRecord:
         clean_body = _clean_text(body, "body", max_length=8000, min_length=1)
         timestamp = _now()
@@ -629,15 +652,16 @@ class ForumStore:
                 """
                 INSERT INTO forum_replies (
                     thread_id, author_id, author_username, author_role,
-                    body, citations_json, created_at
+                    is_anonymous, body, citations_json, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     thread_id,
                     author_id,
                     author_username,
                     author_role,
+                    1 if anonymous else 0,
                     clean_body,
                     _citations_to_json(citations),
                     timestamp,

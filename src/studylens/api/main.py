@@ -294,6 +294,7 @@ def _forum_thread_summary_schema(record: ForumThreadSummaryRecord) -> ForumThrea
         course_id=record.course_id,
         author_username=record.author_username,
         author_role=record.author_role,
+        is_anonymous=record.is_anonymous,
         reply_count=record.reply_count,
         dylen_replied=record.dylen_replied,
         created_at=record.created_at,
@@ -308,6 +309,7 @@ def _forum_reply_schema(record: ForumReplyRecord) -> ForumReply:
         thread_id=record.thread_id,
         author_username=record.author_username,
         author_role=record.author_role,
+        is_anonymous=record.is_anonymous,
         body=record.body,
         citations=record.citations,
         created_at=record.created_at,
@@ -328,6 +330,7 @@ def _forum_thread_schema(record: ForumThreadRecord) -> ForumThread:
             author_id=record.author_id,
             author_username=record.author_username,
             author_role=record.author_role,
+            is_anonymous=record.is_anonymous,
             reply_count=record.reply_count,
             dylen_replied=record.dylen_replied,
             created_at=record.created_at,
@@ -895,6 +898,7 @@ def create_app(
                 author_id=user.id,
                 author_username=user.username,
                 author_role=_forum_role(user, settings),
+                anonymous=payload.anonymous,
             )
         except ForumStoreError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -933,6 +937,7 @@ def create_app(
                 author_id=user.id,
                 author_username=user.username,
                 author_role=_forum_role(user, settings),
+                anonymous=payload.anonymous,
             )
         except ForumStoreError as exc:
             status_code = 404 if str(exc) == "thread not found" else 400

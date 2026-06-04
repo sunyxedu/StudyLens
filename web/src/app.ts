@@ -1356,8 +1356,8 @@ function createForumThreadRow(thread: ForumThreadSummary): HTMLElement {
   const metaLine = document.createElement("div");
   metaLine.className = "forum-thread-row-meta";
   const isStaff = thread.author_role === "admin";
-  let authorHtml = thread.author_username;
-  if (isStaff) authorHtml += ` <span class="forum-chip forum-chip--staff">STAFF</span>`;
+  let authorHtml = thread.is_anonymous ? "🎭 Anonymous" : thread.author_username;
+  if (isStaff && !thread.is_anonymous) authorHtml += ` <span class="forum-chip forum-chip--staff">STAFF</span>`;
   metaLine.innerHTML = `${authorHtml} <span class="forum-mono">· ${formatTimestamp(thread.latest_activity_at)} · 💬 ${thread.reply_count}</span>`;
   if (thread.course_id) {
     const pill = document.createElement("span");
@@ -1452,7 +1452,7 @@ function renderForumThread(thread: ForumThread): void {
   container.appendChild(header);
 
   // OP block (slice 9)
-  container.appendChild(createForumPostBlock(thread.id, thread.author_username, thread.author_role, thread.body, thread.created_at, [], thread.board_name, thread.course_id ?? null, true));
+  container.appendChild(createForumPostBlock(thread.id, thread.is_anonymous ? "🎭 Anonymous" : thread.author_username, thread.author_role, thread.body, thread.created_at, [], thread.board_name, thread.course_id ?? null, true, thread.is_anonymous));
 
   // Replies (slice 11)
   if (thread.replies.length > 0) {
@@ -1481,7 +1481,8 @@ function createForumPostBlock(
   citations: Citation[],
   boardName: string,
   courseId: string | null,
-  isOP: boolean
+  isOP: boolean,
+  isAnonymous = false
 ): HTMLElement {
   const article = document.createElement("article");
   article.className = `forum-post${isOP ? " forum-post--op" : ""}`;
@@ -1513,7 +1514,7 @@ function createForumPostBlock(
   authorHead.className = "forum-post-authorhead";
   const avatar = document.createElement("div");
   avatar.className = "forum-avatar";
-  avatar.textContent = authorUsername.charAt(0).toUpperCase();
+  avatar.textContent = isAnonymous ? "🎭" : authorUsername.charAt(0).toUpperCase();
   const authorInfo = document.createElement("div");
   authorInfo.className = "forum-post-authorinfo";
   const authorName = document.createElement("span");
@@ -1574,6 +1575,8 @@ function createForumReplyBlock(reply: ForumReply): HTMLElement {
   avatar.className = `forum-avatar${isBot ? " forum-avatar--bot" : ""}`;
   if (isBot) {
     avatar.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.3L12 17l-6.2 4.2 2.4-7.3L2 9.4h7.6z"/></svg>`;
+  } else if (reply.is_anonymous) {
+    avatar.textContent = "🎭";
   } else {
     avatar.textContent = reply.author_username.charAt(0).toUpperCase();
   }
@@ -1585,7 +1588,7 @@ function createForumReplyBlock(reply: ForumReply): HTMLElement {
   head.className = "forum-reply-head";
   const author = document.createElement("span");
   author.className = "forum-reply-author";
-  author.textContent = reply.author_username;
+  author.textContent = reply.is_anonymous ? "🎭 Anonymous" : reply.author_username;
   head.appendChild(author);
   if (reply.author_role !== "student") {
     const chip = document.createElement("span");
@@ -1835,7 +1838,7 @@ async function handleCreateForumThread(): Promise<void> {
   elements.forumComposeSubmit2.disabled = true;
   elements.forumComposeSubmit2.textContent = "Posting…";
   try {
-    const thread = await api.createForumThread({ board_id: boardId, title, body, course_id: null });
+    const thread = await api.createForumThread({ board_id: boardId, title, body, course_id: null, anonymous: elements.forumComposeAnon.checked });
     forumData = await api.forumIndex();
     closeForumCompose();
     const board = allForumBoards().find((b) => b.id === boardId);

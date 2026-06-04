@@ -217,6 +217,7 @@ export interface ForumThreadSummary {
   course_id?: string | null;
   author_username: string;
   author_role: "student" | "admin" | "bot" | string;
+  is_anonymous: boolean;
   reply_count: number;
   dylen_replied: boolean;
   created_at: string;
@@ -229,6 +230,7 @@ export interface ForumReply {
   thread_id: number;
   author_username: string;
   author_role: "student" | "admin" | "bot" | string;
+  is_anonymous: boolean;
   body: string;
   citations: Citation[];
   created_at: string;
@@ -266,8 +268,10 @@ export interface ForumThreadCreateRequest {
   title: string;
   body: string;
   course_id?: string | null;
+  anonymous?: boolean;
 }
 
 export interface ForumReplyCreateRequest {
   body: string;
+  anonymous?: boolean;
 }

@@ -175,10 +175,12 @@ class ForumThreadCreateRequest(BaseModel):
     title: str
     body: str
     course_id: str | None = None
+    anonymous: bool = False
 
 
 class ForumReplyCreateRequest(BaseModel):
     body: str
+    anonymous: bool = False
 
 
 class ForumCategory(BaseModel):
@@ -222,6 +224,7 @@ class ForumThreadSummary(BaseModel):
     course_id: str | None = None
     author_username: str
     author_role: str
+    is_anonymous: bool = False
     reply_count: int
     dylen_replied: bool
     created_at: str
@@ -234,6 +237,7 @@ class ForumReply(BaseModel):
     thread_id: int
     author_username: str
     author_role: str
+    is_anonymous: bool = False
     body: str
     citations: list[Citation] = Field(default_factory=list)
     created_at: str
