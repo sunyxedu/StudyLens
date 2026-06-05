@@ -700,7 +700,7 @@ body:has(.shell.mode-login) .topbar {
 .login-bg {
   position: fixed;
   inset: 0;
-  background: url('/login-bg.jpg') center 38% / cover no-repeat;
+  background: url('login-bg.jpg') center 38% / cover no-repeat;
   filter: blur(7px) brightness(1.04) saturate(1.22) sepia(.18);
   transform: scale(1.12);
   transform-origin: center;
