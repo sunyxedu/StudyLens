@@ -1,7 +1,8 @@
 import { app, BrowserWindow } from "electron";
+import path from "node:path";
 
 const STUDYLENS_URL =
-  process.env.STUDYLENS_URL ?? "https://www.google.com/";
+  process.env.STUDYLENS_URL ?? "https://www.google.com/"; // So that error is observable
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -11,7 +12,8 @@ function createWindow() {
     minHeight: 640,
     webPreferences: {
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js")
     }
   });
 
