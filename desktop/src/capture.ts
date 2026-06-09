@@ -1,10 +1,18 @@
 import { BrowserWindow, dialog } from "electron";
+import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 type BrowserStateStep = {
   key: string;
   title: string;
   url: string;
   instruction: string;
+};
+
+type BasicAuthCredentials = {
+  username: string;
+  password: string;
 };
 
 const BROWSER_STATE_STEPS: BrowserStateStep[] = [
@@ -35,6 +43,8 @@ const BROWSER_STATE_STEPS: BrowserStateStep[] = [
 ];
 
 let setupInProgress = false;
+const DOC_EXAMS_PROMPT_HTML = loadAssetText("doc-exams-prompt.html");
+const DOC_EXAMS_PROMPT_SCRIPT = loadAssetText("doc-exams-prompt.js");
 
 export async function captureAndUploadBrowserState(window: BrowserWindow): Promise<void> {
   if (setupInProgress) {
@@ -68,6 +78,16 @@ async function captureBrowserState(window: BrowserWindow): Promise<unknown> {
 
     for (let index = 0; index < BROWSER_STATE_STEPS.length; index += 1) {
       const step = BROWSER_STATE_STEPS[index];
+      if (step.key === "exams") {
+        const credentials = await promptBasicAuthCredentials(window);
+        if (!credentials) {
+          throw new Error("DOC Exams sign-in was cancelled.");
+        }
+        await page.setExtraHTTPHeaders({
+          Authorization: basicAuthHeader(credentials),
+        });
+      }
+
       await page.goto(step.url, { waitUntil: "domcontentloaded" });
       const choice = await dialog.showMessageBox(window, {
         type: "info",
@@ -81,6 +101,9 @@ async function captureBrowserState(window: BrowserWindow): Promise<unknown> {
       if (choice.response === 1) {
         throw new Error("Browser setup was cancelled.");
       }
+      if (step.key === "exams") {
+        await page.setExtraHTTPHeaders({});
+      }
     }
 
     const state = await context.storageState();
@@ -91,6 +114,69 @@ async function captureBrowserState(window: BrowserWindow): Promise<unknown> {
   } finally {
     await browser.close();
   }
+}
+
+async function promptBasicAuthCredentials(
+  parent: BrowserWindow,
+): Promise<BasicAuthCredentials | null> {
+  const promptWindow = new BrowserWindow({
+    parent,
+    modal: true,
+    width: 420,
+    height: 450,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    title: "DOC Exams sign-in",
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  await promptWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(DOC_EXAMS_PROMPT_HTML)}`,
+  );
+  promptWindow.show();
+
+  try {
+    return await new Promise<BasicAuthCredentials | null>((resolve) => {
+      let settled = false;
+      const finish = (value: BasicAuthCredentials | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+
+      promptWindow.on("closed", () => finish(null));
+      void promptWindow.webContents
+        .executeJavaScript(DOC_EXAMS_PROMPT_SCRIPT)
+        .then((credentials: BasicAuthCredentials | null) => {
+          finish(credentials);
+          if (!promptWindow.isDestroyed()) {
+            promptWindow.close();
+          }
+        })
+        .catch(() => {
+          finish(null);
+          if (!promptWindow.isDestroyed()) {
+            promptWindow.close();
+          }
+        });
+    });
+  } finally {
+    if (!promptWindow.isDestroyed()) {
+      promptWindow.close();
+    }
+  }
+}
+
+function basicAuthHeader(credentials: BasicAuthCredentials): string {
+  const token = Buffer.from(`${credentials.username}:${credentials.password}`, "utf8").toString(
+    "base64",
+  );
+  return `Basic ${token}`;
 }
 
 async function uploadBrowserState(window: BrowserWindow, state: unknown): Promise<void> {
@@ -138,4 +224,8 @@ function hasAuthMaterial(state: unknown): boolean {
     (Array.isArray(value.cookies) && value.cookies.length > 0) ||
     (Array.isArray(value.origins) && value.origins.length > 0)
   );
+}
+
+function loadAssetText(filename: string): string {
+  return readFileSync(path.resolve(__dirname, "..", "assets", filename), "utf8");
 }
