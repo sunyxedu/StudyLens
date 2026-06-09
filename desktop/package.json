@@ -7,8 +7,10 @@
     "build": "tsc",
     "dev": "npm run build && electron .",
     "install:browsers": "playwright install chromium",
+    "prepare:browsers": "PLAYWRIGHT_BROWSERS_PATH=./ms-playwright playwright install chromium",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && npm run prepare:browsers && electron-builder --mac dmg --arm64",
     "dist:win": "npm run build && electron-builder --win nsis",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -37,6 +39,12 @@
       "assets/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "ms-playwright",
+        "to": "ms-playwright"
+      }
+    ],
     "extraMetadata": {
       "main": "dist/main.js"
     },
@@ -51,7 +59,7 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns"
+      "identity": null
     },
     "linux": {
       "target": "AppImage",

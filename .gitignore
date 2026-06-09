@@ -14,6 +14,7 @@ node_modules/
 extension/dist/
 web/dist/
 desktop/release
+desktop/ms-playwright
 data/raw/
 data/processed/
 data/vector/

@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -61,6 +61,15 @@ export async function captureAndUploadBrowserState(window: BrowserWindow): Promi
 }
 
 async function captureBrowserState(window: BrowserWindow): Promise<unknown> {
+  // In the packaged app the Playwright Chromium build is shipped under
+  // Contents/Resources/ms-playwright (see electron-builder extraResources),
+  // not in the user's ~/Library/Caches. Point Playwright at it before import.
+  if (app.isPackaged) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(
+      process.resourcesPath,
+      "ms-playwright",
+    );
+  }
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({
     headless: false,
