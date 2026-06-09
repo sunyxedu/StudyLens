@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import { captureAndUploadBrowserState } from "./capture.js";
 
 const STUDYLENS_URL =
   process.env.STUDYLENS_URL ?? "https://www.google.com/"; // So that error is observable
@@ -21,7 +22,26 @@ function createWindow() {
   // Simple wrapper for web app for now
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  ipcMain.handle("browser-setup:start", async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) {
+      return { ok: false, message: "Could not find the StudyLens desktop window." };
+    }
+
+    try {
+      await captureAndUploadBrowserState(window);
+      return { ok: true, message: "Academic site logins connected." };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Browser setup failed.",
+      };
+    }
+  });
+
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

@@ -1,4 +1,4 @@
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 
 type BrowserSetupResult = {
   ok: boolean;
@@ -10,10 +10,7 @@ const desktopApi = {
   platform: process.platform,
   version: process.env.npm_package_version ?? "0.0.0",
   async startBrowserSetup(): Promise<BrowserSetupResult> {
-    return {
-      ok: false,
-      message: "Desktop browser setup is not implemented yet.",
-    };
+    return ipcRenderer.invoke("browser-setup:start") as Promise<BrowserSetupResult>;
   },
 };
 
