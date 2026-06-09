@@ -3,7 +3,7 @@ import path from "node:path";
 import { captureAndUploadBrowserState } from "./capture.js";
 
 const STUDYLENS_URL =
-  process.env.STUDYLENS_URL ?? "https://www.google.com/"; // So that error is observable
+  process.env.STUDYLENS_URL ?? "https://studylens-production.up.railway.app/app/";
 
 function createWindow() {
   const window = new BrowserWindow({
