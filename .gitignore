@@ -13,6 +13,7 @@ build/
 node_modules/
 extension/dist/
 web/dist/
+desktop/release
 data/raw/
 data/processed/
 data/vector/

@@ -19,7 +19,6 @@ function createWindow() {
   });
 
   void window.loadURL(STUDYLENS_URL);
-  // Simple wrapper for web app for now
 }
 
 app.whenReady().then(() => {
