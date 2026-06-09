@@ -70,6 +70,24 @@ import type {
   SearchResult,
 } from "./types.js";
 
+type DesktopBrowserSetupResult = {
+  ok: boolean;
+  message: string;
+};
+
+type StudyLensDesktopApi = {
+  isDesktop: boolean;
+  platform: string;
+  version: string;
+  startBrowserSetup: () => Promise<DesktopBrowserSetupResult>;
+};
+
+declare global {
+  interface Window {
+    studylensDesktop?: StudyLensDesktopApi;
+  }
+}
+
 const elements = {
   topbarUser: byId<HTMLElement>("topbar-user"),
   topbarUsername: byId<HTMLSpanElement>("topbar-username"),
@@ -86,7 +104,8 @@ const elements = {
   loginPassword: byId<HTMLInputElement>("login-password"),
   loginSubmit: byId<HTMLButtonElement>("login-submit"),
   loginStatus: byId<HTMLSpanElement>("login-status"),
-  browserStateSkip: byId<HTMLButtonElement>("browser-state-skip"),
+  browserStateCopy: byId<HTMLElement>("browser-state-instruction"),
+  browserStateInteract: byId<HTMLButtonElement>("browser-state-interact"),
   browserStateStatus: byId<HTMLSpanElement>("browser-state-status"),
   discoveringProgressbar: byId<HTMLElement>("discovering-progressbar"),
   discoveringProgressFill: byId<HTMLElement>("discovering-progress-fill"),
@@ -238,7 +257,7 @@ function init(): void {
       setAuthMode(button.dataset.authMode === "login" ? "login" : "register");
     });
   });
-  elements.browserStateSkip.addEventListener("click", () => { void handleContinueToDiscovery(); });
+  elements.browserStateInteract.addEventListener("click", () => { void handleBrowserStateAction(); });
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.newConvBtn.addEventListener("click", handleNewConversation);
@@ -458,6 +477,7 @@ async function showBrowserStateView(): Promise<void> {
   shell.classList.remove("mode-courses", "mode-login");
   shell.classList.add("mode-setup");
   activateTopLevelView("view-browser-state");
+  renderBrowserStateSetup();
   setStatus(elements.browserStateStatus, "");
 }
 
@@ -522,8 +542,45 @@ function paintDiscoveryProgress(percent: number): void {
   elements.discoveringProgressbar.setAttribute("aria-valuenow", String(Math.floor(clamped)));
 }
 
+function isDesktopRuntime(): boolean {
+  return window.studylensDesktop?.isDesktop === true;
+}
+
+function renderBrowserStateSetup(): void {
+  const templateId = isDesktopRuntime()
+    ? "browser-state-desktop-instruction"
+    : "browser-state-web-instruction";
+  const template = document.getElementById(templateId);
+  if (!(template instanceof HTMLTemplateElement)) {
+    throw new Error(`Missing #${templateId}`);
+  }
+
+  elements.browserStateCopy.replaceChildren(template.content.cloneNode(true));
+  elements.browserStateInteract.textContent = template.dataset.buttonText ?? "Continue";
+}
+
+async function handleBrowserStateAction(): Promise<void> {
+  if (isDesktopRuntime()) {
+    await handleDesktopBrowserSetup();
+  } else {
+    await handleContinueToDiscovery();
+  }
+}
+
+async function handleDesktopBrowserSetup(): Promise<void> {
+  const desktop = window.studylensDesktop;
+  if (!desktop) return;
+  await withBusy(elements.browserStateInteract, elements.browserStateStatus, "Connecting…", async () => {
+    const result = await desktop.startBrowserSetup();
+    setStatus(elements.browserStateStatus, result.message, result.ok ? "ok" : "error");
+    if (result.ok) {
+      await handleContinueToDiscovery();
+    }
+  });
+}
+
 async function handleContinueToDiscovery(): Promise<void> {
-  await withBusy(elements.browserStateSkip, elements.browserStateStatus, "Starting…", async () => {
+  await withBusy(elements.browserStateInteract, elements.browserStateStatus, "Starting…", async () => {
     try {
       const status = await api.startDiscovery();
       if (authSession) {
