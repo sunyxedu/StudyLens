@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from studylens.domain import Answer, Citation, DocumentChunk, SearchResult
+from studylens.retrieval.adaptive import RelevanceJudge, adaptive_search
 from studylens.retrieval.embeddings import EmbeddingClient
 from studylens.retrieval.vector_store import VectorStore
 
@@ -81,6 +82,8 @@ class RAGService:
     embeddings: EmbeddingClient
     vector_store: VectorStore
     llm: LLMClient
+    judge: RelevanceJudge | None = None
+    max_k: int = 80
 
     def index_chunks(self, chunks: list[DocumentChunk]) -> int:
         vectors = self.embeddings.embed([chunk.text for chunk in chunks])
@@ -94,8 +97,27 @@ class RAGService:
         kinds: set[str] | None = None,
         top_k: int = 5,
     ) -> list[SearchResult]:
+        """Retrieve context chunks for ``question``.
+
+        With a ``judge`` configured, ``top_k`` is the initial window of an
+        adaptive search that doubles (5 -> 10 -> 20 -> 40 ...) while the judge
+        keeps approving, up to ``max_k``; without one it is a plain top-k.
+        """
         query_vector = self.embeddings.embed([question])[0]
-        return self.vector_store.search(query_vector, course_id=course_id, kinds=kinds, top_k=top_k)
+        if self.judge is None:
+            return self.vector_store.search(
+                query_vector, course_id=course_id, kinds=kinds, top_k=top_k
+            )
+        return adaptive_search(
+            vector_store=self.vector_store,
+            query_vector=query_vector,
+            question=question,
+            judge=self.judge,
+            course_id=course_id,
+            kinds=kinds,
+            initial_k=top_k,
+            max_k=self.max_k,
+        )
 
     def answer(
         self,
