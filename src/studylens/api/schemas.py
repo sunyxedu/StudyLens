@@ -132,7 +132,12 @@ class AskRequest(BaseModel):
     question: str
     course_id: str | None = None
     kinds: set[ResourceKind] | None = None
-    top_k: int = Field(default=5, ge=1, le=20)
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Initial retrieval window; adaptive retrieval may expand it.",
+    )
     include_exercises: bool = True
 
 
@@ -140,7 +145,12 @@ class RetrieveRequest(BaseModel):
     query: str
     course_id: str | None = None
     kinds: set[ResourceKind] | None = None
-    top_k: int = Field(default=5, ge=1, le=50)
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Initial retrieval window; adaptive retrieval may expand it.",
+    )
 
 
 class GenerateRequest(BaseModel):

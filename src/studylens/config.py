@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     openai_embedding_dimensions: int = 1536
     openai_chat_model: str = "gpt-4.1-mini"
 
+    # Adaptive retrieval: start at the requested top_k, have a judge grade
+    # each batch, and double the window (5 -> 10 -> 20 -> 40 ...) while more
+    # than half of the newest batch is judged relevant, capped at
+    # adaptive_max_k. Set ADAPTIVE_RETRIEVAL=false to fall back to plain top-k.
+    adaptive_retrieval: bool = True
+    adaptive_max_k: int = 80
+
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-6"
 
