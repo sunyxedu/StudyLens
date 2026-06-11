@@ -650,7 +650,10 @@ def create_app(
             token=session.token,
             max_age=max(0, int(ttl.total_seconds())),
         )
-        if is_catalog_program(user.course):
+        # Catalog users with bound logins (cookies) are content *producers* —
+        # they keep the normal discover/process flow and their own course list,
+        # so only seed catalog consumers who have no browser state.
+        if is_catalog_program(user.course) and not store.has_browser_state(user.id):
             _seed_catalog_courses(
                 application.state.course_store,
                 user,
