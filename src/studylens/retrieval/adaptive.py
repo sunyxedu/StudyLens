@@ -2,19 +2,41 @@
 
 The loop retrieves ``initial_k`` chunks, asks a judge to grade each one, and
 doubles the window (5 -> 10 -> 20 -> 40 ...) for as long as strictly more than
-half of the newest batch is judged relevant. Only chunks judged relevant are
-returned, in their original score order.
+half of the newest batch is judged relevant. Chunks with identical text are
+collapsed before judging so duplicated index content cannot dilute the vote.
+Only chunks judged relevant are returned, in their original score order.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Protocol
 
 from studylens.domain import SearchResult
 from studylens.retrieval.vector_store import VectorStore
+
+logger = logging.getLogger(__name__)
+
+
+def text_key(result: SearchResult) -> str:
+    """Whitespace-normalized chunk text, used to spot duplicated content."""
+    return " ".join(result.chunk.text.split())
+
+
+def dedupe_results(results: list[SearchResult]) -> list[SearchResult]:
+    """Keep only the highest-ranked result for each distinct chunk text."""
+    seen: set[str] = set()
+    unique: list[SearchResult] = []
+    for result in results:
+        key = text_key(result)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(result)
+    return unique
 
 
 class ChatClient(Protocol):
@@ -156,27 +178,59 @@ def adaptive_search(
     # reshuffle the ranking between rounds, so the already-judged prefix is
     # tracked by chunk id rather than by position: no chunk is judged twice or
     # duplicated, and chunks that newly enter the window are always judged.
+    # Identical texts are also collapsed (the store may hold the same content
+    # under several resource ids), so duplicates neither dilute the majority
+    # vote nor repeat in the returned context.
     judged_ids: set[str | None] = set()
+    judged_texts: set[str] = set()
     while True:
-        batch = [result for result in results if result.chunk.id not in judged_ids]
+        batch: list[SearchResult] = []
+        batch_texts: set[str] = set()
+        for result in results:
+            key = text_key(result)
+            if (
+                result.chunk.id in judged_ids
+                or key in judged_texts
+                or key in batch_texts
+            ):
+                continue
+            batch.append(result)
+            batch_texts.add(key)
         if not batch:
             break
         verdicts = judge.judge(question, batch)
         if verdicts is None:
             # Judge unavailable: keep the whole batch, stop expanding.
+            logger.warning(
+                "adaptive_search: judge unavailable, keeping %d unjudged chunks",
+                len(batch),
+            )
             relevant.extend(batch)
             break
         judged_ids.update(result.chunk.id for result in batch)
+        judged_texts.update(batch_texts)
+        batch_relevant = sum(verdicts)
         relevant.extend(
             result for result, keep in zip(batch, verdicts, strict=False) if keep
         )
-        majority = sum(verdicts) * 2 > len(batch)
+        majority = batch_relevant * 2 > len(batch)
         exhausted = len(results) < requested
-        if not majority or exhausted or requested >= max_k:
+        expand = majority and not exhausted and requested < max_k
+        logger.info(
+            "adaptive_search: window=%d fetched=%d distinct_batch=%d "
+            "batch_relevant=%d total_relevant=%d -> %s",
+            requested,
+            len(results),
+            len(batch),
+            batch_relevant,
+            len(relevant),
+            "expand" if expand else "stop",
+        )
+        if not expand:
             break
         requested = min(requested * 2, max_k)
         results = vector_store.search(
             query_vector, course_id=course_id, kinds=kinds, top_k=requested
         )
     relevant.sort(key=lambda result: result.score, reverse=True)
-    return relevant if relevant else results[:initial_k]
+    return relevant if relevant else dedupe_results(results)[:initial_k]

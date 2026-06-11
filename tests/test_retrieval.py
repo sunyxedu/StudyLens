@@ -98,6 +98,65 @@ def test_sqlite_vector_store_remains_available_as_fallback(tmp_path: Path) -> No
     assert results[0].chunk.id == chunk.id
 
 
+def make_dup_chunk(text: str, *, resource_id: str, kind: str = "material") -> DocumentChunk:
+    return DocumentChunk(
+        course_id="COMP70001",
+        resource_id=resource_id,
+        kind=kind,
+        text=text,
+        position=0,
+        title=resource_id,
+    )
+
+
+@pytest.mark.parametrize("store_kind", ["qdrant", "sqlite"])
+def test_vector_stores_dedupe_duplicate_texts(store_kind: str, tmp_path: Path) -> None:
+    embeddings = HashEmbeddingClient(dimensions=32)
+    store: QdrantVectorStore | SQLiteVectorStore
+    if store_kind == "qdrant":
+        store = QdrantVectorStore(
+            collection_name="dedupe_test",
+            dimensions=32,
+            client=QdrantClient(":memory:"),
+        )
+    else:
+        store = SQLiteVectorStore(tmp_path / "vectors.sqlite3")
+    chunks = [
+        make_dup_chunk("Same notes text.", resource_id="notes"),
+        make_dup_chunk("Same  notes\ntext.", resource_id="notes-pdf"),
+        make_dup_chunk("A different paragraph.", resource_id="notes"),
+    ]
+    store.upsert(zip(chunks, embeddings.embed([chunk.text for chunk in chunks]), strict=True))
+    assert store.count() == 3
+
+    assert store.dedupe_texts() == 1
+    assert store.count() == 2
+    assert store.dedupe_texts() == 0
+
+
+def test_rag_service_plain_topk_dedupes_duplicate_texts() -> None:
+    embeddings = HashEmbeddingClient(dimensions=64)
+    store = QdrantVectorStore(
+        collection_name="plain_dedupe",
+        dimensions=64,
+        client=QdrantClient(":memory:"),
+    )
+    service = RAGService(embeddings=embeddings, vector_store=store, llm=TemplateLLM())
+    chunks = [
+        make_dup_chunk("Dynamic programming reuses overlapping subproblems.", resource_id="notes"),
+        make_dup_chunk(
+            "Dynamic programming reuses overlapping subproblems.", resource_id="notes-pdf"
+        ),
+        make_dup_chunk("Binary search trees support ordered lookup.", resource_id="notes"),
+    ]
+    service.index_chunks(chunks)
+
+    results = service.retrieve("dynamic programming", top_k=5)
+
+    texts = [result.chunk.text for result in results]
+    assert len(texts) == len(set(texts)) == 2
+
+
 def test_rag_service_indexes_retrieves_and_answers() -> None:
     embeddings = HashEmbeddingClient(dimensions=64)
     store = QdrantVectorStore(

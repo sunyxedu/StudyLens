@@ -51,13 +51,18 @@ class Resource(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if self.id is None:
-            self.id = stable_id(
-                self.course_id,
-                self.kind,
-                self.source_url,
-                self.local_path,
-                self.title,
+            # Resource identity must survive re-indexing: it feeds into chunk
+            # ids, so any unstable input duplicates every derived chunk in the
+            # vector store on the next sync. Download paths and display titles
+            # both proved unstable across runs ("Notes" vs "Notes.pdf",
+            # per-run artifact paths); the canonical source URL is not, so it
+            # anchors the id whenever present.
+            anchor = (
+                self.source_url
+                or (self.local_path.name if self.local_path else None)
+                or self.title
             )
+            self.id = stable_id(self.course_id, self.kind, anchor)
 
 
 class Course(BaseModel):

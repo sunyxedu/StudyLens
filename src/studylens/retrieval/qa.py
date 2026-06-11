@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from studylens.domain import Answer, Citation, DocumentChunk, SearchResult
-from studylens.retrieval.adaptive import RelevanceJudge, adaptive_search
+from studylens.retrieval.adaptive import RelevanceJudge, adaptive_search, dedupe_results
 from studylens.retrieval.embeddings import EmbeddingClient
 from studylens.retrieval.vector_store import VectorStore
 
@@ -33,19 +33,26 @@ class TemplateLLM:
 
 
 class OpenAIChatClient:
-    def __init__(self, *, api_key: str, model: str) -> None:
+    def __init__(
+        self, *, api_key: str, model: str, temperature: float | None = None
+    ) -> None:
         from openai import OpenAI
 
         self.client = OpenAI(api_key=api_key)
         self.model = model
+        self.temperature = temperature
 
     def complete(self, *, system: str, prompt: str) -> str:
+        kwargs: dict[str, object] = {}
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
         response = self.client.responses.create(
             model=self.model,
             input=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
             ],
+            **kwargs,
         )
         return response.output_text
 
@@ -105,8 +112,10 @@ class RAGService:
         """
         query_vector = self.embeddings.embed([question])[0]
         if self.judge is None:
-            return self.vector_store.search(
-                query_vector, course_id=course_id, kinds=kinds, top_k=top_k
+            return dedupe_results(
+                self.vector_store.search(
+                    query_vector, course_id=course_id, kinds=kinds, top_k=top_k
+                )
             )
         return adaptive_search(
             vector_store=self.vector_store,

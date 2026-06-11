@@ -107,7 +107,11 @@ class FakeLLM:
 
 
 def test_adaptive_search_expands_then_stops_on_minority() -> None:
-    texts = ["relevant"] * 5 + ["relevant", "noise", "noise", "noise", "noise"] + ["relevant"] * 10
+    texts = (
+        [f"relevant {i}" for i in range(6)]
+        + [f"noise {i}" for i in range(4)]
+        + [f"relevant {i}" for i in range(6, 16)]
+    )
     store = FakeVectorStore(ranked_results(texts))
     judge = MarkerJudge()
 
@@ -127,7 +131,7 @@ def test_adaptive_search_expands_then_stops_on_minority() -> None:
 
 
 def test_adaptive_search_doubles_until_max_k() -> None:
-    store = FakeVectorStore(ranked_results(["relevant"] * 60))
+    store = FakeVectorStore(ranked_results([f"relevant {i}" for i in range(60)]))
     judge = MarkerJudge()
 
     results = adaptive_search(
@@ -145,7 +149,7 @@ def test_adaptive_search_doubles_until_max_k() -> None:
 
 
 def test_adaptive_search_stops_when_store_is_exhausted() -> None:
-    store = FakeVectorStore(ranked_results(["relevant"] * 8))
+    store = FakeVectorStore(ranked_results([f"relevant {i}" for i in range(8)]))
     judge = MarkerJudge()
 
     results = adaptive_search(
@@ -163,7 +167,7 @@ def test_adaptive_search_stops_when_store_is_exhausted() -> None:
 
 
 def test_adaptive_search_falls_back_to_initial_window_when_nothing_relevant() -> None:
-    store = FakeVectorStore(ranked_results(["noise"] * 12))
+    store = FakeVectorStore(ranked_results([f"noise {i}" for i in range(12)]))
     judge = MarkerJudge()
 
     results = adaptive_search(
@@ -180,7 +184,7 @@ def test_adaptive_search_falls_back_to_initial_window_when_nothing_relevant() ->
 
 
 def test_adaptive_search_keeps_batch_and_stops_when_judge_fails() -> None:
-    store = FakeVectorStore(ranked_results(["noise"] * 12))
+    store = FakeVectorStore(ranked_results([f"noise {i}" for i in range(12)]))
 
     results = adaptive_search(
         vector_store=store,
@@ -193,6 +197,45 @@ def test_adaptive_search_keeps_batch_and_stops_when_judge_fails() -> None:
 
     assert store.requested == [5]
     assert len(results) == 5
+
+
+def test_adaptive_search_collapses_duplicate_texts_before_voting() -> None:
+    """The store may hold the same content under several resource ids; the
+    judge must vote on distinct texts and the output must not repeat them."""
+    texts = ["relevant A", "relevant A", "relevant B", "relevant B", "noise C"]
+    store = FakeVectorStore(ranked_results(texts))
+    judge = MarkerJudge()
+
+    results = adaptive_search(
+        vector_store=store,
+        query_vector=[0.0],
+        question="q",
+        judge=judge,
+        initial_k=5,
+        max_k=80,
+    )
+
+    # Five fetched results collapse to three distinct texts (2/3 relevant is
+    # a majority, so the window still expands before the store runs dry).
+    assert judge.batch_sizes == [3]
+    assert store.requested == [5, 10]
+    assert sorted(result.chunk.text for result in results) == ["relevant A", "relevant B"]
+
+
+def test_adaptive_search_fallback_window_is_deduped() -> None:
+    texts = ["noise A", "noise A", "noise B", "noise B", "noise C", "noise C"]
+    store = FakeVectorStore(ranked_results(texts))
+
+    results = adaptive_search(
+        vector_store=store,
+        query_vector=[0.0],
+        question="q",
+        judge=MarkerJudge(),
+        initial_k=5,
+        max_k=80,
+    )
+
+    assert [result.chunk.text for result in results] == ["noise A", "noise B", "noise C"]
 
 
 def test_adaptive_search_tolerates_reshuffled_rankings() -> None:

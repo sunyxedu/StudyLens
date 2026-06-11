@@ -6,6 +6,7 @@ import sqlite3
 import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
+from hashlib import blake2b
 from pathlib import Path
 from typing import Protocol
 from uuid import NAMESPACE_URL, uuid5
@@ -37,6 +38,15 @@ class VectorStore(Protocol):
     def clear(self) -> None:
         ...
 
+    def dedupe_texts(self) -> int:
+        """Drop chunks whose (course_id, kind, text) duplicates a kept chunk.
+
+        Returns the number of removed chunks. Historic id-scheme changes left
+        the same content stored under several resource ids; this collapses
+        those copies in place.
+        """
+        ...
+
     def search(
         self,
         query_vector: list[float],
@@ -46,6 +56,14 @@ class VectorStore(Protocol):
         top_k: int = 5,
     ) -> list[SearchResult]:
         ...
+
+
+def _dedupe_key(course_id: object, kind: object, text: object) -> bytes:
+    normalized = " ".join(str(text or "").split())
+    digest = blake2b(
+        f"{course_id}|{kind}|{normalized}".encode(), digest_size=16
+    )
+    return digest.digest()
 
 
 def _payload_from_chunk(chunk: DocumentChunk) -> dict[str, object]:
@@ -200,6 +218,37 @@ class QdrantVectorStore:
             self.client.delete_collection(self.collection_name)
         self.initialize()
 
+    def dedupe_texts(self) -> int:
+        assert self.client is not None
+        seen: set[bytes] = set()
+        doomed: list[models.ExtendedPointId] = []
+        offset: models.ExtendedPointId | None = None
+        while True:
+            points, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                payload = point.payload or {}
+                key = _dedupe_key(
+                    payload.get("course_id"), payload.get("kind"), payload.get("text")
+                )
+                if key in seen:
+                    doomed.append(point.id)
+                else:
+                    seen.add(key)
+            if offset is None:
+                break
+        for start in range(0, len(doomed), 512):
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.PointIdsList(points=doomed[start : start + 512]),
+            )
+        return len(doomed)
+
     def search(
         self,
         query_vector: list[float],
@@ -312,6 +361,26 @@ class SQLiteVectorStore:
     def clear(self) -> None:
         with self.connect() as connection:
             connection.execute("DELETE FROM chunks")
+
+    def dedupe_texts(self) -> int:
+        seen: set[bytes] = set()
+        doomed: list[str] = []
+        with self.connect() as connection:
+            for row in connection.execute(
+                "SELECT id, course_id, kind, text FROM chunks ORDER BY id"
+            ):
+                key = _dedupe_key(row["course_id"], row["kind"], row["text"])
+                if key in seen:
+                    doomed.append(row["id"])
+                else:
+                    seen.add(key)
+            for start in range(0, len(doomed), 512):
+                batch = doomed[start : start + 512]
+                placeholders = ",".join("?" for _ in batch)
+                connection.execute(
+                    f"DELETE FROM chunks WHERE id IN ({placeholders})", batch
+                )
+        return len(doomed)
 
     def search(
         self,

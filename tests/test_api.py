@@ -8,6 +8,7 @@ from studylens.api.browser_state import BrowserStateStatus, BrowserStateStep
 from studylens.api.main import _cors_settings, create_app
 from studylens.catalog import COMPUTING_CATALOG
 from studylens.config import Settings
+from studylens.domain import DocumentChunk
 from studylens.errors import ConfigurationError
 from studylens.ingestion.auto_index import AutoIndexReport, _normalize_course_id
 from studylens.ingestion.edstem import EdStemIndexResult
@@ -35,6 +36,47 @@ def make_client(tmp_path: Path) -> TestClient:
     )
     service = RAGService(embeddings=embeddings, vector_store=store, llm=TemplateLLM())
     return TestClient(create_app(settings=settings, rag_service=service))
+
+
+def test_admin_dedupe_index_requires_token_and_removes_duplicates(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
+        qdrant_path=tmp_path / "data" / "vector" / "qdrant",
+        qdrant_collection="admin_dedupe_test",
+        allowed_origins=["http://localhost:5173"],
+        auth_secret_key="test-secret",
+        session_cookie_secure=False,
+        admin_token="test-admin-token",
+    )
+    embeddings = HashEmbeddingClient(dimensions=64)
+    store = QdrantVectorStore(
+        collection_name="admin_dedupe_test",
+        dimensions=64,
+        client=QdrantClient(":memory:"),
+    )
+    service = RAGService(embeddings=embeddings, vector_store=store, llm=TemplateLLM())
+    service.index_chunks(
+        [
+            DocumentChunk(
+                course_id="C", resource_id="r1", kind="material",
+                text="Duplicated text.", position=0,
+            ),
+            DocumentChunk(
+                course_id="C", resource_id="r2", kind="material",
+                text="Duplicated text.", position=0,
+            ),
+        ]
+    )
+    client = TestClient(create_app(settings=settings, rag_service=service))
+
+    assert client.post("/admin/dedupe-index").status_code == 403
+    response = client.post(
+        "/admin/dedupe-index", headers={"X-Admin-Token": "test-admin-token"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"removed_chunks": 1}
+    assert store.count() == 1
 
 
 def register(client: TestClient, username: str = "alice") -> dict:

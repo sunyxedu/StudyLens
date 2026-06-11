@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import secrets
 from datetime import timedelta
@@ -580,6 +581,9 @@ def create_app(
     browser_state_manager: BrowserStateManager | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    # Surface app INFO logs (e.g. adaptive retrieval rounds) on hosted runs;
+    # uvicorn only configures its own loggers, not the root logger.
+    logging.basicConfig(level=logging.INFO)
     service = rag_service or build_rag_service(settings)
 
     application = FastAPI(title="StudyLens", version="0.1.0")
@@ -805,6 +809,15 @@ def create_app(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload), encoding="utf-8")
         return {"status": "ok", "path": str(target)}
+
+    @application.post("/admin/dedupe-index", include_in_schema=False)
+    def dedupe_index(x_admin_token: str = Header(default="")) -> dict[str, int]:
+        if not settings.admin_token:
+            raise HTTPException(status_code=503, detail="admin_token not configured")
+        if not secrets.compare_digest(x_admin_token, settings.admin_token):
+            raise HTTPException(status_code=403, detail="invalid admin token")
+        removed = application.state.rag_service.vector_store.dedupe_texts()
+        return {"removed_chunks": removed}
 
     @application.post("/chunks", response_model=IndexTextResponse)
     def index_text(

@@ -37,7 +37,16 @@ def build_rag_service(settings: Settings | None = None) -> RAGService:
         )
         llm = OpenAIChatClient(api_key=settings.openai_api_key, model=settings.openai_chat_model)
         if settings.adaptive_retrieval:
-            judge = LLMRelevanceJudge(llm=llm)
+            # The judge gates window expansion on a majority vote; sampling
+            # noise on borderline chunks must not flip that gate, so it runs
+            # at temperature 0 unlike the answer-writing client.
+            judge = LLMRelevanceJudge(
+                llm=OpenAIChatClient(
+                    api_key=settings.openai_api_key,
+                    model=settings.openai_chat_model,
+                    temperature=0.0,
+                )
+            )
     else:
         embeddings = HashEmbeddingClient()
         llm = TemplateLLM()
