@@ -65,6 +65,7 @@ from studylens.api.schemas import (
     RetrieveResponse,
 )
 from studylens.bootstrap import build_rag_service
+from studylens.catalog import catalog_courses_for, is_catalog_program
 from studylens.config import Settings, get_settings
 from studylens.domain import Resource
 from studylens.errors import ConfigurationError
@@ -77,6 +78,7 @@ from studylens.ingestion.edstem import EdStemIndexer, build_edstem_indexer
 from studylens.ingestion.edstem_agent import discover_edstem_courses
 from studylens.ingestion.exams import ExamsIndexer, build_exams_indexer
 from studylens.retrieval.qa import RAGService
+from studylens.retrieval.vector_store import VectorStore
 from studylens.storage import (
     AuthStore,
     CourseRecord,
@@ -190,12 +192,53 @@ def _auth_session_response(
     created: bool = False,
 ) -> AuthSessionResponse:
     browser_state_ready = store.has_browser_state(user.id)
+    # Catalog programs (e.g. Computing) are served pre-indexed content, so they
+    # never need to connect Imperial logins / discover / process.
+    needs_browser_state = (not browser_state_ready) and not is_catalog_program(user.course)
     return AuthSessionResponse(
         user=_auth_user_schema(user, settings),
         created=created,
         browser_state_ready=browser_state_ready,
-        needs_browser_state=not browser_state_ready,
+        needs_browser_state=needs_browser_state,
     )
+
+
+def _seed_catalog_courses(
+    course_store: CourseStore,
+    user: UserRecord,
+    vector_store: VectorStore,
+) -> None:
+    """Populate a catalog user's course list from the curated catalog.
+
+    The full catalog is always added to the list. Whether each course is marked
+    indexed ("Ready") is decided by asking the vector store if that course_id
+    already has content — indexed by *any* account, since the store is global
+    by course_id. Courses without content stay "Pending". This means processing
+    a course once (with any account) makes it Ready for every catalog user, and
+    the catalog never has to track processing status by hand.
+
+    Codes are normalized to the canonical course_id form (e.g. ``50001`` ->
+    ``COMP50001``) so list entries and content lookups agree, regardless of how
+    the catalog constant is written.
+    """
+    catalog = catalog_courses_for(user.course, user.grade)
+    if not catalog:
+        return
+    normalized = [
+        (_normalize_course_id(code), title, url) for code, title, url in catalog
+    ]
+    course_store.replace_all(normalized, user_id=user.id)
+    for code, _title, _url in normalized:
+        if _course_has_content(vector_store, code):
+            course_store.mark_indexed(code, user_id=user.id)
+
+
+def _course_has_content(vector_store: VectorStore, course_id: str) -> bool:
+    """True if the vector store holds at least one chunk for ``course_id``."""
+    try:
+        return vector_store.count(course_id=course_id) > 0
+    except Exception:  # noqa: BLE001 - detection is best-effort; default to Pending
+        return False
 
 
 def _browser_state_status_schema(
@@ -607,6 +650,12 @@ def create_app(
             token=session.token,
             max_age=max(0, int(ttl.total_seconds())),
         )
+        if is_catalog_program(user.course):
+            _seed_catalog_courses(
+                application.state.course_store,
+                user,
+                application.state.rag_service.vector_store,
+            )
         return _auth_session_response(
             store=store,
             user=user,

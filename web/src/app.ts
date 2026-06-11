@@ -98,9 +98,9 @@ const elements = {
   authModeButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".auth-mode")),
   loginUsername: byId<HTMLInputElement>("login-username"),
   loginGradeField: byId<HTMLElement>("login-grade-field"),
-  loginGrade: byId<HTMLInputElement>("login-grade"),
+  loginGrade: byId<HTMLSelectElement>("login-grade"),
   loginCourseField: byId<HTMLElement>("login-course-field"),
-  loginCourse: byId<HTMLInputElement>("login-course"),
+  loginCourse: byId<HTMLSelectElement>("login-course"),
   loginPassword: byId<HTMLInputElement>("login-password"),
   loginSubmit: byId<HTMLButtonElement>("login-submit"),
   loginStatus: byId<HTMLSpanElement>("login-status"),
@@ -113,6 +113,8 @@ const elements = {
   discoveringHint: byId<HTMLSpanElement>("discovering-hint"),
   discoveringStatus: byId<HTMLSpanElement>("discovering-status"),
   // Course library (main page)
+  coursesToolbar: byId<HTMLElement>("courses-toolbar"),
+  coursesLede: byId<HTMLParagraphElement>("courses-lede"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
   coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
   coursesStatus: byId<HTMLSpanElement>("courses-status"),
@@ -481,6 +483,26 @@ async function showBrowserStateView(): Promise<void> {
   setStatus(elements.browserStateStatus, "");
 }
 
+// Catalog users (e.g. Computing) get a pre-maintained, read-only course list:
+// content is processed ahead of time by a privileged account, so they have no
+// browser logins and cannot process anything themselves. Mirrors the backend's
+// is_catalog_program().
+function isCatalogUser(): boolean {
+  return authSession?.user.course?.trim().toLowerCase() === "computing";
+}
+
+let defaultCoursesLede: string | null = null;
+function applyCoursesLede(): void {
+  const catalog = isCatalogUser();
+  if (defaultCoursesLede === null) defaultCoursesLede = elements.coursesLede.innerHTML;
+  elements.coursesLede.innerHTML = catalog
+    ? "Your courses are ready — open any course to start. More are <strong>coming soon</strong>."
+    : defaultCoursesLede;
+  // Catalog users have no processing controls, so the Forum entry sits alone on
+  // its row — collapse the toolbar to a single line (lede left, Forum right).
+  elements.coursesToolbar.classList.toggle("is-catalog", catalog);
+}
+
 function showCoursesApp(): void {
   stopDiscoveryTicker();
   shell.classList.remove("mode-login", "mode-setup");
@@ -491,6 +513,7 @@ function showCoursesApp(): void {
   currentCourse = null;
   conversations = [];
   activeConversation = null;
+  applyCoursesLede();
   void loadCachedCourses();
 }
 
@@ -750,25 +773,30 @@ function renderCourseList(): void {
 
 function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
   const accent = courseAccent(course.code);
-  const selected = selectedCourseCodes.has(course.code);
+  const catalog = isCatalogUser();
+  const selected = !catalog && selectedCourseCodes.has(course.code);
 
   const li = document.createElement("li");
-  li.className = `ccard${selected ? " ccard--selected" : ""}`;
+  li.className = `ccard${selected ? " ccard--selected" : ""}${catalog ? " ccard--catalog" : ""}`;
   li.style.setProperty("--ccard-accent", accent);
   li.dataset.code = course.code;
 
-  // Click card = toggle selection (Enter button stops propagation)
-  li.addEventListener("click", () => {
-    const isSelected = selectedCourseCodes.has(course.code);
-    if (isSelected) {
-      selectedCourseCodes.delete(course.code);
-      li.classList.remove("ccard--selected");
-    } else {
-      selectedCourseCodes.add(course.code);
-      li.classList.add("ccard--selected");
-    }
-    updateCoursesActions();
-  });
+  // Click card = toggle selection (Enter button stops propagation). Catalog
+  // users can't process, so cards aren't selectable — only the hover highlight
+  // (pure CSS) remains.
+  if (!catalog) {
+    li.addEventListener("click", () => {
+      const isSelected = selectedCourseCodes.has(course.code);
+      if (isSelected) {
+        selectedCourseCodes.delete(course.code);
+        li.classList.remove("ccard--selected");
+      } else {
+        selectedCourseCodes.add(course.code);
+        li.classList.add("ccard--selected");
+      }
+      updateCoursesActions();
+    });
+  }
 
   // Left accent bar
   const bar = document.createElement("div");
@@ -793,7 +821,8 @@ function createCourseCard(course: DiscoveredCourse): HTMLLIElement {
     badge.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 6l3 3 5-5"/></svg>Ready`;
   } else {
     badge.className = "ccard-badge ccard-badge--pending";
-    badge.innerHTML = `<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5" cy="5" r="4"/></svg>Pending`;
+    const pendingLabel = catalog ? "Coming soon" : "Pending";
+    badge.innerHTML = `<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5" cy="5" r="4"/></svg>${pendingLabel}`;
   }
 
   head.append(codePill, badge);
@@ -852,6 +881,13 @@ function updateCoursesSummary(dropped: number = 0, refreshedAt?: string | null):
 }
 
 function updateCoursesActions(): void {
+  // Catalog users can't process — hide both processing controls entirely.
+  if (isCatalogUser()) {
+    elements.coursesIndex.hidden = true;
+    elements.coursesSelectAll.hidden = true;
+    return;
+  }
+  elements.coursesIndex.hidden = false;
   const selectedCount = selectedCourseCodes.size;
   elements.coursesIndex.disabled = selectedCount === 0;
   elements.coursesIndex.textContent =

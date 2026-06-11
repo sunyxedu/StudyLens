@@ -6,9 +6,10 @@ from qdrant_client import QdrantClient
 
 from studylens.api.browser_state import BrowserStateStatus, BrowserStateStep
 from studylens.api.main import _cors_settings, create_app
+from studylens.catalog import COMPUTING_CATALOG
 from studylens.config import Settings
 from studylens.errors import ConfigurationError
-from studylens.ingestion.auto_index import AutoIndexReport
+from studylens.ingestion.auto_index import AutoIndexReport, _normalize_course_id
 from studylens.ingestion.edstem import EdStemIndexResult
 from studylens.ingestion.exams import ExamIndexResult
 from studylens.retrieval import HashEmbeddingClient, QdrantVectorStore, RAGService
@@ -42,7 +43,7 @@ def register(client: TestClient, username: str = "alice") -> dict:
         json={
             "username": username,
             "grade": "Year 3",
-            "course": "Computing",
+            "course": "Mathematics",
             "password": "correct horse battery staple",
         },
     )
@@ -151,6 +152,52 @@ def test_register_creates_session_and_reports_browser_state_needed(tmp_path: Pat
     assert client.get("/auth/session").status_code == 200
 
 
+def test_catalog_program_skips_onboarding_and_seeds_courses(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    # Index content for one catalog course, using a *different* (non-catalog)
+    # account — the store is global by course_id, so this should make the course
+    # Ready for catalog users regardless of who processed it.
+    register(client)  # alice, Mathematics
+    ready_code = _normalize_course_id(COMPUTING_CATALOG[0][0])
+    indexed = client.post(
+        "/chunks",
+        json={
+            "course_id": ready_code,
+            "title": "Lecture 1",
+            "kind": "material",
+            "text": "Divide and conquer splits a problem into subproblems.",
+        },
+    )
+    assert indexed.status_code == 200
+
+    body = client.post(
+        "/auth/register",
+        json={
+            "username": "carol",
+            "grade": "Year 1",
+            "course": "Computing",
+            "password": "correct horse battery staple",
+        },
+    ).json()
+
+    # Catalog programs jump straight to their course list — no logins/discover/process.
+    assert body["needs_browser_state"] is False
+
+    courses = client.get("/courses").json()["courses"]
+    by_code = {c["code"]: c for c in courses}
+    # The whole catalog is seeded into the list.
+    expected_codes = {_normalize_course_id(code) for code, _, _ in COMPUTING_CATALOG}
+    assert set(by_code) == expected_codes
+    # Only the course with content is Ready; the rest stay Pending.
+    assert by_code[ready_code]["indexed_at"]
+    assert all(
+        by_code[code]["indexed_at"] is None
+        for code in expected_codes
+        if code != ready_code
+    )
+
+
 def test_login_requires_existing_registered_user(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -168,7 +215,7 @@ def test_login_requires_existing_registered_user(tmp_path: Path) -> None:
         json={
             "username": "alice",
             "grade": "Year 3",
-            "course": "Computing",
+            "course": "Mathematics",
             "password": "correct horse battery staple",
         },
     )
