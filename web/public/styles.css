@@ -939,7 +939,8 @@ body:has(.shell.mode-login) .topbar {
   margin-bottom: 5px;
 }
 
-#view-login .field input {
+#view-login .field input,
+#view-login .field select {
   background: #fff;
   border: 1px solid var(--line, #efe7d6);
   border-radius: 11px;
@@ -949,6 +950,16 @@ body:has(.shell.mode-login) .topbar {
   color: var(--ink, #23282a);
   min-height: 44px;
   transition: border-color 130ms, box-shadow 130ms;
+}
+
+#view-login .field select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%232e5d4d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
 }
 
 /* ── Submit button ────────────────────────────────────────────────────── */
@@ -971,7 +982,8 @@ body:has(.shell.mode-login) .topbar {
 /* ── Focus, hover, reduced-motion, responsive ─────────────────────────── */
 
 /* Input focus */
-#view-login .field input:focus {
+#view-login .field input:focus,
+#view-login .field select:focus {
   outline: none;
   border-color: var(--green, #2e5d4d);
   box-shadow: 0 0 0 3px rgba(46, 93, 77, .12);
@@ -1037,6 +1049,7 @@ body:has(.shell.mode-login) .topbar {
 @media (prefers-reduced-motion: reduce) {
   .login-bg,
   #view-login .field input,
+  #view-login .field select,
   #view-login #login-submit,
   #view-login .auth-mode-switch .segment,
   .login-feature-chip {
@@ -1133,6 +1146,10 @@ body:has(.shell.mode-login) .topbar {
 .ccard {
   transition: transform .2s cubic-bezier(.22,.7,.3,1), box-shadow .2s ease, border-color 140ms ease, background 140ms ease;
 }
+
+/* Catalog cards aren't selectable (read-only list) — drop the click affordance
+   but keep the hover lift. The Enter button on Ready cards stays clickable. */
+.ccard--catalog { cursor: default; }
 
 @media (hover: hover) {
   .ccard:hover {

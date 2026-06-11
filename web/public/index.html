@@ -100,12 +100,21 @@
                     <input id="login-username" name="username" autocomplete="username" required />
                   </label>
                   <label id="login-grade-field" class="field">
-                    <span>Grade</span>
-                    <input id="login-grade" name="grade" autocomplete="organization-title" required />
+                    <span>Year</span>
+                    <select id="login-grade" name="grade" required>
+                      <option value="Year 1">Year 1</option>
+                      <option value="Year 2">Year 2</option>
+                      <option value="Year 3">Year 3</option>
+                      <option value="Year 4">Year 4</option>
+                    </select>
                   </label>
                   <label id="login-course-field" class="field">
                     <span>Course</span>
-                    <input id="login-course" name="course" autocomplete="organization" required />
+                    <select id="login-course" name="course" required>
+                      <option value="Computing">Computing</option>
+                      <option value="JMC">JMC</option>
+                      <option value="Mathematics">Mathematics</option>
+                    </select>
                   </label>
                   <label id="login-password-field" class="field">
                     <span>Password</span>
@@ -220,7 +229,7 @@
 
             <!-- Toolbar (slice 2) -->
             <div class="courses-toolbar" id="courses-toolbar">
-              <p class="courses-lede">
+              <p class="courses-lede" id="courses-lede">
                 Select the courses you want, then <strong>Process selected</strong> runs Scientia,
                 Panopto, past exams, and EdStem for each. Once processed, click
                 <strong>Enter →</strong> to open a course.
