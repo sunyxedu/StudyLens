@@ -484,11 +484,15 @@ async function showBrowserStateView(): Promise<void> {
 }
 
 // Catalog users (e.g. Computing) get a pre-maintained, read-only course list:
-// content is processed ahead of time by a privileged account, so they have no
-// browser logins and cannot process anything themselves. Mirrors the backend's
-// is_catalog_program().
+// content is processed ahead of time, and they have no browser logins so they
+// can't process anything themselves. A Computing user who *has* bound logins
+// (cookies) is a content producer and keeps the normal process flow, so the
+// read-only catalog UI applies only when there's no browser state — mirrors the
+// backend's seeding guard.
 function isCatalogUser(): boolean {
-  return authSession?.user.course?.trim().toLowerCase() === "computing";
+  if (!authSession) return false;
+  const course = authSession.user.course?.trim().toLowerCase();
+  return course === "computing" && !authSession.browser_state_ready;
 }
 
 let defaultCoursesLede: string | null = null;

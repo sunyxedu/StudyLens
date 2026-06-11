@@ -198,6 +198,38 @@ def test_catalog_program_skips_onboarding_and_seeds_courses(tmp_path: Path) -> N
     )
 
 
+def test_catalog_program_with_browser_state_keeps_normal_flow(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    # Register a Computing user, then give them bound logins (cookies) — they
+    # become a content producer and should NOT be re-seeded from the catalog.
+    body = client.post(
+        "/auth/register",
+        json={
+            "username": "dave",
+            "grade": "Year 1",
+            "course": "Computing",
+            "password": "correct horse battery staple",
+        },
+    ).json()
+    user_id = body["user"]["id"]
+    client.app.state.auth_store.save_browser_state(user_id, {"cookies": [], "origins": []})
+    # Replace their list with a sentinel so a re-seed would be detectable.
+    client.app.state.course_store.replace_all(
+        [("MATH99999", "Sentinel", None)], user_id=user_id
+    )
+
+    session = client.post(
+        "/auth/login",
+        json={"username": "dave", "password": "correct horse battery staple"},
+    ).json()
+
+    assert session["needs_browser_state"] is False
+    courses = client.get("/courses").json()["courses"]
+    # Login did not overwrite the list with the catalog — producer keeps own courses.
+    assert {c["code"] for c in courses} == {"MATH99999"}
+
+
 def test_login_requires_existing_registered_user(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
