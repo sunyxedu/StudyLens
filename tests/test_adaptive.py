@@ -16,21 +16,26 @@ from studylens.retrieval import (
 from studylens.retrieval.qa import TemplateLLM
 
 
-def make_result(text: str, *, score: float, kind: str = "material") -> SearchResult:
+def make_result(
+    text: str, *, score: float, kind: str = "material", position: int = 0
+) -> SearchResult:
     chunk = DocumentChunk(
         course_id="COMP70001",
         resource_id=f"COMP70001-{kind}",
         kind=kind,
         text=text,
-        position=0,
+        position=position,
         title=f"COMP70001 {kind}",
     )
     return SearchResult(chunk=chunk, score=score)
 
 
 def ranked_results(texts: list[str]) -> list[SearchResult]:
+    # Distinct positions give every chunk a distinct stable id, matching real
+    # stores where identical ids collapse into a single row at upsert time.
     return [
-        make_result(text, score=1.0 - index * 0.01) for index, text in enumerate(texts)
+        make_result(text, score=1.0 - index * 0.01, position=index)
+        for index, text in enumerate(texts)
     ]
 
 
@@ -51,6 +56,26 @@ class FakeVectorStore:
     ) -> list[SearchResult]:
         self.requested.append(top_k)
         return self.results[:top_k]
+
+
+class ReshufflingVectorStore:
+    """Returns a different ranking on every call, like an approximate index."""
+
+    def __init__(self, rounds: list[list[SearchResult]]) -> None:
+        self.rounds = rounds
+        self.requested: list[int] = []
+
+    def search(
+        self,
+        query_vector: list[float],
+        *,
+        course_id: str | None = None,
+        kinds: set[str] | None = None,
+        top_k: int = 5,
+    ) -> list[SearchResult]:
+        self.requested.append(top_k)
+        round_index = min(len(self.requested), len(self.rounds)) - 1
+        return self.rounds[round_index][:top_k]
 
 
 class MarkerJudge:
@@ -170,6 +195,39 @@ def test_adaptive_search_keeps_batch_and_stops_when_judge_fails() -> None:
     assert len(results) == 5
 
 
+def test_adaptive_search_tolerates_reshuffled_rankings() -> None:
+    """A reshuffling store (approximate index) must not cause duplicate or
+    skipped judgements when the window grows."""
+    first = [
+        make_result(f"relevant {letter}", score=0.9 - index * 0.01, position=index)
+        for index, letter in enumerate("ABCDE")
+    ]
+    newcomer = make_result("relevant N", score=0.95, position=99)
+    tail = [
+        make_result(f"relevant {letter}", score=0.8 - index * 0.01, position=10 + index)
+        for index, letter in enumerate("FGHI")
+    ]
+    store = ReshufflingVectorStore(rounds=[first, [newcomer, *first, *tail]])
+    judge = MarkerJudge()
+
+    results = adaptive_search(
+        vector_store=store,
+        query_vector=[0.0],
+        question="q",
+        judge=judge,
+        initial_k=5,
+        max_k=10,
+    )
+
+    ids = [result.chunk.id for result in results]
+    assert len(ids) == len(set(ids)) == 10
+    assert judge.batch_sizes == [5, 5]
+    assert results[0].chunk.id == newcomer.chunk.id
+    assert [result.score for result in results] == sorted(
+        (result.score for result in results), reverse=True
+    )
+
+
 def test_llm_relevance_judge_parses_mixed_verdicts() -> None:
     llm = FakeLLM('Here you go: [true, false, "yes", 0, 1]')
     judge = LLMRelevanceJudge(llm=llm)
@@ -178,6 +236,20 @@ def test_llm_relevance_judge_parses_mixed_verdicts() -> None:
 
     assert verdicts == [True, False, True, False, True]
     assert "[1] COMP70001 material" in llm.prompts[0]
+
+
+def test_llm_relevance_judge_ignores_echoed_excerpt_markers() -> None:
+    llm = FakeLLM("Excerpt [1] helps, [2] does not. Verdict: [true, false]")
+    judge = LLMRelevanceJudge(llm=llm)
+
+    assert judge.judge("q", ranked_results(["a", "b"])) == [True, False]
+
+
+def test_llm_relevance_judge_prefers_boolean_array_for_single_excerpt() -> None:
+    llm = FakeLLM("[1] is unrelated to the question: [false]")
+    judge = LLMRelevanceJudge(llm=llm)
+
+    assert judge.judge("q", ranked_results(["a"])) == [False]
 
 
 def test_llm_relevance_judge_returns_none_on_garbage_or_errors() -> None:

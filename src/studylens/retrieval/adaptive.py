@@ -36,18 +36,9 @@ _JUDGE_SYSTEM = (
 )
 
 
-def _parse_verdicts(response: str, *, expected: int) -> list[bool] | None:
-    match = re.search(r"\[.*?\]", response, flags=re.DOTALL)
-    if match is None:
-        return None
-    try:
-        raw = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(raw, list) or len(raw) < expected:
-        return None
+def _coerce_verdicts(values: list[object]) -> list[bool] | None:
     verdicts: list[bool] = []
-    for value in raw[:expected]:
+    for value in values:
         if isinstance(value, bool):
             verdicts.append(value)
         elif isinstance(value, (int, float)):
@@ -57,6 +48,30 @@ def _parse_verdicts(response: str, *, expected: int) -> list[bool] | None:
         else:
             return None
     return verdicts
+
+
+def _parse_verdicts(response: str, *, expected: int) -> list[bool] | None:
+    # The prompt labels excerpts "[1]", "[2]", ... and models often echo those
+    # markers before the verdict array, so taking the first bracketed span is
+    # wrong. Scan every flat array, prefer ones that are purely JSON booleans,
+    # and among those take the last — the instructed reply comes after any
+    # echoed reasoning.
+    candidates: list[list[object]] = []
+    for match in re.finditer(r"\[[^\[\]]*\]", response):
+        try:
+            raw = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(raw, list) and len(raw) >= expected:
+            candidates.append(raw[:expected])
+    for values in reversed(candidates):
+        if all(isinstance(value, bool) for value in values):
+            return _coerce_verdicts(values)
+    for values in reversed(candidates):
+        verdicts = _coerce_verdicts(values)
+        if verdicts is not None:
+            return verdicts
+    return None
 
 
 @dataclass(slots=True)
@@ -136,14 +151,22 @@ def adaptive_search(
         query_vector, course_id=course_id, kinds=kinds, top_k=requested
     )
     relevant: list[SearchResult] = []
-    judged_upto = 0
-    while judged_upto < len(results):
-        batch = results[judged_upto:]
+    # Each expansion re-queries the store with a larger window. Approximate
+    # indexes (e.g. server-side Qdrant HNSW) and concurrent upserts may
+    # reshuffle the ranking between rounds, so the already-judged prefix is
+    # tracked by chunk id rather than by position: no chunk is judged twice or
+    # duplicated, and chunks that newly enter the window are always judged.
+    judged_ids: set[str | None] = set()
+    while True:
+        batch = [result for result in results if result.chunk.id not in judged_ids]
+        if not batch:
+            break
         verdicts = judge.judge(question, batch)
         if verdicts is None:
             # Judge unavailable: keep the whole batch, stop expanding.
             relevant.extend(batch)
             break
+        judged_ids.update(result.chunk.id for result in batch)
         relevant.extend(
             result for result, keep in zip(batch, verdicts, strict=False) if keep
         )
@@ -151,9 +174,9 @@ def adaptive_search(
         exhausted = len(results) < requested
         if not majority or exhausted or requested >= max_k:
             break
-        judged_upto = len(results)
         requested = min(requested * 2, max_k)
         results = vector_store.search(
             query_vector, course_id=course_id, kinds=kinds, top_k=requested
         )
+    relevant.sort(key=lambda result: result.score, reverse=True)
     return relevant if relevant else results[:initial_k]
