@@ -1412,6 +1412,108 @@ body:has(.shell.mode-login) .topbar {
 
 .courses-actions .button.secondary:hover { border-color: var(--green); color: var(--green); background: var(--green-soft); }
 
+/* Forum spotlight entry */
+.forum-spotlight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  padding: 7px 14px 7px 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  color: inherit;
+  white-space: nowrap;
+  transition: transform 180ms cubic-bezier(.22,.7,.3,1),
+              box-shadow 180ms cubic-bezier(.22,.7,.3,1),
+              border-color 180ms cubic-bezier(.22,.7,.3,1);
+}
+
+.forum-spotlight:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in srgb, var(--green) 40%, var(--line));
+}
+
+.forum-spotlight:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.forum-spotlight:active {
+  transform: translateY(0);
+}
+
+.forum-spotlight-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--green);
+  color: #fff;
+  flex-shrink: 0;
+  transition: transform 180ms cubic-bezier(.22,.7,.3,1);
+}
+
+.forum-spotlight:hover .forum-spotlight-icon {
+  transform: rotate(-5deg) scale(1.05);
+}
+
+.forum-spotlight-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.forum-spotlight-name {
+  font-family: "Hanken Grotesk", Inter, sans-serif;
+  font-weight: 800;
+  font-size: 15.5px;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.forum-spotlight-sub {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted-2);
+  line-height: 1.2;
+}
+
+.forum-spotlight-dylen {
+  display: inline;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font-weight: 600;
+}
+
+.forum-spotlight-arrow {
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+  color: var(--green);
+  transition: transform 180ms cubic-bezier(.22,.7,.3,1);
+}
+
+.forum-spotlight:hover .forum-spotlight-arrow {
+  transform: translateX(4px);
+}
+
+@media (max-width: 680px) {
+  .forum-spotlight {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .courses-status-mono {
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
