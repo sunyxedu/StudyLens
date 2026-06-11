@@ -82,10 +82,15 @@ type StudyLensDesktopApi = {
   startBrowserSetup: () => Promise<DesktopBrowserSetupResult>;
 };
 
+type DesktopDownloadPlatform = "windows" | "mac" | "unknown";
+type DesktopDownloadConfig = Partial<Record<"windows" | "mac", string>>;
+
 declare global {
   interface Window {
     studylensDesktop?: StudyLensDesktopApi;
   }
+
+  var STUDYLENS_DESKTOP_DOWNLOADS: DesktopDownloadConfig | undefined;
 }
 
 const elements = {
@@ -104,6 +109,12 @@ const elements = {
   loginPassword: byId<HTMLInputElement>("login-password"),
   loginSubmit: byId<HTMLButtonElement>("login-submit"),
   loginStatus: byId<HTMLSpanElement>("login-status"),
+  downloadBack: byId<HTMLButtonElement>("download-back"),
+  downloadPrimary: byId<HTMLAnchorElement>("download-primary"),
+  downloadWindows: byId<HTMLAnchorElement>("download-windows"),
+  downloadMac: byId<HTMLAnchorElement>("download-mac"),
+  downloadDetected: byId<HTMLParagraphElement>("download-detected"),
+  downloadStatus: byId<HTMLParagraphElement>("download-status"),
   browserStateCopy: byId<HTMLElement>("browser-state-instruction"),
   browserStateInteract: byId<HTMLButtonElement>("browser-state-interact"),
   browserStateStatus: byId<HTMLSpanElement>("browser-state-status"),
@@ -239,6 +250,7 @@ const COPY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
 const RETRY_SVG = `<svg class="retry-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/></svg>`;
 const EDIT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
+const DOWNLOADS = globalThis.STUDYLENS_DESKTOP_DOWNLOADS ?? {};
 
 init();
 
@@ -258,6 +270,17 @@ function init(): void {
     });
   });
   elements.browserStateInteract.addEventListener("click", () => { void handleBrowserStateAction(); });
+  elements.downloadBack.addEventListener("click", () => {
+    window.location.hash = "";
+  });
+  elements.downloadPrimary.addEventListener("click", handleUnavailableDownload);
+  elements.downloadWindows.addEventListener("click", handleUnavailableDownload);
+  elements.downloadMac.addEventListener("click", handleUnavailableDownload);
+  window.addEventListener("hashchange", () => {
+    if (!handlePublicRoute()) {
+      void initializeAuth();
+    }
+  });
   elements.backToCoursesBtn.addEventListener("click", showCoursesPage);
   elements.reindexBtn.addEventListener("click", handleReindex);
   elements.newConvBtn.addEventListener("click", handleNewConversation);
@@ -307,7 +330,9 @@ function init(): void {
 
   updateCoursesActions();
   setAuthMode("register");
-  void initializeAuth();
+  if (!handlePublicRoute()) {
+    void initializeAuth();
+  }
 }
 
 
@@ -470,6 +495,80 @@ function setAuthMode(mode: "register" | "login"): void {
   elements.loginPassword.autocomplete = isRegister ? "new-password" : "current-password";
   elements.loginSubmit.textContent = isRegister ? "Register" : "Login";
   setStatus(elements.loginStatus, "");
+}
+
+function handlePublicRoute(): boolean {
+  if (window.location.hash !== "#download" || isDesktopRuntime()) {
+    return false;
+  }
+  showDownloadView();
+  return true;
+}
+
+function showDownloadView(): void {
+  stopDiscoveryTicker();
+  shell.classList.remove("mode-courses", "mode-login");
+  shell.classList.add("mode-setup");
+  elements.topbarUser.classList.add("hidden");
+  activateTopLevelView("view-download");
+  renderDownloadLinks();
+}
+
+function renderDownloadLinks(): void {
+  const detected = detectDesktopDownloadPlatform();
+  const detectedUrl = detected === "unknown" ? "" : DOWNLOADS[detected] ?? "";
+  const fallback: DesktopDownloadPlatform = DOWNLOADS.windows ? "windows" : DOWNLOADS.mac ? "mac" : "unknown";
+  const selected = detectedUrl ? detected : fallback;
+  const primaryUrl = selected === "unknown" ? "" : DOWNLOADS[selected] ?? "";
+
+  configureDownloadLink(elements.downloadWindows, DOWNLOADS.windows ?? "");
+  configureDownloadLink(elements.downloadMac, DOWNLOADS.mac ?? "");
+  configureDownloadLink(elements.downloadPrimary, primaryUrl);
+
+  if (selected === "windows") {
+    elements.downloadPrimary.textContent = "Download for Windows";
+    elements.downloadDetected.textContent = detected === "windows"
+      ? "We detected Windows and selected the .exe installer."
+      : "Windows is selected because it is the available desktop download.";
+  } else if (selected === "mac") {
+    elements.downloadPrimary.textContent = "Download for macOS";
+    elements.downloadDetected.textContent = detected === "mac"
+      ? "We detected macOS and selected the .dmg installer."
+      : "macOS is selected because it is the available desktop download.";
+  } else {
+    elements.downloadPrimary.textContent = "Download desktop app";
+    elements.downloadDetected.textContent = "Add download URLs at deploy time to enable installers.";
+  }
+
+  setStatus(elements.downloadStatus, primaryUrl ? "" : "Desktop downloads are not configured yet.", primaryUrl ? "ok" : "error");
+}
+
+function configureDownloadLink(link: HTMLAnchorElement, url: string): void {
+  if (url) {
+    link.href = url;
+    link.removeAttribute("aria-disabled");
+    link.removeAttribute("tabindex");
+    return;
+  }
+  link.href = "#";
+  link.setAttribute("aria-disabled", "true");
+  link.setAttribute("tabindex", "-1");
+}
+
+function handleUnavailableDownload(event: MouseEvent): void {
+  const link = event.currentTarget;
+  if (link instanceof HTMLAnchorElement && link.getAttribute("aria-disabled") === "true") {
+    event.preventDefault();
+    setStatus(elements.downloadStatus, "That installer is not configured yet.", "error");
+  }
+}
+
+function detectDesktopDownloadPlatform(): DesktopDownloadPlatform {
+  const uaNavigator = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = `${uaNavigator.userAgentData?.platform ?? navigator.platform ?? ""} ${navigator.userAgent}`;
+  if (/mac|darwin/i.test(platform)) return "mac";
+  if (/win/i.test(platform)) return "windows";
+  return "unknown";
 }
 
 async function showBrowserStateView(): Promise<void> {

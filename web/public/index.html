@@ -122,6 +122,38 @@
           </div>
         </section>
 
+        <section class="view auth-view" id="view-download" aria-labelledby="download-title">
+          <div class="download-panel">
+            <div class="download-hero">
+              <img src="logo.png" alt="" class="download-logo" aria-hidden="true" />
+              <div>
+                <p class="download-eyebrow">StudyLens Desktop</p>
+                <h2 id="download-title">Download StudyLens for your computer</h2>
+                <p class="download-copy">
+                  The desktop app can capture your academic site logins locally, then connect them
+                  to your StudyLens account.
+                </p>
+              </div>
+            </div>
+            <div class="download-actions">
+              <a id="download-primary" class="button primary download-primary" href="#" rel="noopener">Download</a>
+              <button id="download-back" class="button secondary" type="button">Back to sign in</button>
+            </div>
+            <p id="download-detected" class="download-detected"></p>
+            <div class="download-options" aria-label="Other downloads">
+              <a id="download-windows" class="download-option" href="#" rel="noopener">
+                <span class="download-option-name">Windows</span>
+                <span class="download-option-file">.exe installer</span>
+              </a>
+              <a id="download-mac" class="download-option" href="#" rel="noopener">
+                <span class="download-option-name">macOS</span>
+                <span class="download-option-file">.dmg installer</span>
+              </a>
+            </div>
+            <p id="download-status" class="status"></p>
+          </div>
+        </section>
+
         <section class="view auth-view" id="view-browser-state" aria-labelledby="browser-state-title">
           <div class="setup-panel">
             <div class="view-head">
@@ -168,6 +200,20 @@
             You can skip the prompts by exporting <code>STUDYLENS_USERNAME</code> and
             <code>STUDYLENS_PASSWORD</code> first.
           </p>
+          <div class="setup-download" role="note" aria-label="Desktop app download">
+            <div class="setup-download-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12"/>
+                <path d="M7 10l5 5 5-5"/>
+                <path d="M5 21h14"/>
+              </svg>
+            </div>
+            <div class="setup-download-copy">
+              <strong>Want the easier desktop setup?</strong>
+              <span>Install StudyLens Desktop to connect academic sites from your own computer.</span>
+            </div>
+            <a id="browser-state-download-link" class="button primary setup-download-button" href="#download">Download desktop app</a>
+          </div>
         </template>
 
         <template id="browser-state-desktop-instruction" data-button-text="Connect academic sites">

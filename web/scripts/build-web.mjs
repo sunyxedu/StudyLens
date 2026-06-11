@@ -4,6 +4,16 @@ import { build } from "esbuild";
 
 const backendUrl =
   process.env.STUDYLENS_BACKEND_URL || process.env.VITE_STUDYLENS_BACKEND_URL || "";
+const desktopDownloads = {
+  windows:
+    process.env.STUDYLENS_DOWNLOAD_WINDOWS_URL ||
+    process.env.VITE_STUDYLENS_DOWNLOAD_WINDOWS_URL ||
+    "",
+  mac:
+    process.env.STUDYLENS_DOWNLOAD_MAC_URL ||
+    process.env.VITE_STUDYLENS_DOWNLOAD_MAC_URL ||
+    "",
+};
 
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist", { recursive: true });
@@ -32,5 +42,9 @@ cpSync("node_modules/highlight.js/styles/github.min.css", "dist/hljs.min.css");
 
 writeFileSync(
   "dist/config.js",
-  `globalThis.STUDYLENS_BACKEND_URL = ${JSON.stringify(backendUrl)};\n`,
+  [
+    `globalThis.STUDYLENS_BACKEND_URL = ${JSON.stringify(backendUrl)};`,
+    `globalThis.STUDYLENS_DESKTOP_DOWNLOADS = ${JSON.stringify(desktopDownloads)};`,
+    "",
+  ].join("\n"),
 );
