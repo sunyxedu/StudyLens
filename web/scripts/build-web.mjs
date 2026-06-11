@@ -8,11 +8,11 @@ const desktopDownloads = {
   windows:
     process.env.STUDYLENS_DOWNLOAD_WINDOWS_URL ||
     process.env.VITE_STUDYLENS_DOWNLOAD_WINDOWS_URL ||
-    "",
+    "https://github.com/sunyxedu/StudyLens/releases/download/DesktopAppV1.0.0/StudyLens_Setup_v1.0.0.exe",
   mac:
     process.env.STUDYLENS_DOWNLOAD_MAC_URL ||
     process.env.VITE_STUDYLENS_DOWNLOAD_MAC_URL ||
-    "",
+    "https://github.com/sunyxedu/StudyLens/releases/download/DesktopAppV1.0.0/StudyLens-1.0.0-arm64.dmg",
 };
 
 rmSync("dist", { recursive: true, force: true });
