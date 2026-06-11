@@ -113,6 +113,7 @@ const elements = {
   discoveringHint: byId<HTMLSpanElement>("discovering-hint"),
   discoveringStatus: byId<HTMLSpanElement>("discovering-status"),
   // Course library (main page)
+  coursesToolbar: byId<HTMLElement>("courses-toolbar"),
   coursesLede: byId<HTMLParagraphElement>("courses-lede"),
   coursesIndex: byId<HTMLButtonElement>("courses-index"),
   coursesSelectAll: byId<HTMLButtonElement>("courses-select-all"),
@@ -492,10 +493,14 @@ function isCatalogUser(): boolean {
 
 let defaultCoursesLede: string | null = null;
 function applyCoursesLede(): void {
+  const catalog = isCatalogUser();
   if (defaultCoursesLede === null) defaultCoursesLede = elements.coursesLede.innerHTML;
-  elements.coursesLede.innerHTML = isCatalogUser()
+  elements.coursesLede.innerHTML = catalog
     ? "Your courses are ready — open any course to start. More are <strong>coming soon</strong>."
     : defaultCoursesLede;
+  // Catalog users have no processing controls, so the Forum entry sits alone on
+  // its row — collapse the toolbar to a single line (lede left, Forum right).
+  elements.coursesToolbar.classList.toggle("is-catalog", catalog);
 }
 
 function showCoursesApp(): void {

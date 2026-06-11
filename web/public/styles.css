@@ -1403,6 +1403,27 @@ body:has(.shell.mode-login) .topbar {
   flex-wrap: wrap;
 }
 
+/* Catalog users (no processing controls): lede and the lone Forum entry share
+   one row so the toolbar stays compact and the divider rides up. */
+.courses-toolbar.is-catalog {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+.courses-toolbar.is-catalog .courses-lede {
+  margin: 0;
+}
+
+@media (max-width: 680px) {
+  .courses-toolbar.is-catalog {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .courses-actions .button.primary {
   background: var(--green);
   border-color: var(--green);
