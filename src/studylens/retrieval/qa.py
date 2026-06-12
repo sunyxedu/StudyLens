@@ -138,6 +138,20 @@ class RAGService:
         include_exercises: bool = True,
     ) -> Answer:
         results = self.retrieve(question, course_id=course_id, kinds=kinds, top_k=top_k)
+        if not results:
+            # Without judge-approved context the LLM would answer from its own
+            # parametric knowledge while citing nothing — worse for a study
+            # tool than admitting the gap, so don't ask it at all.
+            return Answer(
+                question=question,
+                answer=(
+                    "I could not find course material relevant to this question "
+                    "in the indexed content. Try rephrasing, picking another "
+                    "course, or re-syncing the course materials."
+                ),
+                citations=[],
+                follow_up=None,
+            )
         system = (
             "You are StudyLens, a concise course tutor. Answer only from retrieved context. "
             "If the evidence is insufficient, say what is missing. "

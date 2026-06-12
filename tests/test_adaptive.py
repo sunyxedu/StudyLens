@@ -345,6 +345,45 @@ def test_rag_service_uses_adaptive_retrieval_when_judge_is_set() -> None:
     assert len(answer.citations) == 1
 
 
+def test_rag_service_answer_reports_missing_material_without_llm_call() -> None:
+    class ExplodingLLM:
+        def complete(self, *, system: str, prompt: str) -> str:
+            raise AssertionError("the answer LLM must not run without context")
+
+    class RejectAllJudge:
+        def judge(self, question: str, results: list[SearchResult]) -> list[bool] | None:
+            return [False] * len(results)
+
+    embeddings = HashEmbeddingClient(dimensions=64)
+    store = QdrantVectorStore(
+        collection_name="no_context_answer",
+        dimensions=64,
+        client=QdrantClient(":memory:"),
+    )
+    service = RAGService(
+        embeddings=embeddings,
+        vector_store=store,
+        llm=ExplodingLLM(),
+        judge=RejectAllJudge(),
+    )
+    chunks = [
+        DocumentChunk(
+            course_id="COMP50001",
+            resource_id="notes",
+            kind="material",
+            text="Sorting networks compare elements in parallel.",
+            position=0,
+        )
+    ]
+    assert service.index_chunks(chunks) == 1
+
+    answer = service.answer("How does the Krebs cycle produce ATP?", course_id="COMP50001")
+
+    assert answer.citations == []
+    assert answer.follow_up is None
+    assert "could not find course material" in answer.answer
+
+
 def test_build_rag_service_wires_judge_from_settings(tmp_path: Path) -> None:
     base = {
         "data_dir": tmp_path,
