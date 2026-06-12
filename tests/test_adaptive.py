@@ -166,7 +166,9 @@ def test_adaptive_search_stops_when_store_is_exhausted() -> None:
     assert len(results) == 8
 
 
-def test_adaptive_search_falls_back_to_initial_window_when_nothing_relevant() -> None:
+def test_adaptive_search_returns_nothing_when_judge_rejects_all() -> None:
+    """Rejected chunks must not resurface as citations: an all-irrelevant
+    window yields an empty result, not the unfiltered initial window."""
     store = FakeVectorStore(ranked_results([f"noise {i}" for i in range(12)]))
     judge = MarkerJudge()
 
@@ -180,7 +182,7 @@ def test_adaptive_search_falls_back_to_initial_window_when_nothing_relevant() ->
     )
 
     assert store.requested == [5]
-    assert len(results) == 5
+    assert results == []
 
 
 def test_adaptive_search_keeps_batch_and_stops_when_judge_fails() -> None:
@@ -220,22 +222,6 @@ def test_adaptive_search_collapses_duplicate_texts_before_voting() -> None:
     assert judge.batch_sizes == [3]
     assert store.requested == [5, 10]
     assert sorted(result.chunk.text for result in results) == ["relevant A", "relevant B"]
-
-
-def test_adaptive_search_fallback_window_is_deduped() -> None:
-    texts = ["noise A", "noise A", "noise B", "noise B", "noise C", "noise C"]
-    store = FakeVectorStore(ranked_results(texts))
-
-    results = adaptive_search(
-        vector_store=store,
-        query_vector=[0.0],
-        question="q",
-        judge=MarkerJudge(),
-        initial_k=5,
-        max_k=80,
-    )
-
-    assert [result.chunk.text for result in results] == ["noise A", "noise B", "noise C"]
 
 
 def test_adaptive_search_tolerates_reshuffled_rankings() -> None:
@@ -374,3 +360,21 @@ def test_build_rag_service_wires_judge_from_settings(tmp_path: Path) -> None:
 
     classic = build_rag_service(Settings(**base, adaptive_retrieval=False))
     assert classic.judge is None
+
+
+def test_build_rag_service_gives_judge_its_own_deterministic_client(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path,
+        database_url=f"sqlite:///{tmp_path / 'studylens.db'}",
+        vector_store="sqlite",
+        vector_db_path=tmp_path / "vectors.sqlite3",
+        openai_api_key="sk-test",
+    )
+
+    service = build_rag_service(settings)
+
+    assert isinstance(service.judge, LLMRelevanceJudge)
+    assert service.judge.llm.model == settings.openai_judge_model == "gpt-4.1"
+    assert service.judge.llm.temperature == 0.0
+    assert service.llm.model == settings.openai_chat_model
+    assert service.llm.temperature is None

@@ -43,7 +43,7 @@ def build_rag_service(settings: Settings | None = None) -> RAGService:
             judge = LLMRelevanceJudge(
                 llm=OpenAIChatClient(
                     api_key=settings.openai_api_key,
-                    model=settings.openai_chat_model,
+                    model=settings.openai_judge_model,
                     temperature=0.0,
                 )
             )

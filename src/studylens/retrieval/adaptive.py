@@ -162,9 +162,11 @@ def adaptive_search(
     judge marks strictly more than half of each newly fetched batch relevant.
 
     Expansion also stops when the store runs out of results or the window
-    reaches ``max_k``. When nothing at all is judged relevant the initial
-    window is returned unfiltered, so an over-strict or broken judge can never
-    leave callers with less context than classic top-k retrieval.
+    reaches ``max_k``. Only judge-approved chunks are returned — when nothing
+    is judged relevant the result is empty, so callers surface "no relevant
+    material" instead of citing unrelated context. The exception is a judge
+    that errors out entirely: its ungraded batch is kept, because an
+    infrastructure failure says nothing about relevance.
     """
     initial_k = max(1, initial_k)
     max_k = max(initial_k, max_k)
@@ -233,4 +235,4 @@ def adaptive_search(
             query_vector, course_id=course_id, kinds=kinds, top_k=requested
         )
     relevant.sort(key=lambda result: result.score, reverse=True)
-    return relevant if relevant else dedupe_results(results)[:initial_k]
+    return relevant

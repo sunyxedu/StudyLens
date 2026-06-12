@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_dimensions: int = 1536
     openai_chat_model: str = "gpt-4.1-mini"
+    # Grades retrieved chunks for adaptive retrieval. Stronger than the chat
+    # model because its verdicts gate what gets cited; per-question cost stays
+    # small (a couple of calls, boolean output). Runs at temperature 0, so
+    # pick a model that accepts the parameter (not gpt-5*/o* reasoning ones).
+    openai_judge_model: str = "gpt-4.1"
 
     # Adaptive retrieval: start at the requested top_k, have a judge grade
     # each batch, and double the window (5 -> 10 -> 20 -> 40 ...) while more
